@@ -311,6 +311,18 @@ export type ServerTraceDiagnosticsResult = typeof ServerTraceDiagnosticsResult.T
 export const ServerProcessSignal = Schema.Literals(["SIGINT", "SIGKILL"]);
 export type ServerProcessSignal = typeof ServerProcessSignal.Type;
 
+/**
+ * Who started a process: a provider session (with the thread it works for
+ * when known) or a thread's terminal. Absent for the server's own helpers.
+ */
+export const ServerProcessOrigin = Schema.Struct({
+  kind: Schema.Literals(["provider", "terminal"]),
+  provider: Schema.optional(TrimmedNonEmptyString),
+  providerInstanceId: Schema.optional(TrimmedNonEmptyString),
+  threadId: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerProcessOrigin = typeof ServerProcessOrigin.Type;
+
 export const ServerProcessDiagnosticsEntry = Schema.Struct({
   pid: PositiveInt,
   startTimeMs: NonNegativeInt,
@@ -323,6 +335,7 @@ export const ServerProcessDiagnosticsEntry = Schema.Struct({
   command: TrimmedNonEmptyString,
   depth: NonNegativeInt,
   childPids: Schema.Array(PositiveInt),
+  origin: Schema.optional(ServerProcessOrigin),
 });
 export type ServerProcessDiagnosticsEntry = typeof ServerProcessDiagnosticsEntry.Type;
 

@@ -1,0 +1,925 @@
+/*
+ * T3 Neo fork styles that apply under every look: the pet, the sidebar
+ * starfield, and the small Neo pills. Animations are stepped or transform
+ * only and stop under prefers-reduced-motion.
+ */
+
+/* ---- Pet ---------------------------------------------------------------- */
+
+.neo-pet-widget {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.neo-pet-widget-window {
+  position: static;
+  width: 100%;
+  height: 100%;
+  justify-content: flex-end;
+  padding: 8px;
+}
+
+.neo-pet-sprite {
+  position: relative;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 35%));
+}
+
+.neo-pet-widget-window .neo-pet-sprite {
+  cursor: pointer;
+}
+
+/* The rabbit draws its own soft edge; a dark backdrop under white fur reads as a stain. */
+.neo-pet-sprite:has(.neo-rabbit-scene) {
+  filter: none;
+}
+
+.neo-pet-sprite:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.neo-pet-sprite:active {
+  cursor: grabbing;
+}
+
+/* ASCII pet glyph colors: the ember amber of the original flame on dark, the
+   accent orange (the slider color) on light. Settings → Pets → ASCII pet color
+   pins one of them via data-neo-ascii-color on <html>; the swatch next to that
+   select reads the same variables. --neo-mark is the same idea for the "Neo"
+   badges and pills. */
+:root {
+  --neo-ascii-pet-light: #c8641f;
+  --neo-ascii-pet-dark: #f1a629;
+  --neo-mark: #a4530f;
+}
+
+.dark {
+  --neo-mark: #f1a629;
+}
+
+/* With the Neo look off, the pet and the marks follow the theme's action color
+   (the moon in the version card). applyThemePalette sets each pet half from
+   the theme's light and dark palettes; this is the fallback for the mode shown. */
+html:not([data-look="neo"]) {
+  --neo-ascii-pet-light: var(--primary);
+  --neo-ascii-pet-dark: var(--primary);
+  --neo-mark: var(--primary);
+}
+
+.neo-ascii-pet {
+  color: var(--neo-ascii-pet-dark);
+  /* Heavy glyphs with a hairline stroke: the monkey has to hold its own over busy content. */
+  font-weight: 700;
+  -webkit-text-stroke: 0.35px currentColor;
+  paint-order: stroke fill;
+  /* A dark halo keeps the glyphs readable over light content and a warm glow lifts them off dark. */
+  text-shadow:
+    0 0 1px rgb(0 0 0 / 95%),
+    0 0 2px rgb(0 0 0 / 85%),
+    0 1px 3px rgb(0 0 0 / 70%),
+    0 0 14px color-mix(in srgb, currentColor 35%, transparent);
+}
+
+html:not(.dark) .neo-ascii-pet {
+  color: var(--neo-ascii-pet-light);
+  text-shadow:
+    0 0 1px rgb(60 30 0 / 70%),
+    0 0 2px rgb(60 30 0 / 55%),
+    0 1px 2px rgb(255 255 255 / 80%),
+    0 0 12px color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* A pinned choice beats the appearance; the halo above still follows the backdrop. */
+html[data-neo-ascii-color="light"] .neo-ascii-pet {
+  color: var(--neo-ascii-pet-light);
+}
+
+html[data-neo-ascii-color="dark"] .neo-ascii-pet {
+  color: var(--neo-ascii-pet-dark);
+}
+
+/* The color preview next to the select; "system" shows both halves on a diagonal.
+   The ring sits outside the fill as a shadow: a translucent border painted over
+   the fill reads as a light rim on the dark half and vanishes on the light one. */
+.neo-ascii-swatch {
+  display: inline-block;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.neo-ascii-swatch[data-choice="light"] {
+  background: var(--neo-ascii-pet-light);
+}
+
+.neo-ascii-swatch[data-choice="dark"] {
+  background: var(--neo-ascii-pet-dark);
+}
+
+.neo-ascii-swatch[data-choice="system"] {
+  /* A half-pixel blend at the seam keeps the diagonal from stair-stepping. */
+  background: linear-gradient(
+    135deg,
+    var(--neo-ascii-pet-light) calc(50% - 0.5px),
+    var(--neo-ascii-pet-dark) calc(50% + 0.5px)
+  );
+}
+
+.neo-ascii-nothing {
+  opacity: 0.65;
+}
+
+/* Speech bubble above the pet: one run, or every run once unfolded. Same corner
+   radius as the chat composer; overflow clipped so row hovers stay inside. */
+.neo-pet-bubble {
+  display: flex;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 1rem));
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  pointer-events: auto;
+  overflow: hidden;
+  border: 1px solid var(--contrast-border);
+  border-radius: 18px;
+  background: var(--popover);
+  box-shadow: 0 16px 32px -20px rgb(0 0 0 / 60%);
+}
+
+.neo-pet-bubble[data-side="start"] {
+  align-self: flex-start;
+}
+
+.neo-pet-bubble[data-side="end"] {
+  align-self: flex-end;
+}
+
+.neo-pet-bubble-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border-radius: 14px;
+  padding: 6px 12px;
+  text-align: left;
+  color: var(--contrast-foreground);
+  cursor: pointer;
+}
+
+.neo-pet-bubble-item:hover {
+  background: var(--accent);
+}
+
+.neo-pet-bubble-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.neo-pet-bubble-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* Round pills under the pet: the running count or a done check, and the
+   chevron that unfolds the other runs. */
+.neo-pet-controls {
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.neo-pet-control {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--contrast-border);
+  border-radius: 999px;
+  background: var(--popover);
+  color: var(--contrast-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 8px 20px -12px rgb(0 0 0 / 60%);
+}
+
+button.neo-pet-control {
+  cursor: pointer;
+}
+
+button.neo-pet-control:hover {
+  background: var(--accent);
+}
+
+/* The rabbit: box-shadow pixels hopping on a transform-only loop. */
+/* ---- Rabbit: an egg body, box-shadow tail/eye/feet, ear pseudo-element, clouds. ---- */
+
+.neo-rabbit-scene {
+  position: relative;
+  overflow: visible;
+  --neo-rabbit-fur: #fff7ee;
+  --neo-rabbit-fur-edge: #f7ede2;
+  --neo-rabbit-fur-shade: #eddccb;
+  --neo-rabbit-eye: #2b1d16;
+  --neo-rabbit-ear: #e9b3a2;
+  --neo-rabbit-nose: #d98b7a;
+  --neo-rabbit-blush: rgb(217 139 122 / 28%);
+}
+
+html:not(.dark) .neo-rabbit-scene {
+  --neo-rabbit-fur: #fffaf4;
+  --neo-rabbit-fur-edge: #efe2d3;
+  --neo-rabbit-fur-shade: #e6d5c2;
+}
+
+.neo-rabbit {
+  position: absolute;
+  left: 2em;
+  top: 2.5em;
+  width: 5em;
+  height: 3em;
+  background: radial-gradient(
+    ellipse at 42% 30%,
+    var(--neo-rabbit-fur) 52%,
+    var(--neo-rabbit-fur-shade) 100%
+  );
+  border-radius: 70% 90% 60% 50%;
+  transform: rotate(0deg) translate(0, 0);
+  animation: neo-rabbit-hop 1.5s cubic-bezier(0.42, 0, 0.58, 1) infinite;
+  z-index: 1;
+  filter: drop-shadow(0 0 1px rgb(120 84 56 / 28%));
+}
+
+/* Tail, eye (with its highlight), nose, blush, and feet ride on one
+   element's box-shadows; earlier entries paint on top. */
+.neo-rabbit::before {
+  content: "";
+  position: absolute;
+  width: 1em;
+  height: 1em;
+  background: var(--neo-rabbit-fur);
+  border-radius: 100%;
+  top: 0.5em;
+  left: -0.3em;
+  box-shadow:
+    4.07em 0.33em 0 -0.45em var(--neo-rabbit-fur),
+    4em 0.4em 0 -0.35em var(--neo-rabbit-eye),
+    4.65em 0.85em 0 -0.38em var(--neo-rabbit-nose),
+    3.8em 0.9em 0.1em -0.3em var(--neo-rabbit-blush),
+    0.5em 1em 0 var(--neo-rabbit-fur),
+    4em 1em 0 -0.3em var(--neo-rabbit-fur),
+    4em 1em 0 -0.3em var(--neo-rabbit-fur),
+    4em 1em 0 -0.4em var(--neo-rabbit-fur);
+  animation: neo-rabbit-kick 1.5s cubic-bezier(0.42, 0, 0.58, 1) infinite;
+}
+
+/* Ears: the front one shows its inner ear, the back one is a box-shadow copy. */
+.neo-rabbit::after {
+  content: "";
+  position: absolute;
+  width: 0.75em;
+  height: 2em;
+  background: linear-gradient(
+    to right,
+    var(--neo-rabbit-fur) 0 28%,
+    var(--neo-rabbit-ear) 28% 66%,
+    var(--neo-rabbit-fur) 66%
+  );
+  border-radius: 50% 100% 0 0;
+  transform: rotate(-30deg);
+  right: 1em;
+  top: -1em;
+  border-top: 1px solid var(--neo-rabbit-fur-edge);
+  border-left: 1px solid var(--neo-rabbit-fur-edge);
+  box-shadow: -0.5em 0 0 -0.1em var(--neo-rabbit-fur);
+}
+
+.neo-rabbit-scene[data-playing="false"] .neo-rabbit,
+.neo-rabbit-scene[data-playing="false"] .neo-rabbit::before {
+  animation-play-state: paused;
+}
+
+@keyframes neo-rabbit-hop {
+  0% {
+    transform: rotate(0deg) translate(0, 0) scale(1.06, 0.94);
+  }
+  12% {
+    transform: rotate(-4deg) translate(0.15em, -0.1em) scale(0.96, 1.06);
+  }
+  38% {
+    transform: rotate(-9deg) translate(0.9em, -2.6em) scale(1, 1.02);
+  }
+  56% {
+    transform: rotate(6deg) translate(1.5em, -2.2em) scale(1.02, 0.98);
+  }
+  72% {
+    transform: rotate(3deg) translate(1.9em, 0) scale(1.08, 0.92);
+  }
+  84% {
+    transform: rotate(0deg) translate(1em, 0) scale(1, 1);
+  }
+  100% {
+    transform: rotate(0deg) translate(0, 0) scale(1.06, 0.94);
+  }
+}
+
+@keyframes neo-rabbit-kick {
+  0%,
+  12%,
+  84%,
+  100% {
+    box-shadow:
+      4.07em 0.33em 0 -0.45em var(--neo-rabbit-fur),
+      4em 0.4em 0 -0.35em var(--neo-rabbit-eye),
+      4.65em 0.85em 0 -0.38em var(--neo-rabbit-nose),
+      3.8em 0.9em 0.1em -0.3em var(--neo-rabbit-blush),
+      0.5em 1em 0 var(--neo-rabbit-fur),
+      4em 1em 0 -0.3em var(--neo-rabbit-fur),
+      4em 1em 0 -0.3em var(--neo-rabbit-fur),
+      4em 1em 0 -0.4em var(--neo-rabbit-fur);
+  }
+  38%,
+  56% {
+    box-shadow:
+      4.07em 0.33em 0 -0.45em var(--neo-rabbit-fur),
+      4em 0.4em 0 -0.35em var(--neo-rabbit-eye),
+      4.65em 0.85em 0 -0.38em var(--neo-rabbit-nose),
+      3.8em 0.9em 0.1em -0.3em var(--neo-rabbit-blush),
+      0.5em 1.7em 0 var(--neo-rabbit-fur),
+      4em 1.75em 0 -0.3em var(--neo-rabbit-fur),
+      4.2em 1.75em 0 -0.2em var(--neo-rabbit-fur),
+      4.4em 1.9em 0 -0.2em var(--neo-rabbit-fur);
+  }
+}
+
+/* ---- Collapsed header actions (Settings → Neo) -----------------------------
+   With the chat header's actions folded away, the top bar slims to a strip in
+   the chrome color and the workspace under it gets rounded top corners, like a
+   card under a thin bar. The strip never drops below the native title-bar
+   area so window controls keep their room. Applies under both looks. */
+[data-chat-header][data-neo-header-collapsed] {
+  --workspace-topbar-height: max(2rem, env(titlebar-area-height, 0px));
+  background-color: var(--app-chrome-background);
+}
+
+[data-chat-header][data-neo-header-collapsed] ~ [data-chat-workspace] {
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+  overflow: clip;
+}
+
+/* ---- Chevron animations (Settings → Appearance) ----------------------------
+   A vertical chevron inside a popup trigger stays as drawn while the popup is
+   closed and turns 180° to face the popup while it is open — the usual
+   dropdown convention, so a closed menu never shows an upside-down chevron.
+   Base UI marks the trigger data-popup-open; data-popup-side
+   (components/ui/popupSide.tsx) opts the trigger in. Only vertical chevrons
+   take part; horizontal popups (submenus) are left alone. Off: chevrons stay
+   as drawn. */
+
+[data-popup-side] :is(.lucide-chevron-down, .lucide-chevron-up) {
+  transition: transform 160ms ease;
+}
+
+[data-popup-side][data-popup-open] :is(.lucide-chevron-down, .lucide-chevron-up) {
+  transform: rotate(180deg);
+}
+
+html[data-chevron-animations="off"]
+  [data-popup-side]
+  :is(.lucide-chevron-down, .lucide-chevron-up) {
+  transform: none;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-popup-side] :is(.lucide-chevron-down, .lucide-chevron-up) {
+    transition: none;
+  }
+}
+
+/* ---- Composer usage badge: its hover card is a portaled tooltip ----------
+   Surface, border, radius and shadow come from the shared tooltip popup, so it
+   matches the sidebar's thread previews; only sizing and type live here. */
+
+.neo-usage-card {
+  width: max-content;
+  min-width: 15rem;
+  max-width: 22rem;
+  padding: 10px 12px;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.4;
+  text-wrap: initial;
+}
+
+.neo-usage-card h4 {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.neo-usage-card h4:not(:first-child) {
+  margin-top: 8px;
+}
+
+.neo-usage-live-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Reset countdown after a window label: a tiny pill in the accent tint. */
+.neo-usage-reset {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.neo-usage-live-meter {
+  height: 4px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  overflow: hidden;
+}
+
+.neo-usage-live-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+/* ---- Sidebar starfield ------------------------------------------------- */
+
+/* Transparent: the header shows the sidebar's own background, so there is no
+   seam between the header art and the star sky below it. */
+.neo-sidebar-backdrop {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 0;
+  /* Twice the header: the art's top half is the header (rings complete inside
+     it), the bottom half is a tail of thinning stars that fades out fast. */
+  height: calc(var(--workspace-topbar-height) * 2);
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  mask-image: linear-gradient(to bottom, black 50%, rgb(0 0 0 / 40%) 64%, transparent 90%);
+}
+
+/* Star skies: small star shapes scattered over the sidebar, the chat top bar
+   and the workspace (NeoStarSky). They sit at z-index -1 inside an isolated
+   host, so they paint above the host's background and below its content.
+   Roughly half the stars twinkle or flare on long stepped keyframes; the rest
+   never repaint. Hidden under the Default look. */
+.neo-star-sky {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  color: #f2a26e;
+  --neo-sky-bright: #ffd9a8;
+  pointer-events: none;
+  user-select: none;
+}
+
+html[data-look="neo"] .neo-star-sky {
+  display: block;
+}
+
+html:not(.dark) .neo-star-sky {
+  color: #a4530f;
+  --neo-sky-bright: #7a3d10;
+  opacity: 0.6;
+}
+
+.neo-sky-star {
+  position: absolute;
+  display: block;
+  translate: -50% -50%;
+  opacity: var(--dim);
+}
+
+.neo-sky-star-bright {
+  color: var(--neo-sky-bright);
+}
+
+/* The halo: a soft disc of the star's own color, sized to the star. */
+.neo-sky-star::before {
+  content: "";
+  position: absolute;
+  inset: -70%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, currentColor 45%, transparent) 0%,
+    transparent 65%
+  );
+  opacity: var(--glow);
+}
+
+.neo-sky-star > svg {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.neo-sky-twinkle-0 {
+  animation: neo-sky-twinkle 6.4s steps(8) infinite;
+}
+
+.neo-sky-twinkle-1 {
+  animation: neo-sky-twinkle 8.8s steps(8) infinite;
+}
+
+.neo-sky-twinkle-2 {
+  animation: neo-sky-twinkle 11.6s steps(10) infinite;
+}
+
+.neo-sky-flare-0 {
+  animation: neo-sky-flare 13s steps(12) infinite;
+}
+
+.neo-sky-flare-1 {
+  animation: neo-sky-flare 17s steps(14) infinite;
+}
+
+@keyframes neo-sky-twinkle {
+  0%,
+  100% {
+    opacity: var(--dim);
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Mostly resting, then one brief bright glint. */
+@keyframes neo-sky-flare {
+  0%,
+  72%,
+  100% {
+    opacity: var(--dim);
+  }
+  78% {
+    opacity: 1;
+  }
+  84% {
+    opacity: 0.55;
+  }
+}
+
+/* The sidebar trail starts under the header's own starfield. */
+.neo-sidebar-trail {
+  top: var(--workspace-topbar-height);
+}
+
+html[data-look="neo"] [data-app-sidebar] [data-slot="sidebar-inner"] {
+  position: relative;
+  isolation: isolate;
+}
+
+html[data-look="neo"] [data-chat-header] {
+  isolation: isolate;
+}
+
+.neo-star {
+  animation: neo-twinkle 4.8s steps(6) infinite;
+}
+
+.neo-star-1 {
+  animation-delay: 1.6s;
+}
+
+.neo-star-2 {
+  animation-delay: 3.2s;
+}
+
+/* Embers: a few larger amber dots that breathe slowly, in steps so nothing repaints continuously. */
+.neo-ember {
+  animation: neo-ember-pulse 7s steps(8) infinite;
+}
+
+.neo-ember-1 {
+  animation-delay: 2.3s;
+}
+
+.neo-ember-2 {
+  animation-delay: 4.6s;
+}
+
+@keyframes neo-ember-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Pulsing glow for accent glyphs (brand moon, version card), in the glyph's own color. */
+.neo-ember-glow {
+  animation: neo-ember-glow 6s steps(6) infinite;
+}
+
+@keyframes neo-ember-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px color-mix(in srgb, currentColor 35%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 7px color-mix(in srgb, currentColor 85%, transparent));
+  }
+}
+
+/* ASCII spark next to the brand: four glyphs take turns. */
+.neo-ascii-spark {
+  position: relative;
+  display: inline-block;
+  width: 0.9em;
+  height: 1em;
+  color: var(--primary);
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 0.8em;
+  line-height: 1;
+  vertical-align: -0.05em;
+}
+
+.neo-ascii-spark > span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: neo-ascii-spark 3.2s steps(1) infinite;
+}
+
+.neo-ascii-spark > span:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.neo-ascii-spark > span:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+.neo-ascii-spark > span:nth-child(4) {
+  animation-delay: 2.4s;
+}
+
+@keyframes neo-ascii-spark {
+  0%,
+  24% {
+    opacity: 1;
+  }
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Branch manager move pill and its header placement. */
+.neo-branch-move {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  width: 22px;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--neo-mark) 55%, transparent);
+  background: color-mix(in srgb, var(--neo-mark) 14%, transparent);
+  color: var(--neo-mark);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.neo-branch-move:hover {
+  background: color-mix(in srgb, var(--neo-mark) 26%, transparent);
+}
+
+/* The "Neo" pill on settings and controls the fork added. */
+.neo-feature-badge {
+  border: 1px solid color-mix(in srgb, var(--neo-mark) 45%, transparent);
+  background: color-mix(in srgb, var(--neo-mark) 14%, transparent);
+  color: var(--neo-mark);
+}
+
+.neo-branch-toolbar-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+/* The strip is built for the composer (negative top margin, card surface); in the header it
+   becomes one control like Open and Commit next to it: checkout, branch, and the branch chevron
+   are flat segments separated by hairlines. */
+.neo-branch-toolbar-header > div {
+  display: flex !important;
+  /* 24 px segments plus the hairline border, the same outer height as the Open pill. */
+  height: calc(1.5rem + 2px);
+  align-items: stretch;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  overflow: hidden;
+  border: 1px solid var(--contrast-border) !important;
+  border-radius: var(--control-radius) !important;
+  background: var(--toolbar-control) !important;
+  box-shadow: none !important;
+  isolation: auto;
+}
+
+.neo-branch-toolbar-header > div > div {
+  flex: none !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  gap: 0 !important;
+}
+
+.neo-branch-toolbar-header > div > div + div {
+  border-left: 1px solid var(--contrast-border);
+}
+
+.neo-branch-toolbar-header [data-slot="button"],
+.neo-branch-toolbar-header [data-slot="menu-trigger"],
+.neo-branch-toolbar-header [data-slot="select-trigger"],
+.neo-branch-toolbar-header [data-slot="combobox-trigger"],
+.neo-branch-toolbar-header span[class*="border-transparent"] {
+  /* A definite height so the chevron segment can fill it. */
+  height: 1.5rem !important;
+  min-height: 1.5rem;
+  padding: 0 0.625rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  color: var(--foreground) !important;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.neo-branch-toolbar-header [data-slot="button"]:hover,
+.neo-branch-toolbar-header [data-slot="menu-trigger"]:hover,
+.neo-branch-toolbar-header [data-slot="select-trigger"]:hover,
+.neo-branch-toolbar-header [data-slot="combobox-trigger"]:hover {
+  background-color: var(--toolbar-control-hover) !important;
+}
+
+.neo-branch-toolbar-header [data-slot="button"] svg,
+.neo-branch-toolbar-header [data-slot="menu-trigger"] svg,
+.neo-branch-toolbar-header [data-slot="combobox-trigger"] svg,
+.neo-branch-toolbar-header span[class*="border-transparent"] svg {
+  color: var(--foreground);
+  opacity: 0.85;
+}
+
+/* The branch chevron becomes its own segment, like the chevrons of Open and Commit. */
+.neo-branch-toolbar-header [data-slot="combobox-trigger"] {
+  padding-right: 0 !important;
+}
+
+.neo-branch-toolbar-header [data-slot="combobox-trigger"] > svg:last-child {
+  box-sizing: content-box;
+  width: 1rem;
+  height: 100% !important;
+  align-self: stretch;
+  margin: 0 0 0 0.5rem;
+  padding: 0 0.25rem;
+  border-left: 1px solid var(--contrast-border);
+  opacity: 1;
+}
+
+/* The amber move pill stays a pill of its own inside the strip. */
+.neo-branch-toolbar-header .neo-branch-move {
+  align-self: center;
+  margin: 0 0.25rem !important;
+}
+
+/* The strip hides its labels when it measures as cramped; in the header there is room. */
+.neo-branch-toolbar-header [class*="composer-context:max-w-0"],
+.neo-branch-toolbar-header [class*="composer-context:opacity-0"] {
+  max-width: 240px !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* When the header tightens, the workspace label ("Local checkout") gives way first and
+   folds to its icon, with the tooltip naming it. Add action, Open and Commit keep their
+   labels down to 42rem (@2xl), so this folds at 56rem (@4xl), well before them. */
+@container header-actions (max-width: 56rem) {
+  .neo-branch-toolbar-header [data-branch-env-mode-label] {
+    max-width: 0 !important;
+  }
+
+  .neo-branch-toolbar-header [data-branch-env-mode-label] > span {
+    opacity: 0 !important;
+  }
+}
+
+@keyframes neo-twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-star,
+  .neo-sky-star,
+  .neo-ember,
+  .neo-ember-glow,
+  .neo-rabbit,
+  .neo-rabbit::before {
+    animation: none;
+  }
+
+  .neo-ascii-spark-removed {
+    opacity: 1;
+  }
+}
+
+/* Detached desktop pet window: the BrowserWindow is transparent, so every
+   layer under the pet has to be transparent as well. */
+html[data-neo-pet-window],
+html[data-neo-pet-window] body,
+html[data-neo-pet-window] #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+html[data-neo-pet-window] .neo-pet-widget-window .neo-pet-sprite {
+  cursor: grab;
+}
+
+/* Agent controls (Settings → Appearance → Agent controls). "Top bar style" gives the
+   composer's model, traits and mode controls the bordered pill of the header's Open and
+   Commit controls; the default keeps upstream's ghost buttons. Applies under both looks. */
+[data-neo-agent-controls="topbar"] [data-composer-control] {
+  margin-inline-start: 0;
+  border: 1px solid var(--contrast-border);
+  border-radius: var(--control-radius);
+  background-color: var(--toolbar-control);
+  color: var(--contrast-toolbar-control-foreground);
+}
+
+[data-neo-agent-controls="topbar"] [data-composer-control]:hover,
+[data-neo-agent-controls="topbar"] [data-composer-control][data-pressed],
+[data-neo-agent-controls="topbar"] [data-composer-control][data-popup-open] {
+  background-color: var(--toolbar-control-hover);
+}
+
+/* Plan mode keeps its filled accent while the pills are on. */
+[data-neo-agent-controls="topbar"] [data-composer-control][data-active] {
+  border-color: transparent;
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* Pills stand on their own: the hairlines between ghost controls go, the gap grows. */
+[data-neo-agent-controls="topbar"] > div:first-child {
+  gap: 0.375rem;
+}
+
+[data-neo-agent-controls="topbar"] > div:first-child > [data-slot="separator"] {
+  display: none;
+}

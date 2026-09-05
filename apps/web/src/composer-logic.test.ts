@@ -67,6 +67,28 @@ describe("composerSubmissionIntentForEnter", () => {
       }),
     ).toBe("foreground");
   });
+
+  it("sends now with Mod+Enter while a turn is running", () => {
+    expect(
+      composerSubmissionIntentForEnter({
+        isMobileViewport: false,
+        shiftKey: false,
+        modifierKey: true,
+        isDraftThread: false,
+        isRunning: true,
+      }),
+    ).toBe("immediate");
+    // Plain Enter still queues behind the running turn.
+    expect(
+      composerSubmissionIntentForEnter({
+        isMobileViewport: false,
+        shiftKey: false,
+        modifierKey: false,
+        isDraftThread: false,
+        isRunning: true,
+      }),
+    ).toBe("foreground");
+  });
 });
 
 describe("detectComposerTrigger", () => {

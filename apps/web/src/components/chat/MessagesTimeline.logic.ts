@@ -121,7 +121,10 @@ export function resolveTimelineMinimapHasPersistentGutter(viewportWidth: number)
 
 export const TIMELINE_MINIMAP_HIT_STRIP_LEFT = 12;
 export const TIMELINE_MINIMAP_HIT_STRIP_MAX_WIDTH = 40;
-export const TIMELINE_MINIMAP_EXPANDED_HIT_STRIP_WIDTH = "22rem";
+export const TIMELINE_MINIMAP_PREVIEW_LEFT = 32;
+export const TIMELINE_MINIMAP_PREVIEW_MAX_WIDTH = 320;
+export const TIMELINE_MINIMAP_PREVIEW_MIN_WIDTH = 160;
+export const TIMELINE_MINIMAP_PREVIEW_GUTTER_MARGIN = 24;
 
 /**
  * The minimap overlays the viewport's left edge while the content column is
@@ -147,15 +150,39 @@ export function resolveTimelineMinimapHitStripWidth(viewportWidth: number): numb
 }
 
 /**
- * Once the preview is open, keep the full preview and the space leading to it
+ * The hover preview sits to the right of the rail, so like the hit strip it
+ * has to fit inside the side gutter or it covers the message text it is
+ * previewing. Shrink it to the gutter, and drop it entirely (0) once the
+ * gutter is too narrow to show anything readable.
+ */
+export function resolveTimelineMinimapPreviewWidth(viewportWidth: number): number {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) {
+    return 0;
+  }
+
+  const contentWidth = Math.min(viewportWidth, TIMELINE_CONTENT_MAX_WIDTH);
+  const sideGutter = Math.max(0, (viewportWidth - contentWidth) / 2);
+  const available =
+    Math.floor(sideGutter) - TIMELINE_MINIMAP_PREVIEW_LEFT - TIMELINE_MINIMAP_PREVIEW_GUTTER_MARGIN;
+  if (available < TIMELINE_MINIMAP_PREVIEW_MIN_WIDTH) {
+    return 0;
+  }
+  return Math.min(TIMELINE_MINIMAP_PREVIEW_MAX_WIDTH, available);
+}
+
+/**
+ * Once the preview is open, keep the preview and the space leading to it
  * interactive. The collapsed strip remains gutter-capped so it cannot block
  * selecting message text.
  */
 export function resolveTimelineMinimapInteractiveWidth(
   collapsedWidth: number,
+  previewWidth: number,
   expanded: boolean,
-): number | string {
-  return expanded ? TIMELINE_MINIMAP_EXPANDED_HIT_STRIP_WIDTH : collapsedWidth;
+): number {
+  return expanded && previewWidth > 0
+    ? TIMELINE_MINIMAP_PREVIEW_LEFT + previewWidth
+    : collapsedWidth;
 }
 
 function computeElapsedMs(startIso: string, endIso: string): number | null {

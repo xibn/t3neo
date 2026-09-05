@@ -3,7 +3,13 @@ import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 export type ComposerTriggerKind = "path" | "slash-command" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
-export type ComposerSubmissionIntent = "foreground" | "background";
+/**
+ * "immediate" bypasses the message queue: the message steers the running
+ * turn instead of waiting behind it. "queue" is the opposite: the draft is
+ * queued even on an idle thread, which the composer uses to move a draft
+ * aside while a queued message is edited.
+ */
+export type ComposerSubmissionIntent = "foreground" | "background" | "immediate" | "queue";
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
@@ -17,11 +23,19 @@ export function composerSubmissionIntentForEnter(input: {
   shiftKey: boolean;
   modifierKey: boolean;
   isDraftThread: boolean;
+  /** A running turn queues plain Enter; Mod+Enter sends now (steers). */
+  isRunning?: boolean;
 }): ComposerSubmissionIntent | null {
   if (input.isMobileViewport || input.shiftKey) {
     return null;
   }
-  return input.modifierKey && input.isDraftThread ? "background" : "foreground";
+  if (input.modifierKey && input.isDraftThread) {
+    return "background";
+  }
+  if (input.modifierKey && input.isRunning) {
+    return "immediate";
+  }
+  return "foreground";
 }
 
 const isInlineTokenSegment = (

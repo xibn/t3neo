@@ -10,7 +10,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -20,10 +20,12 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
 import GitActionsControl from "../GitActionsControl";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { type DraftId } from "~/composerDraftStore";
+import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import ProjectScriptsControl, {
@@ -35,6 +37,7 @@ import { useRemoteOpenState, type RemoteOpenMode } from "../../remoteOpen";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { ProcessesButton } from "~/neo/ProcessesDialog";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProjectFavicon } from "../ProjectFavicon";
@@ -57,6 +60,13 @@ interface ChatHeaderProps {
   activeProjectFaviconPath: string | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
+  /** T3 Neo: the branch manager when it is docked in the header. */
+  extraActions?: ReactNode;
+  /** T3 Neo: show the button that folds the actions away (Settings → Neo). */
+  actionsToggle: boolean;
+  /** T3 Neo: the actions are folded away; only the fold button stays. */
+  actionsCollapsed: boolean;
+  onToggleActionsCollapsed: () => void;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
@@ -125,6 +135,10 @@ export const ChatHeader = memo(function ChatHeader({
   activeProjectFaviconPath,
   openInCwd,
   activeProjectScripts,
+  extraActions,
+  actionsToggle,
+  actionsCollapsed,
+  onToggleActionsCollapsed,
   preferredScriptId,
   keybindings,
   availableEditors,
@@ -143,6 +157,7 @@ export const ChatHeader = memo(function ChatHeader({
     activeProjectScripts ? activeProjectCwd : null,
   );
   const remoteOpenState = useRemoteOpenState(activeThreadEnvironmentId);
+  const showActions = !actionsCollapsed;
   const showOpenInPicker = shouldShowOpenInPicker({
     activeProjectName,
     activeThreadEnvironmentId,
@@ -323,6 +338,7 @@ export const ChatHeader = memo(function ChatHeader({
             <input
               autoFocus
               aria-label="Thread title"
+              data-thread-rename
               className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring"
               defaultValue={renamingTitle}
               onBlur={(event) => {
@@ -374,11 +390,12 @@ export const ChatHeader = memo(function ChatHeader({
       <div
         data-chat-header-actions
         className={cn(
-          "flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3",
+          "flex shrink-0 items-center justify-end gap-2 @2xl/header-actions:gap-3",
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
-        {activeProjectScripts && (
+        {showActions ? <ProcessesButton /> : null}
+        {showActions && activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}
             fileScripts={fileScripts}
@@ -390,7 +407,7 @@ export const ChatHeader = memo(function ChatHeader({
             onDeleteScript={onDeleteProjectScript}
           />
         )}
-        {showOpenInPicker && (
+        {showActions && showOpenInPicker && (
           <OpenInPicker
             environmentId={activeThreadEnvironmentId}
             keybindings={keybindings}
@@ -398,7 +415,8 @@ export const ChatHeader = memo(function ChatHeader({
             openInCwd={openInCwd}
           />
         )}
-        {activeProjectName && (
+        {showActions ? extraActions : null}
+        {showActions && activeProjectName && (
           <GitActionsControl
             gitCwd={gitCwd}
             activeThreadRef={scopeThreadRef(activeThreadEnvironmentId, activeThreadId)}
@@ -406,6 +424,30 @@ export const ChatHeader = memo(function ChatHeader({
             {...(draftId ? { draftId } : {})}
           />
         )}
+        {actionsToggle ? (
+          <Tooltip>
+            <TooltipTrigger render={<span className="flex shrink-0" />}>
+              <Toggle
+                className="shrink-0 [-webkit-app-region:no-drag]"
+                pressed={actionsCollapsed}
+                onPressedChange={onToggleActionsCollapsed}
+                aria-label={actionsCollapsed ? "Show header actions" : "Hide header actions"}
+                variant="ghost"
+                size="sm"
+                data-chat-header-actions-toggle
+              >
+                {actionsCollapsed ? (
+                  <ChevronsLeftIcon className="size-4" />
+                ) : (
+                  <ChevronsRightIcon className="size-4" />
+                )}
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipPopup side="bottom">
+              {actionsCollapsed ? "Show header actions" : "Hide header actions"}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
       </div>
     </div>
   );

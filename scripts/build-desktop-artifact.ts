@@ -159,6 +159,7 @@ interface BuildCliInput {
   readonly skipBuild: Option.Option<boolean>;
   readonly keepStage: Option.Option<boolean>;
   readonly signed: Option.Option<boolean>;
+  readonly selfSigned: Option.Option<boolean>;
   readonly verbose: Option.Option<boolean>;
   readonly mockUpdates: Option.Option<boolean>;
   readonly mockUpdateServerPort: Option.Option<number>;
@@ -769,6 +770,13 @@ interface ResolvedBuildOptions {
   readonly skipBuild: boolean;
   readonly keepStage: boolean;
   readonly signed: boolean;
+  /**
+   * macOS only: sign with whatever code-signing identity CSC_LINK holds (a
+   * self-signed certificate works), with no notarization and no passkey
+   * entitlements. Enough for Squirrel to accept in-place updates between
+   * builds signed with the same certificate.
+   */
+  readonly selfSigned: boolean;
   readonly verbose: boolean;
   readonly mockUpdates: boolean;
   readonly mockUpdateServerPort: number | undefined;
@@ -1322,6 +1330,7 @@ const BuildEnvConfig = Config.all({
   skipBuild: Config.boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
   keepStage: Config.boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
   signed: Config.boolean("T3CODE_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
+  selfSigned: Config.boolean("T3CODE_DESKTOP_SELF_SIGNED").pipe(Config.withDefault(false)),
   verbose: Config.boolean("T3CODE_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
   mockUpdates: Config.boolean("T3CODE_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
   mockUpdateServerPort: Config.string("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.option),
@@ -1407,6 +1416,8 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const skipBuild = resolveBooleanFlag(input.skipBuild, env.skipBuild);
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
   const signed = resolveBooleanFlag(input.signed, env.signed);
+  // A full Apple signing setup already covers everything self-signing offers.
+  const selfSigned = !signed && resolveBooleanFlag(input.selfSigned, env.selfSigned);
   const verbose = resolveBooleanFlag(input.verbose, env.verbose);
 
   const mockUpdates = resolveBooleanFlag(input.mockUpdates, env.mockUpdates);
@@ -1433,6 +1444,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     skipBuild,
     keepStage,
     signed,
+    selfSigned,
     verbose,
     mockUpdates,
     mockUpdateServerPort,
@@ -2071,8 +2083,13 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   };
 });
 
+// Upstream nightlies are X.Y.Z-nightly.<date>.<run>; T3 Neo rebuilds of them
+// are X.Y.Z-nightly.neo.<date>.<run>. "nightly" stays the first pre-release word
+// because electron-updater reads the update channel from it.
+const NIGHTLY_VERSION_PATTERN = /-nightly\.(?:neo\.)?\d{8}\.\d+$/;
+
 export function resolveDesktopUpdateChannel(version: string): "latest" | "nightly" {
-  return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
+  return NIGHTLY_VERSION_PATTERN.test(version) ? "nightly" : "latest";
 }
 
 function isDesktopPreviewVersion(version: string): boolean {
@@ -2118,8 +2135,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? "T3 Neo (Nightly)"
+    : (desktopPackageJson.productName ?? "T3 Neo");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2127,6 +2144,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   target: string,
   version: string,
   signed: boolean,
+  selfSigned: boolean,
   mockUpdates: boolean,
   mockUpdateServerPort: number | undefined,
   macPasskeySigning:
@@ -2143,7 +2161,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName: "T3-Neo-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
     directories: {
@@ -2187,7 +2205,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           schemes: ["t3code", "t3code-dev"],
         },
       ],
-      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      ...(signed || selfSigned ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      // A self-signed certificate cannot be notarized; say so instead of
+      // letting electron-builder look for Apple credentials.
+      ...(selfSigned ? { notarize: false } : {}),
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
@@ -3189,6 +3210,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.target,
       appVersion,
       options.signed,
+      options.selfSigned,
       options.mockUpdates,
       options.mockUpdateServerPort,
       macPasskeySigning && macEntitlementsPath
@@ -3275,9 +3297,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     }
   }
   if (!options.signed) {
-    buildEnv.CSC_IDENTITY_AUTO_DISCOVERY = "false";
-    delete buildEnv.CSC_LINK;
-    delete buildEnv.CSC_KEY_PASSWORD;
+    // Self-signed keeps the certificate but never the notarization credentials.
+    if (!options.selfSigned) {
+      buildEnv.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+      delete buildEnv.CSC_LINK;
+      delete buildEnv.CSC_KEY_PASSWORD;
+    }
     delete buildEnv.APPLE_API_KEY;
     delete buildEnv.APPLE_API_KEY_ID;
     delete buildEnv.APPLE_API_ISSUER;
@@ -3427,6 +3452,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   signed: Flag.boolean("signed").pipe(
     Flag.withDescription(
       "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: T3CODE_DESKTOP_SIGNED).",
+    ),
+    Flag.optional,
+  ),
+  selfSigned: Flag.boolean("self-signed").pipe(
+    Flag.withDescription(
+      "macOS: sign with the CSC_LINK certificate only (self-signed is fine), no notarization, no passkey entitlements; keeps in-place updates working (env: T3CODE_DESKTOP_SELF_SIGNED).",
     ),
     Flag.optional,
   ),

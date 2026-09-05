@@ -1,3 +1,26 @@
+# T3 Neo
+
+<p>
+  <a href="https://xibn.github.io/t3neo/download/"><img src="assets/neo/download-button.svg" alt="Download T3 Neo for your OS" width="340" height="56"></a>
+</p>
+
+A fork of [T3 Code](https://github.com/pingdotgg/t3code) that follows every stable upstream release and adds:
+
+- **Neo look.** Warm amber palette, flat bordered surfaces, pill controls, a star sky over sidebar and top bar. On by default; the standard look stays selectable.
+- **Message queue.** Messages sent during a running turn wait and start their own turn afterwards. Send now steers instead. Per-message edit, reorder, discard, retry.
+- **Usage badges.** Every finished turn shows its share of your plan window, or the billed cost. The composer pill shows the tightest limit and opens plan, last turn, and month-to-date.
+- **Collapsible header.** One button folds the header actions away into a slim bar with a rounded workspace below.
+- **Pets.** Hoppy, Wukong the reactive ASCII monkey, or a still Lunar badge. Running-thread count, unseen-completion marker, activity list, optional floating desktop window.
+- **Neo settings.** Toggles for all of the above, chevron animations, ASCII color, branch manager position, default context window and fast mode, in-place desktop updates, and more.
+
+## Screenshots
+
+<img src="assets/neo/screenshots/header-collapsed.jpg" alt="Chat in the Neo look with the header collapsed to a slim bar" width="100%">
+
+<img src="assets/neo/screenshots/pets.jpg" alt="Pet settings with the four pet cards" width="100%">
+
+---
+
 # T3 Code
 
 T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).

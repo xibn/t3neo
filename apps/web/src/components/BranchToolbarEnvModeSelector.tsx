@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 export const PREVIOUS_WORKTREE_SELECT_VALUE = "previous-worktree";
 
@@ -61,6 +62,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
         )}
         <span
           data-composer-label
+          data-branch-env-mode-label
           className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
         >
           <span
@@ -74,74 +76,87 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
     );
   }
 
+  // Names the workspace when the header folds the label to its icon.
+  const currentLabel =
+    envModeItems.find((item) => item.value === effectiveEnvMode)?.label ??
+    resolveEnvModeLabel(effectiveEnvMode);
+
   return (
-    <Select
-      modal={false}
-      value={effectiveEnvMode}
-      onValueChange={(value: string | null) => {
-        if (value === PREVIOUS_WORKTREE_SELECT_VALUE) {
-          onUsePreviousWorktree?.();
-          return;
-        }
-        onEnvModeChange(value as EnvMode);
-      }}
-      items={envModeItems}
-    >
-      <SelectTrigger
-        variant="ghost"
-        size="xs"
-        className="min-w-0 shrink font-medium"
-        aria-label="Workspace"
-        data-composer-context-control
+    <Tooltip>
+      <Select
+        modal={false}
+        value={effectiveEnvMode}
+        onValueChange={(value: string | null) => {
+          if (value === PREVIOUS_WORKTREE_SELECT_VALUE) {
+            onUsePreviousWorktree?.();
+            return;
+          }
+          onEnvModeChange(value as EnvMode);
+        }}
+        items={envModeItems}
       >
-        {effectiveEnvMode === "worktree" ? (
-          <FolderGit2Icon className="size-3" />
-        ) : activeWorktreePath ? (
-          <FolderGitIcon className="size-3" />
-        ) : (
-          <FolderIcon className="size-3" />
-        )}
-        <span
-          data-composer-label
-          className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
+        <TooltipTrigger
+          render={
+            <SelectTrigger
+              variant="ghost"
+              size="xs"
+              className="min-w-0 shrink font-medium"
+              aria-label="Workspace"
+              data-composer-context-control
+            />
+          }
         >
+          {effectiveEnvMode === "worktree" ? (
+            <FolderGit2Icon className="size-3" />
+          ) : activeWorktreePath ? (
+            <FolderGitIcon className="size-3" />
+          ) : (
+            <FolderIcon className="size-3" />
+          )}
           <span
-            data-composer-label-motion
-            className="block w-full min-w-0 max-w-[240px] origin-left truncate transition-[opacity,transform] duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:[transform:translateX(-0.25rem)_scaleX(0.95)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transform-none motion-reduce:transition-opacity"
+            data-composer-label
+            data-branch-env-mode-label
+            className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
           >
-            <SelectValue />
+            <span
+              data-composer-label-motion
+              className="block w-full min-w-0 max-w-[240px] origin-left truncate transition-[opacity,transform] duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:[transform:translateX(-0.25rem)_scaleX(0.95)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transform-none motion-reduce:transition-opacity"
+            >
+              <SelectValue />
+            </span>
           </span>
-        </span>
-      </SelectTrigger>
-      <SelectPopup>
-        <SelectGroup>
-          <SelectGroupLabel>Workspace</SelectGroupLabel>
-          <SelectItem value="local">
-            <span className="inline-flex items-center gap-1.5">
-              {activeWorktreePath ? (
-                <FolderGitIcon className="size-3" />
-              ) : (
-                <FolderIcon className="size-3" />
-              )}
-              {resolveCurrentWorkspaceLabel(activeWorktreePath)}
-            </span>
-          </SelectItem>
-          <SelectItem value="worktree">
-            <span className="inline-flex items-center gap-1.5">
-              <FolderGit2Icon className="size-3" />
-              {resolveEnvModeLabel("worktree")}
-            </span>
-          </SelectItem>
-          {showPreviousWorktree && previousWorktreeLabel ? (
-            <SelectItem value={PREVIOUS_WORKTREE_SELECT_VALUE}>
+        </TooltipTrigger>
+        <SelectPopup>
+          <SelectGroup>
+            <SelectGroupLabel>Workspace</SelectGroupLabel>
+            <SelectItem value="local">
               <span className="inline-flex items-center gap-1.5">
-                <HistoryIcon className="size-3" />
-                {previousWorktreeLabel}
+                {activeWorktreePath ? (
+                  <FolderGitIcon className="size-3" />
+                ) : (
+                  <FolderIcon className="size-3" />
+                )}
+                {resolveCurrentWorkspaceLabel(activeWorktreePath)}
               </span>
             </SelectItem>
-          ) : null}
-        </SelectGroup>
-      </SelectPopup>
-    </Select>
+            <SelectItem value="worktree">
+              <span className="inline-flex items-center gap-1.5">
+                <FolderGit2Icon className="size-3" />
+                {resolveEnvModeLabel("worktree")}
+              </span>
+            </SelectItem>
+            {showPreviousWorktree && previousWorktreeLabel ? (
+              <SelectItem value={PREVIOUS_WORKTREE_SELECT_VALUE}>
+                <span className="inline-flex items-center gap-1.5">
+                  <HistoryIcon className="size-3" />
+                  {previousWorktreeLabel}
+                </span>
+              </SelectItem>
+            ) : null}
+          </SelectGroup>
+        </SelectPopup>
+      </Select>
+      <TooltipPopup side="bottom">{currentLabel}</TooltipPopup>
+    </Tooltip>
   );
 });

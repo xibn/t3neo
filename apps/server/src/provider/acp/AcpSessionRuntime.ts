@@ -10,6 +10,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -17,6 +18,11 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import * as EffectAcpClient from "effect-acp/client";
 import * as EffectAcpErrors from "effect-acp/errors";
+import {
+  registerProcessOrigin,
+  unregisterProcessOrigin,
+  type ProcessOrigin,
+} from "../../diagnostics/ProcessOrigins.ts";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -67,6 +73,8 @@ export interface AcpSpawnInput {
 
 export interface AcpSessionRuntimeOptions {
   readonly spawn: AcpSpawnInput;
+  /** T3 Neo Processes dialog: who the spawned agent works for; probes leave it out. */
+  readonly origin?: ProcessOrigin;
   readonly cwd: string;
   readonly resumeSessionId?: string;
   readonly sessionLoadTimeout?: Duration.Input;
@@ -255,6 +263,8 @@ export class AcpSessionRuntime extends Context.Service<
   }
 >()("t3/provider/acp/AcpSessionRuntime") {}
 
+const isAcpRequestError = Schema.is(EffectAcpErrors.AcpRequestError);
+
 interface AcpStartedState extends AcpSessionRuntimeStartResult {}
 
 type AcpStartState =
@@ -361,6 +371,13 @@ export const make = (
             }),
         ),
       );
+    if (options.origin) {
+      const origin = options.origin;
+      registerProcessOrigin(child.pid, origin);
+      yield* Effect.addFinalizer(() => Effect.sync(() => unregisterProcessOrigin(child.pid))).pipe(
+        Effect.provideService(Scope.Scope, runtimeScope),
+      );
+    }
 
     const acpContext = yield* Layer.build(
       EffectAcpClient.layerChildProcess(child, {
@@ -565,6 +582,18 @@ export const make = (
         | EffectAcpSchema.LoadSessionResponse
         | EffectAcpSchema.NewSessionResponse
         | EffectAcpSchema.ResumeSessionResponse;
+      const createSession = Effect.gen(function* () {
+        const createPayload = {
+          cwd: options.cwd,
+          mcpServers: options.mcpServers ?? [],
+        } satisfies EffectAcpSchema.NewSessionRequest;
+        return yield* runLoggedRequest(
+          "session/new",
+          createPayload,
+          acp.agent.createSession(createPayload),
+        );
+      });
+
       if (options.resumeSessionId) {
         const loadPayload = {
           sessionId: options.resumeSessionId,
@@ -588,8 +617,7 @@ export const make = (
           }),
         );
 
-        sessionId = options.resumeSessionId;
-        sessionSetupResult = yield* Effect.gen(function* () {
+        const loadOutcome = yield* Effect.gen(function* () {
           yield* logRequest({
             method: "session/load",
             payload: loadPayload,
@@ -637,18 +665,32 @@ export const make = (
             ),
           );
 
-          return loaded;
-        }).pipe(Effect.ensuring(Ref.set(sessionLoadGateRef, Option.none())));
-      } else {
-        const createPayload = {
-          cwd: options.cwd,
-          mcpServers: options.mcpServers ?? [],
-        } satisfies EffectAcpSchema.NewSessionRequest;
-        const created = yield* runLoggedRequest(
-          "session/new",
-          createPayload,
-          acp.agent.createSession(createPayload),
+          return { _tag: "loaded" as const, loaded };
+        }).pipe(
+          Effect.ensuring(Ref.set(sessionLoadGateRef, Option.none())),
+          // The agent answered and said no: the stored session is gone or
+          // unknown to this agent build. Start fresh instead of failing the
+          // turn; transport faults, timeouts and exits still surface as before.
+          Effect.catch((error) =>
+            isAcpRequestError(error)
+              ? Effect.logWarning("acp session/load rejected; starting a new session", {
+                  sessionId: options.resumeSessionId,
+                  code: error.code,
+                  detail: error.errorMessage,
+                }).pipe(Effect.as({ _tag: "rejected" as const }))
+              : Effect.fail(error),
+          ),
         );
+        if (loadOutcome._tag === "loaded") {
+          sessionId = options.resumeSessionId;
+          sessionSetupResult = loadOutcome.loaded;
+        } else {
+          const created = yield* createSession;
+          sessionId = created.sessionId;
+          sessionSetupResult = created;
+        }
+      } else {
+        const created = yield* createSession;
         sessionId = created.sessionId;
         sessionSetupResult = created;
       }

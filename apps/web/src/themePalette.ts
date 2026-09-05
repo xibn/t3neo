@@ -1890,6 +1890,16 @@ export function applyThemeColorPreview(colors: ThemeColors, appearance: ThemeApp
   }
 }
 
+/**
+ * Neo's ASCII pet reads one color per appearance so its swatch can show both.
+ * Under the default look each half takes the theme's action color for that
+ * mode (the moon in the version card); the Neo look keeps its own amber.
+ */
+const NEO_ASCII_PET_VARIABLES = {
+  light: "--neo-ascii-pet-light",
+  dark: "--neo-ascii-pet-dark",
+} as const;
+
 export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppearance): void {
   if (typeof document === "undefined") return;
 
@@ -1899,18 +1909,28 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
   setThemePreviewSidebarArtwork(null);
   const palette = getThemeDefinition(theme);
 
-  if (palette) {
+  // The Neo look brings its own palette and index.css keys theme-specific
+  // rules on data-theme-id, so a stored theme must not mark or paint the
+  // document while Neo is on. The preference stays stored for the default look.
+  if (palette && root.dataset.look !== "neo") {
     root.dataset.themeId = palette.id;
     const mode = appearance ?? legacyThemeMode(theme) ?? palette.appearance;
     const colors = getThemeColorsForMode(palette, mode) ?? palette.colors;
     for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
       root.style.setProperty(APP_THEME_VARIABLES[role], value);
     }
+    for (const half of ["light", "dark"] as const) {
+      const halfColors = getThemeColorsForMode(palette, half) ?? colors;
+      root.style.setProperty(NEO_ASCII_PET_VARIABLES[half], halfColors.messageAction);
+    }
     return;
   }
 
   delete root.dataset.themeId;
-  for (const variable of Object.values(APP_THEME_VARIABLES)) {
+  for (const variable of [
+    ...Object.values(APP_THEME_VARIABLES),
+    ...Object.values(NEO_ASCII_PET_VARIABLES),
+  ]) {
     root.style.removeProperty(variable);
   }
 }

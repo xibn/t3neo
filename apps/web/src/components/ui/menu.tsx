@@ -5,16 +5,29 @@ import { ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
+import { PopupSideProvider, usePopupTriggerRef, usePublishPopupSide } from "./popupSide";
 
 const MenuCreateHandle = MenuPrimitive.createHandle;
 
-const Menu = MenuPrimitive.Root;
+function Menu(props: MenuPrimitive.Root.Props) {
+  return (
+    <PopupSideProvider>
+      <MenuPrimitive.Root {...props} />
+    </PopupSideProvider>
+  );
+}
 
 const MenuPortal = MenuPrimitive.Portal;
 
-function MenuTrigger({ className, children, ...props }: MenuPrimitive.Trigger.Props) {
+function MenuTrigger({ className, children, ref, ...props }: MenuPrimitive.Trigger.Props) {
+  const triggerRef = usePopupTriggerRef(ref);
   return (
-    <MenuPrimitive.Trigger className={className} data-slot="menu-trigger" {...props}>
+    <MenuPrimitive.Trigger
+      className={className}
+      data-slot="menu-trigger"
+      ref={triggerRef}
+      {...props}
+    >
       {children}
     </MenuPrimitive.Trigger>
   );
@@ -36,6 +49,7 @@ function MenuPopup({
   side?: MenuPrimitive.Positioner.Props["side"];
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
 }) {
+  const positionerRef = usePublishPopupSide(side);
   const hasExplicitWidthClass =
     typeof className === "string" &&
     className.split(/\s+/).some((classToken) => {
@@ -51,6 +65,7 @@ function MenuPopup({
         anchor={anchor}
         className="z-[130]"
         data-slot="menu-positioner"
+        ref={positionerRef}
         side={side}
         sideOffset={sideOffset}
       >

@@ -1,0 +1,676 @@
+/*
+ * Neo look. A warm near-black canvas with cream text, a single amber
+ * accent and one leaf green for success; bordered frosted-glass surfaces;
+ * softly squared controls;
+ * light, tight display typography with small uppercase labels. Applied by
+ * `data-look="neo"` on <html> (see appearanceLook.ts). Loaded after
+ * index.css so equal-specificity selectors win here. Plain CSS on purpose:
+ * this file is not a Tailwind entry, so no @variant / @apply.
+ */
+
+html[data-look="neo"]:root,
+html[data-look="neo"][data-theme-id]:root {
+  color-scheme: light;
+  --font-sans:
+    "Schibsted Grotesk", "Inter Tight", "Inter", "Helvetica Neue", Helvetica, Arial, system-ui,
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --radius: 0.875rem;
+  /* Controls share one soft corner, in scale with the 1rem popups; no pills. */
+  --control-radius: 0.625rem;
+  /* Glass surfaces (composer, header, popups) frost what lies behind them. The
+     opacity itself follows Settings → Appearance → Glass opacity, which the app
+     writes inline on <html>; only the blur and saturation are Neo's. */
+  --glass-blur: 14px;
+  --glass-saturation: 1.08;
+
+  --neo-accent: #c8641f;
+  --neo-accent-soft: rgb(200 100 31 / 14%);
+  --neo-ink: #17110d;
+
+  /* One leaf-green scale in place of Tailwind's mint emerald and teal. Utilities
+     resolve `var(--color-emerald-*)` at use time, so every `text-emerald-600`,
+     `dark:text-emerald-300/90` and `--success` token follows without touching
+     the components. */
+  --neo-green: #1cac5a;
+  --neo-green-bright: #06df73;
+  --neo-green-deep: #1e7841;
+  --neo-green-deeper: #18562e;
+  --color-emerald-300: var(--neo-green);
+  --color-emerald-400: var(--neo-green);
+  --color-emerald-500: var(--neo-green);
+  --color-emerald-600: var(--neo-green-deep);
+  --color-emerald-700: var(--neo-green-deeper);
+  --color-teal-300: var(--neo-green-bright);
+  --color-teal-600: var(--neo-green-deeper);
+
+  /* Light Neo: warm parchment rather than white, with firmer borders and ink. */
+  --background: #e3d9cb;
+  --app-chrome-background: #dad0c1;
+  --toolbar-background: #dad0c1;
+  --toolbar-foreground: var(--neo-ink);
+  --toolbar-border: rgb(23 17 13 / 20%);
+  --toolbar-control: #ede5da;
+  --toolbar-control-foreground: var(--neo-ink);
+  --toolbar-control-hover: #d8cdbd;
+  --surface-raised: #ede5da;
+  --foreground: var(--neo-ink);
+  --card: #ede5da;
+  --card-foreground: var(--neo-ink);
+  --popover: #ede5da;
+  --popover-foreground: var(--neo-ink);
+  --primary: var(--neo-accent);
+  --primary-foreground: #fff7ee;
+  --secondary: #d8cdbd;
+  --secondary-foreground: var(--neo-ink);
+  --muted: #d8cdbd;
+  --muted-foreground: #5f5044;
+  --placeholder: #857466;
+  --secondary-label: #5f5044;
+  --icon-muted: #6f5f51;
+  --message-surface: #dcd1c1;
+  --message-foreground: var(--neo-ink);
+  --message-action: var(--neo-accent);
+  --message-action-foreground: #fff7ee;
+  --message-action-hover: #b05617;
+  --accent: #d8cdbd;
+  --accent-foreground: var(--neo-ink);
+  --border: rgb(23 17 13 / 20%);
+  --input: rgb(23 17 13 / 30%);
+  --ring: var(--neo-accent);
+  --error: #d4463f;
+  --error-foreground: #a12f29;
+  --error-surface: rgb(212 70 63 / 8%);
+  --destructive: var(--error);
+  --destructive-foreground: var(--error-foreground);
+  --warning: var(--neo-accent);
+  --warning-foreground: #9c5219;
+  --warning-surface: var(--neo-accent-soft);
+  --update: var(--neo-accent);
+  --update-foreground: #9c5219;
+  --update-surface: var(--neo-accent-soft);
+  --info: #4f7fb8;
+  --info-foreground: #2f5f95;
+  --success: var(--neo-green);
+  --success-foreground: var(--neo-green-deep);
+  --sidebar: #d1c6b5;
+  --neo-sidebar: #d1c6b5;
+  --sidebar-foreground: var(--neo-ink);
+  --sidebar-muted-foreground: #5f5044;
+  --sidebar-control-surface: #cfc2b0;
+  /* Rows darken like a soft shadow on the parchment instead of lifting to white. */
+  --neo-sidebar-row-hover: rgb(23 17 13 / 6%);
+  --neo-sidebar-row-active: rgb(23 17 13 / 10%);
+  --neo-sidebar-row-selected: rgb(23 17 13 / 9%);
+  --sidebar-row-hover: var(--neo-sidebar-row-hover);
+  --sidebar-row-active: var(--neo-sidebar-row-active);
+  --sidebar-row-selected: var(--neo-sidebar-row-selected);
+  --sidebar-border: rgb(23 17 13 / 20%);
+  --sidebar-stage-fade: #d1c6b5;
+  --code-background: #dcd4c7;
+  --code-foreground: #241a13;
+  --terminal-background: #14110e;
+  --terminal-foreground: #ffedd9;
+  --terminal-cursor: #f2a26e;
+  --terminal-selection-background: rgb(242 162 110 / 30%);
+  --app-scrollbar-thumb: rgb(30 22 17 / 14%);
+  --app-scrollbar-thumb-hover: rgb(30 22 17 / 24%);
+}
+
+html[data-look="neo"].dark:root,
+html[data-look="neo"][data-theme-id].dark:root {
+  color-scheme: dark;
+  --neo-accent: #f2a26e;
+  --neo-accent-soft: rgb(242 162 110 / 12%);
+  --neo-ink: #ffedd9;
+  /* The deep steps are light-mode text; on the dark canvas they sink into the
+     background, so unprefixed `text-emerald-600/700` read as the base green. */
+  --color-emerald-600: var(--neo-green);
+  --color-emerald-700: var(--neo-green);
+
+  --background: #110f0d;
+  --app-chrome-background: #0c0b0a;
+  --toolbar-background: #0c0b0a;
+  --toolbar-foreground: var(--neo-ink);
+  --toolbar-border: rgb(255 237 217 / 8%);
+  --toolbar-control: #1a1613;
+  --toolbar-control-foreground: var(--neo-ink);
+  --toolbar-control-hover: #241f1a;
+  --surface-raised: #171412;
+  --foreground: var(--neo-ink);
+  --card: #171412;
+  --card-foreground: var(--neo-ink);
+  --popover: #1c1815;
+  --popover-foreground: var(--neo-ink);
+  --primary: var(--neo-accent);
+  --primary-foreground: #1b120a;
+  --secondary: #1f1a16;
+  --secondary-foreground: var(--neo-ink);
+  --muted: #1f1a16;
+  --muted-foreground: #b5a698;
+  --placeholder: #8c7d70;
+  --secondary-label: #b5a698;
+  --icon-muted: #a09284;
+  --message-surface: #1f1a16;
+  --message-foreground: var(--neo-ink);
+  --message-action: var(--neo-accent);
+  --message-action-foreground: #1b120a;
+  --message-action-hover: #f7b487;
+  --accent: #221e1a;
+  --accent-foreground: var(--neo-ink);
+  --border: rgb(255 237 217 / 14%);
+  --input: rgb(255 237 217 / 16%);
+  --ring: var(--neo-accent);
+  --error: #e5484d;
+  --error-foreground: #ff8a8e;
+  --error-surface: rgb(229 72 77 / 10%);
+  --warning-foreground: #f7b487;
+  --update-foreground: #f7b487;
+  --info: #7aa7dd;
+  --info-foreground: #a8c6ec;
+  --success: var(--neo-green);
+  --success-foreground: var(--neo-green);
+  --sidebar: #0c0b0a;
+  --neo-sidebar: #0c0b0a;
+  /* Dimmer than the canvas ink: the column is a long list of labels and
+     icons, and full cream on near-black glares. */
+  --sidebar-foreground: #d4c5b4;
+  --sidebar-muted-foreground: #9a8b7d;
+  --sidebar-control-surface: #1a1613;
+  --neo-sidebar-row-hover: rgb(255 237 217 / 5%);
+  --neo-sidebar-row-active: rgb(255 237 217 / 8%);
+  --neo-sidebar-row-selected: rgb(255 237 217 / 10%);
+  --sidebar-row-hover: var(--neo-sidebar-row-hover);
+  --sidebar-row-active: var(--neo-sidebar-row-active);
+  --sidebar-row-selected: var(--neo-sidebar-row-selected);
+  --sidebar-border: rgb(255 237 217 / 8%);
+  --sidebar-stage-fade: #0c0b0a;
+  --code-background: #0c0b0a;
+  --code-foreground: #f5e6d3;
+  --terminal-background: #0c0b0a;
+  --app-scrollbar-thumb: rgb(255 237 217 / 10%);
+  --app-scrollbar-thumb-hover: rgb(255 237 217 / 16%);
+}
+
+/* The sidebar redeclares its own palette; keep it on the same tokens. Themes and the
+   dark scheme reassign --sidebar and the row tints at the root and on the column
+   (light rows go white there), so the column pins them here. */
+html[data-look="neo"] [data-app-sidebar] {
+  --sidebar: var(--neo-sidebar);
+  --sidebar-row-hover: var(--neo-sidebar-row-hover);
+  --sidebar-row-active: var(--neo-sidebar-row-active);
+  --sidebar-row-selected: var(--neo-sidebar-row-selected);
+  --background: var(--sidebar);
+  --card: var(--surface-raised);
+  --accent: var(--sidebar-row-hover);
+  /* Keycaps and other muted fills; the sidebar's own control tint, not near-white zinc. */
+  --muted: var(--sidebar-control-surface);
+  --foreground: var(--sidebar-foreground);
+  --accent-foreground: var(--sidebar-foreground);
+  --muted-foreground: var(--sidebar-muted-foreground);
+  border-color: var(--sidebar-border);
+}
+
+/* ---- Typography ------------------------------------------------------- */
+
+html[data-look="neo"] body {
+  letter-spacing: -0.005em;
+  font-feature-settings: "ss01", "cv11";
+}
+
+html[data-look="neo"] h1,
+html[data-look="neo"] h2 {
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+html[data-look="neo"] h1 {
+  font-weight: 300;
+}
+
+html[data-look="neo"] [data-surface-subheader] {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--contrast-muted-foreground);
+}
+
+html[data-look="neo"] ::selection {
+  background: color-mix(in srgb, var(--neo-accent) 32%, transparent);
+}
+
+/* ---- Shapes: soft corners and flat cards ------------------------------ */
+
+html[data-look="neo"] [data-slot="button"],
+html[data-look="neo"] [data-slot="toggle"],
+html[data-look="neo"] [data-slot="badge"],
+html[data-look="neo"] [data-slot="sidebar-trigger"],
+html[data-look="neo"] [data-toolbar-control],
+html[data-look="neo"] [data-slot="menu-trigger"] {
+  border-radius: var(--control-radius);
+}
+
+html[data-look="neo"] [data-slot="input"],
+html[data-look="neo"] [data-slot="sidebar-input"],
+html[data-look="neo"] [data-slot="textarea"],
+html[data-look="neo"] [data-slot="textarea-control"] {
+  border-radius: 0.75rem;
+}
+
+/* Thread rename fields (chat header, sidebar): a filled field like the
+   composer, with inner padding so the select-all highlight sits inside the
+   outline instead of touching it. The highlight itself is ::selection, which
+   browsers draw square. */
+html[data-look="neo"] input[data-thread-rename] {
+  border-radius: var(--control-radius);
+  padding-inline: 0.625rem;
+  background-color: var(--card);
+}
+
+html[data-look="neo"] [data-slot="menu-popup"],
+html[data-look="neo"] [data-slot="select-popup"],
+html[data-look="neo"] [data-slot="popover-popup"],
+html[data-look="neo"] [data-slot="combobox-popup"],
+html[data-look="neo"] [data-slot="autocomplete-popup"],
+html[data-look="neo"] [data-slot="tooltip-popup"],
+html[data-look="neo"] [data-slot="dialog-popup"],
+html[data-look="neo"] [data-slot="alert-dialog-popup"],
+html[data-look="neo"] [data-slot="command-dialog-popup"],
+html[data-look="neo"] [data-slot="sheet-popup"],
+html[data-look="neo"] [data-slot="toast-popup"] {
+  border: 1px solid var(--contrast-border);
+  border-radius: 1rem;
+  background-color: var(--popover);
+  backdrop-filter: none;
+  box-shadow:
+    0 1px 0 rgb(255 237 217 / 4%) inset,
+    0 24px 48px -24px rgb(0 0 0 / 55%);
+}
+
+/* Popups own their corner and shadow. The select's inner glass shell and the
+   highlight pseudo-elements follow that corner instead of drawing a second,
+   rounder shadow underneath. */
+html[data-look="neo"] [data-slot="select-popup"] > .dropdown-glass {
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+html[data-look="neo"] [data-slot="popover-popup"]::before,
+html[data-look="neo"] [data-slot="tooltip-popup"]::before {
+  border-radius: inherit;
+}
+
+/* Tooltips carry rich content (thread previews), so they stay a touch tighter. */
+html[data-look="neo"] [data-slot="tooltip-popup"] {
+  border-radius: 0.85rem;
+  overflow: hidden;
+}
+
+html[data-look="neo"] [data-slot="dialog-popup"],
+html[data-look="neo"] [data-slot="alert-dialog-popup"],
+html[data-look="neo"] [data-slot="command-dialog-popup"] {
+  border-radius: 1.25rem;
+}
+
+/* Thread status: working reads in the look's amber, not upstream's sky blue. */
+html[data-look="neo"] [data-app-sidebar] .text-sky-600,
+html[data-look="neo"].dark [data-app-sidebar] .dark\:text-sky-400 {
+  color: var(--neo-accent);
+}
+
+/* Sidebar: solid column with pill rows. It draws no right edge of its own — the
+   content panel's outline (top + left border wrapping into a rounded corner) is the
+   single stroke that separates sidebar, top bar, and content. */
+html[data-look="neo"] [data-app-sidebar] {
+  border-right: 0;
+}
+
+html[data-look="neo"] [data-thread-item] > a,
+html[data-look="neo"] [data-thread-item] > button,
+html[data-look="neo"] [data-thread-item] > div > a,
+html[data-look="neo"] [data-sidebar="menu-item"] > a,
+html[data-look="neo"] [data-sidebar="menu-item"] > button {
+  border-radius: var(--control-radius);
+}
+
+/* Chat header: a hairline under the toolbar, pill controls. */
+html[data-look="neo"] [data-chat-header] {
+  border-bottom: 1px solid var(--contrast-border);
+  background-color: var(--app-chrome-background);
+}
+
+html[data-look="neo"] [data-chat-header] [data-slot="button"],
+html[data-look="neo"] [data-chat-header] [data-slot="menu-trigger"],
+html[data-look="neo"] [data-chat-header] [data-toolbar-control] {
+  border: 1px solid var(--contrast-border);
+  background-color: var(--toolbar-control);
+  color: var(--contrast-toolbar-control-foreground);
+}
+
+html[data-look="neo"] [data-chat-header] [data-slot="button"]:hover,
+html[data-look="neo"] [data-chat-header] [data-slot="menu-trigger"]:hover,
+html[data-look="neo"] [data-chat-header] [data-toolbar-control]:hover {
+  background-color: var(--toolbar-control-hover);
+}
+
+/* Composer: a bordered frosted card on the card tone, tighter radius. */
+html[data-look="neo"] [data-slot="composer-shell"] {
+  --chat-composer-glass-surface: var(--card);
+  --chat-composer-outline: var(--contrast-border);
+  --chat-composer-highlight: rgb(255 237 217 / 5%);
+}
+
+html[data-look="neo"] [data-slot="composer-shell"]::before,
+html[data-look="neo"] [data-slot="composer-host"],
+html[data-look="neo"] [data-chat-composer-main-surface] {
+  border-radius: 18px;
+}
+
+html[data-look="neo"] [data-slot="composer-host"] {
+  box-shadow: 0 18px 40px -28px rgb(0 0 0 / 60%);
+}
+
+html[data-look="neo"] [data-composer-banner-surface] {
+  --chat-composer-glass-surface: var(--surface-raised);
+  --chat-composer-outline: var(--contrast-border);
+}
+
+/* Messages and code keep the same flat, bordered treatment. */
+html[data-look="neo"] .chat-markdown .chat-markdown-codeblock {
+  border: 1px solid var(--contrast-border);
+  border-radius: 0.875rem;
+  background-color: var(--code-background);
+}
+
+html[data-look="neo"] .chat-markdown :not(pre) > code {
+  border-radius: 0.375rem;
+  background-color: var(--muted);
+  color: var(--contrast-foreground);
+}
+
+/* The send button keeps the environment's stage artwork under the default
+   look; Neo has one accent and uses it here too. */
+html[data-look="neo"] [data-composer-send-backdrop] {
+  display: none;
+}
+
+html[data-look="neo"] [data-composer-send] {
+  border-radius: var(--control-radius);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+html[data-look="neo"] [data-composer-send]:enabled:hover {
+  filter: brightness(1.08);
+}
+
+html[data-look="neo"] [data-composer-stop] {
+  border-radius: var(--control-radius);
+}
+
+/* Split actions (Queue, Implement) are one control: the outer corners take
+   the control radius, the shared edge stays square, and the segments drop
+   their own shadows so nothing shows through the seam. */
+html[data-look="neo"] [data-chat-composer-queue-actions] > *,
+html[data-look="neo"] [data-chat-composer-implement-actions] > * {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html[data-look="neo"] [data-chat-composer-queue-actions] > :first-child,
+html[data-look="neo"] [data-chat-composer-implement-actions] > :first-child {
+  border-start-start-radius: var(--control-radius);
+  border-end-start-radius: var(--control-radius);
+}
+
+html[data-look="neo"] [data-chat-composer-queue-actions] > :last-child,
+html[data-look="neo"] [data-chat-composer-implement-actions] > :last-child {
+  border-start-end-radius: var(--control-radius);
+  border-end-end-radius: var(--control-radius);
+}
+
+/* Split buttons (Open / Commit / scripts) are one control: the group carries
+   the border and radius, the segments inside are flat. */
+html[data-look="neo"] [data-slot="group"][data-orientation="horizontal"],
+html[data-look="neo"] [data-slot="group"]:not([data-orientation]) {
+  border: 1px solid var(--contrast-border);
+  border-radius: var(--control-radius);
+  background-color: var(--toolbar-control);
+  overflow: hidden;
+}
+
+html[data-look="neo"] [data-slot="group"] > [data-slot="button"],
+html[data-look="neo"] [data-slot="group"] > [data-slot="menu-trigger"],
+html[data-look="neo"] [data-slot="group"] > [data-toolbar-control] {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html[data-look="neo"] [data-slot="group"] > [data-slot="button"]:hover,
+html[data-look="neo"] [data-slot="group"] > [data-slot="menu-trigger"]:hover,
+html[data-look="neo"] [data-slot="group"] > [data-toolbar-control]:hover {
+  background-color: var(--toolbar-control-hover);
+}
+
+html[data-look="neo"] [data-slot="group"] > [data-slot="separator"] {
+  align-self: stretch;
+  width: 1px;
+  height: auto;
+  background-color: var(--contrast-border);
+}
+
+/* The composer footer pills (model, effort, runtime mode) are single buttons, not
+   split groups, so each gets a divider before its dropdown chevron to match the split
+   Open/Commit buttons in the top bar. The divider is a background gradient on the
+   button — never on the SVG — so it stays put while the chevron rotates. */
+html[data-look="neo"] [data-chat-composer-footer] button:has(svg.lucide-chevron-down) {
+  background-image: linear-gradient(var(--contrast-border), var(--contrast-border));
+  background-size: 1px 1.5rem;
+  background-position: right 1.75rem center;
+  background-repeat: no-repeat;
+  /* 7px + 14px chevron + 7px: the chevron is centred in the 28px segment right of the divider. */
+  padding-right: 0.4375rem;
+}
+
+html[data-look="neo"] [data-chat-composer-footer] svg.lucide-chevron-down {
+  margin-left: 0.75rem;
+  margin-right: 0;
+}
+
+/* The empty composer is compact under the Neo look: a short editor and about half
+   the default air above and below the text, so the model row sits close to it
+   instead of floating a card-height below. The expanded setting overrides this. */
+html[data-look="neo"] :not([data-neo-composer-expanded]) [data-testid="composer-editor"] {
+  min-height: 2rem;
+}
+
+/* The editor's content wrapper carries the vertical padding around the text
+   (upstream pt-4/pb-2); halve it so a one-line message is not lost in whitespace. */
+html[data-look="neo"] [data-chat-composer-surface] > div:has([data-testid="composer-editor"]) {
+  padding-top: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
+/* "Keep the composer expanded": grow with the text up to eight lines and hold
+   the tallest height reached while the draft has text (see ChatComposer). The
+   lower bound is the editor's own compact minimum. */
+[data-neo-composer-expanded] [data-testid="composer-editor"] {
+  min-height: clamp(4.375rem, var(--neo-composer-held-height, 0px), calc(8 * 1.625em));
+  max-height: calc(8 * 1.625em);
+}
+
+/* Paper grain behind the workspace: a faint dot grid under a warm glow at the
+   top. Static gradients, so nothing repaints. The chat paints it too, since its
+   stage covers the workspace inset with its own opaque background. */
+/* The inset behind the content is the darker "frame" colour (same as the sidebar and
+   top bar); the content body sits on top as the lighter surface with a rounded top-left
+   corner, so the frame shows through where the content meets the top bar and the sidebar. */
+html[data-look="neo"] [data-slot="sidebar-inset"] {
+  background-color: var(--sidebar);
+}
+
+html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header {
+  border-bottom: 0;
+}
+
+html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header + div {
+  background-color: var(--background);
+  border-top: 1px solid var(--contrast-border);
+  border-left: 1px solid var(--contrast-border);
+  border-top-left-radius: 1.5rem;
+}
+
+/* Expanded, the show/hide toggle keeps the same 5px distance to the floating
+   panel toggles as it has when folded away: the actions row reserves 58px on
+   the right for the 60px controls instead of upstream's 64px. */
+html[data-look="neo"]
+  [data-chat-header]:not([data-neo-header-collapsed])
+  [data-chat-header-actions] {
+  padding-right: 3.625rem;
+}
+
+/* The chat's top bar, the column behind the card, and the folded header's notch
+   and swoosh fill all share the sidebar's chrome, colour and grain alike: the
+   workspace reads as one card set into a frame, with no second tone behind its
+   rounded corner and no step between sidebar and bar. (Colour alone is not
+   enough; the sidebar's grain lifts it a shade, so a flat bar next to it reads
+   as a different surface.) The card's own border is the only edge, so the
+   sidebar drops its right border line. */
+html[data-look="neo"] [data-chat-header],
+html[data-look="neo"] [data-chat-column-maximized-away],
+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions],
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::before {
+  background-color: var(--sidebar);
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: var(--surface-grain-size);
+}
+
+html[data-look="neo"] [data-app-sidebar] {
+  border-right-color: transparent;
+}
+
+/* With the header actions folded away the top bar becomes a 14px strip and the
+   content a card under it, like t3.chat with its sidebar collapsed: the strip
+   carries nothing, the breadcrumb hides, and the toggles sit in a notch that
+   drops from the strip over the card's top-right corner. The card's top edge
+   curves down into the notch wall (the ::before inverted corner) and the notch
+   rounds back out at its bottom-left. (The generic strip height for the Default
+   look lives in neo/neo.css.) */
+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
+  --workspace-topbar-height: 0.875rem;
+  --neo-notch-height: 2.5rem;
+  overflow: visible;
+  /* The header is an isolated stacking context (star trail) and the chat column
+     after it is positioned too, so without this the notch paints underneath the
+     card and its buttons cannot be clicked. */
+  z-index: 40;
+}
+
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [aria-label="Thread breadcrumb"] {
+  display: none;
+}
+
+/* The notch: the actions cluster grows to strip colour under the strip and wraps
+   the panel toggles too, which float in its right part at their usual inset. Its
+   bottom border continues the card's outline; the curved left edge is the swoosh
+   below. */
+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions] {
+  position: absolute;
+  top: var(--workspace-topbar-height);
+  right: 0;
+  z-index: 30;
+  height: var(--neo-notch-height);
+  align-items: center;
+  /* The toggle hugs the swoosh: the curve lands 6px inside the notch, right
+     where the toggle's icon inset begins. No CSS border here: the outline is
+     semi-transparent, so a border under the swoosh stroke would double up
+     brighter. The ::after stroke draws the notch's bottom edge too. */
+  padding: 0 calc(var(--workspace-controls-right, 0.75rem) + 4.125rem) 0 0;
+}
+
+/* The swoosh, t3.chat's corner shape: two quarter arcs joined by a short
+   vertical, sheared 30° so the card's top edge sweeps down and right into the
+   notch. ::before is the strip-coloured fill, ::after the one-pixel outline
+   along the curve; both are SVG masks so the colours stay theme tokens. The
+   curve spans 50px and ends 6px inside the notch; the pieces start 60px left
+   of it so the stroke takes over from the card's border on a straight run,
+   16px before the curve, and the fill hides the border row underneath. */
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::before,
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60px;
+  width: 400px;
+  height: 40px;
+  pointer-events: none;
+  mask-repeat: no-repeat;
+  mask-size: 400px 40px;
+}
+
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::after {
+  background-color: var(--contrast-border);
+  /* One 1px stroke, the same weight and token as the card's border, running
+     from the card's top edge through the curve and along the notch's bottom.
+     Nothing else draws under it, so the line keeps a single alpha throughout. */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+html[data-look="neo"]
+  [data-chat-header][data-neo-header-collapsed]
+  [data-workspace-titlebar-controls] {
+  top: calc(var(--workspace-topbar-height) + 0.375rem);
+  height: auto;
+}
+
+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat-workspace] {
+  border-right: 1px solid var(--contrast-border);
+  border-top-left-radius: 1.25rem;
+  border-top-right-radius: 0;
+}
+
+html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header + div,
+html[data-look="neo"] [data-chat-stage] {
+  background-image:
+    radial-gradient(60rem 22rem at 50% -8rem, rgb(242 162 110 / 7%), transparent 70%),
+    radial-gradient(rgb(241 166 41 / 8%) 1px, transparent 1.4px);
+  background-size:
+    100% 100%,
+    26px 26px;
+  background-position:
+    0 0,
+    13px 13px;
+  background-repeat: no-repeat, repeat;
+}
+
+html[data-look="neo"]:not(.dark) [data-slot="sidebar-inset"] > div > div > header + div,
+html[data-look="neo"]:not(.dark) [data-chat-stage] {
+  background-image:
+    radial-gradient(60rem 22rem at 50% -8rem, rgb(212 114 42 / 6%), transparent 70%),
+    radial-gradient(rgb(23 17 13 / 9%) 1px, transparent 1.4px);
+}

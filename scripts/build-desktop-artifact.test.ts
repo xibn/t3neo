@@ -246,12 +246,15 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("resolves the dedicated nightly updater channel from nightly versions", () => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17-nightly.20260413.42"), "nightly");
+    assert.equal(resolveDesktopUpdateChannel("0.0.39-nightly.neo.20260904.1280"), "nightly");
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
+    assert.equal(resolveDesktopUpdateChannel("0.0.39-neo.1"), "latest");
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Neo (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Neo (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.39-nightly.neo.20260904.1280"), "T3 Neo (Nightly)");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -322,6 +325,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "0.0.33-pr.8182.1",
         false,
         false,
+        false,
         undefined,
         undefined,
       );
@@ -329,6 +333,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "mac",
         "dmg",
         "0.0.33",
+        false,
         false,
         false,
         undefined,
@@ -565,6 +570,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "1.2.3",
         false,
         false,
+        false,
         undefined,
         undefined,
       );
@@ -572,6 +578,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "linux",
         "AppImage",
         "1.2.3",
+        false,
         false,
         false,
         undefined,
@@ -583,6 +590,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "1.2.3",
         false,
         false,
+        false,
         undefined,
         undefined,
         true,
@@ -591,6 +599,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "win",
         "nsis",
         "1.2.3",
+        false,
         false,
         false,
         undefined,
@@ -636,7 +645,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/node_modules/.bin/**",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "T3 Code (Alpha) 1.2.3 Installer",
+        title: "T3 Neo (Alpha) 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 540, height: 412 },
         contents: [
@@ -1386,10 +1395,19 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
-        entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
-      });
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        true,
+        false,
+        false,
+        undefined,
+        {
+          entitlementsPath: "/tmp/entitlements.mac.plist",
+          provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        },
+      );
 
       const mac = config.mac as Record<string, unknown>;
       assert.equal(config.appId, "com.t3tools.t3code");
@@ -1402,12 +1420,51 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
+  it.effect("signs self-signed macOS builds without notarization or passkey entitlements", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        false,
+        true,
+        false,
+        undefined,
+        undefined,
+      );
+
+      const mac = config.mac as Record<string, unknown>;
+      assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
+      assert.equal(mac.notarize, false);
+      assert.equal(mac.entitlements, undefined);
+      assert.equal(mac.provisioningProfile, undefined);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("leaves notarization to electron-builder for fully signed macOS builds", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        true,
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      assert.equal((config.mac as Record<string, unknown>).notarize, undefined);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
   it.effect("uses the nightly DMG background for nightly macOS builds", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig(
         "mac",
         "dmg",
         "1.2.3-nightly.20260815.1",
+        false,
         false,
         false,
         undefined,
@@ -1427,6 +1484,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "win",
         "nsis",
         "1.2.3",
+        false,
         false,
         false,
         undefined,
@@ -1763,6 +1821,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         skipBuild: Option.none(),
         keepStage: Option.none(),
         signed: Option.none(),
+        selfSigned: Option.none(),
         verbose: Option.none(),
         mockUpdates: Option.none(),
         mockUpdateServerPort: Option.none(),
@@ -1803,6 +1862,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
             skipBuild: Option.none(),
             keepStage: Option.none(),
             signed: Option.none(),
+            selfSigned: Option.none(),
             verbose: Option.none(),
             mockUpdates: Option.none(),
             mockUpdateServerPort: Option.none(),
@@ -1827,6 +1887,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         skipBuild: Option.some(false),
         keepStage: Option.some(false),
         signed: Option.some(false),
+        selfSigned: Option.some(false),
         verbose: Option.some(false),
         mockUpdates: Option.some(false),
         mockUpdateServerPort: Option.none(),

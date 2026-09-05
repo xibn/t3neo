@@ -1,0 +1,42 @@
+name: Feature request
+description: Ask for something new in T3 Neo. Claude Code builds it, documents it in the feature spec, and ships it.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - neo:feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are handled automatically: Claude Code implements the request on the
+        latest release branch, adds it to `.github/upstream-sync/FEATURE.md` so it survives every
+        upstream sync, reviews and approves its own change in two extra passes, and publishes a
+        patch release. Progress shows up as comments and `neo:*` labels.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What should T3 Neo do?
+      description: Describe the behavior you want as if you were writing the spec. Where does it live, what does it look like, what are the edge cases?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What does it make easier or possible?
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Screenshots, links, or descriptions of how other tools do it.
+
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Automation
+      options:
+        - label: Let Claude Code build this automatically and publish a release.
+          required: false

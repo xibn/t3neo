@@ -104,9 +104,12 @@ import { Input } from "../ui/input";
 import {
   DEFAULT_CODE_FONT_STACK,
   DEFAULT_SANS_FONT_STACK,
+  type FontFamilyChoice,
   isFontFamilyAvailable,
   isMonospaceFamily,
   resolveDefaultFamilyLabel,
+  resolveSansFamilyLabel,
+  resolveSansFontChoices,
   resolveTerminalFontPreference,
   resolveTerminalFontSizePreference,
   TYPOGRAPHY_ADVANCED_STORAGE_KEY,
@@ -121,6 +124,22 @@ import {
   NumberFieldInput,
 } from "../ui/number-field";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import {
+  APPEARANCE_LOOK_LABELS,
+  APPEARANCE_LOOKS,
+  DEFAULT_APPEARANCE_LOOK,
+  isAppearanceLook,
+  setAppearanceLook,
+  useAppearanceLook,
+} from "~/appearanceLook";
+import { setChevronAnimations, useChevronAnimations } from "~/chevronAnimations";
+import { NeoFeatureBadge } from "~/neo/NeoBadge";
+import {
+  AGENT_CONTROLS_STYLE_LABELS,
+  DEFAULT_NEO_SETTINGS,
+  useNeoSettings,
+  useUpdateNeoSettings,
+} from "~/neo/neoSettings";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -1005,6 +1024,10 @@ export function AppearanceSettingsPanel() {
   } = useTheme();
   const customThemes = useCustomThemes();
   const [isImportThemeOpen, setIsImportThemeOpen] = useState(false);
+  const appearanceLook = useAppearanceLook();
+  const chevronAnimations = useChevronAnimations();
+  const neoSettings = useNeoSettings();
+  const updateNeoSettings = useUpdateNeoSettings();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const environmentStageLabel = useEnvironmentStageLabel();
@@ -1040,8 +1063,120 @@ export function AppearanceSettingsPanel() {
             theme={theme}
             themeHalves={themeHalves}
             onImportOpenChange={setIsImportThemeOpen}
+            themesLocked={appearanceLook === "neo"}
           />
         </div>
+
+        <SettingsRow
+          {...searchableSetting("appearance-look")}
+          title={
+            <span className="inline-flex items-center gap-2">
+              {searchableSetting("appearance-look").title}
+              <NeoFeatureBadge />
+            </span>
+          }
+          description="Neo is the T3 Neo interface with its own light and dark palette: a warm canvas, flat bordered surfaces, pill controls, and lighter display type. Default (Themes) is the standard T3 Code interface, where themes pick the palette."
+          resetAction={
+            appearanceLook !== DEFAULT_APPEARANCE_LOOK ? (
+              <SettingResetButton
+                label="look"
+                onClick={() => setAppearanceLook(DEFAULT_APPEARANCE_LOOK)}
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={appearanceLook}
+              onValueChange={(value) => {
+                if (isAppearanceLook(value)) {
+                  setAppearanceLook(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Look">
+                <SelectValue>{APPEARANCE_LOOK_LABELS[appearanceLook]}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {APPEARANCE_LOOKS.map((look) => (
+                  <SelectItem hideIndicator key={look} value={look}>
+                    {APPEARANCE_LOOK_LABELS[look]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("appearance-chevron-animations")}
+          title={
+            <span className="inline-flex items-center gap-2">
+              {searchableSetting("appearance-chevron-animations").title}
+              <NeoFeatureBadge />
+            </span>
+          }
+          description="Chevrons on menus and pickers point away from where the menu opens and turn to face it while it is open. Off keeps them still."
+          resetAction={
+            chevronAnimations ? null : (
+              <SettingResetButton
+                label="chevron animations"
+                onClick={() => setChevronAnimations(true)}
+              />
+            )
+          }
+          control={
+            <Switch
+              checked={chevronAnimations}
+              onCheckedChange={(checked) => setChevronAnimations(Boolean(checked))}
+              aria-label="Chevron animations"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("appearance-agent-controls")}
+          title={
+            <span className="inline-flex items-center gap-2">
+              {searchableSetting("appearance-agent-controls").title}
+              <NeoFeatureBadge />
+            </span>
+          }
+          description="How the model, context, speed and mode controls in the message box look. Top bar style gives them the bordered pills of the header's Open and Commit controls; Default style keeps the plain T3 Code buttons."
+          resetAction={
+            neoSettings.agentControlsStyle !== DEFAULT_NEO_SETTINGS.agentControlsStyle ? (
+              <SettingResetButton
+                label="agent controls style"
+                onClick={() =>
+                  updateNeoSettings({ agentControlsStyle: DEFAULT_NEO_SETTINGS.agentControlsStyle })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={neoSettings.agentControlsStyle}
+              onValueChange={(value) => {
+                if (value === "topbar" || value === "default") {
+                  updateNeoSettings({ agentControlsStyle: value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Agent controls style">
+                <SelectValue>
+                  {AGENT_CONTROLS_STYLE_LABELS[neoSettings.agentControlsStyle]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="topbar">
+                  {AGENT_CONTROLS_STYLE_LABELS.topbar}
+                </SelectItem>
+                <SelectItem hideIndicator value="default">
+                  {AGENT_CONTROLS_STYLE_LABELS.default}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
 
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}
@@ -1187,21 +1322,29 @@ export function AppearanceSettingsPanel() {
 
 function useFontDefaultFamilies() {
   const settings = usePrimarySettings();
+  const appearanceLook = useAppearanceLook();
   // An unset preference shows the font it resolves to on this machine; the
   // default stacks are the platform's own faces, so the name is probed, not
   // hardcoded.
-  const defaults = useMemo(
+  const probed = useMemo(
     () => ({
-      sans: resolveDefaultFamilyLabel(DEFAULT_SANS_FONT_STACK) ?? "System default",
+      system: resolveDefaultFamilyLabel(DEFAULT_SANS_FONT_STACK) ?? "System default",
       code: resolveDefaultFamilyLabel(DEFAULT_CODE_FONT_STACK) ?? "System monospace",
     }),
     [],
   );
+  // The interface picker pins the Neo face and the platform face; the look
+  // decides which of them an unset preference means.
+  const sansChoices = useMemo(
+    () => resolveSansFontChoices({ look: appearanceLook, systemFamily: probed.system }),
+    [appearanceLook, probed.system],
+  );
   return {
-    sans: defaults.sans,
-    code: defaults.code,
+    sans: resolveSansFamilyLabel("", sansChoices),
+    sansChoices,
+    code: probed.code,
     // The composer inherits whatever the interface preference resolves to.
-    interfaceFamily: settings.fontFamilySans.trim() || defaults.sans,
+    interfaceFamily: resolveSansFamilyLabel(settings.fontFamilySans, sansChoices),
   };
 }
 
@@ -1214,6 +1357,7 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
       {...searchableSetting("interface-font")}
       description="Everything outside code blocks and the terminal."
       defaultFamily={defaults.sans}
+      choices={defaults.sansChoices}
       defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilySans}
       value={settings.fontFamilySans}
       onValueChange={(fontFamilySans) => updateSettings({ fontFamilySans })}
@@ -1510,6 +1654,7 @@ function FontFamilySettingsRow({
   title,
   description,
   defaultFamily,
+  choices,
   defaultValue,
   preview,
   value,
@@ -1523,6 +1668,8 @@ function FontFamilySettingsRow({
   description: string;
   /** What an unset preference renders as, e.g. "Menlo". */
   defaultFamily: string;
+  /** Pinned picker rows (see FontFamilyPicker); omitted rows pin only the default. */
+  choices?: readonly FontFamilyChoice[];
   /** The persisted family value supplied by the unified settings defaults. */
   defaultValue: string;
   preview?: ReactNode;
@@ -1608,6 +1755,7 @@ function FontFamilySettingsRow({
       <FontFamilyPicker
         ariaLabel={`${title} family`}
         defaultFamily={defaultFamily}
+        {...(choices !== undefined ? { choices } : {})}
         selectedFamily={trimmed}
         requireMonospace={requireMonospace}
         initialOpen={inputFocusedRef.current}

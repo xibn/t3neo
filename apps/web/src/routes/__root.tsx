@@ -23,6 +23,9 @@ import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToas
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
 import { useEnvironmentThemeSync } from "../hooks/useEnvironmentTheme";
+import { useMessageQueueDrain } from "../hooks/useMessageQueueDrain";
+import { PetWidget } from "../neo/pets/PetWidget";
+import { applyAsciiPetColor, useNeoSettings } from "../neo/neoSettings";
 import { Button } from "../components/ui/button";
 import {
   AnchoredToastProvider,
@@ -33,6 +36,8 @@ import {
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { applyAppearanceContrast } from "~/appearanceContrast";
+import { applyAppearanceLook, useAppearanceLook } from "~/appearanceLook";
+import { applyChevronAnimations, useChevronAnimations } from "~/chevronAnimations";
 import { useClientSettings } from "../hooks/useSettings";
 import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
 import {
@@ -92,6 +97,7 @@ export const Route = createRootRoute({
 
 function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
+  const isPetWindowRoute = pathname === "/pet";
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
 
@@ -111,6 +117,11 @@ function RootRouteView() {
         <Outlet />
       </>
     );
+  }
+
+  // The detached desktop pet window renders only the pet, without app chrome.
+  if (isPetWindowRoute) {
+    return <Outlet />;
   }
 
   if (authGateState.status !== "authenticated" && authGateState.status !== "hosted-static") {
@@ -148,6 +159,7 @@ function RootRouteView() {
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
+        {primaryEnvironmentAuthenticated && !isPetWindowRoute ? <PetWidget mode="overlay" /> : null}
         {appShell}
         {/* Above the router: a theme draft is judged by walking the app, so the
             editor has to survive navigation away from settings. */}
@@ -160,6 +172,7 @@ function RootRouteView() {
 /** Follows the palette the primary environment's machine publishes, if any. */
 function EnvironmentThemeSync() {
   useEnvironmentThemeSync();
+  useMessageQueueDrain();
   // Ordered after the palette sync so a first-run client adopting the
   // environment's own theme finds it already in the library.
   useDefaultThemeAdoption();
@@ -172,6 +185,24 @@ function ContrastAppearanceSync() {
   useEffect(() => {
     applyAppearanceContrast(document.documentElement, appearanceContrast);
   }, [appearanceContrast]);
+
+  const appearanceLook = useAppearanceLook();
+  useEffect(() => {
+    applyAppearanceLook(document.documentElement, appearanceLook);
+  }, [appearanceLook]);
+
+  const chevronAnimations = useChevronAnimations();
+  useEffect(() => {
+    applyChevronAnimations(document.documentElement, chevronAnimations);
+  }, [chevronAnimations]);
+
+  const neoSettings = useNeoSettings();
+  const asciiPetColor = neoSettings.asciiPetColor;
+  useEffect(() => {
+    applyAsciiPetColor(document.documentElement, asciiPetColor);
+  }, [asciiPetColor]);
+
+  useEffect(() => {}, [neoSettings]);
 
   return null;
 }

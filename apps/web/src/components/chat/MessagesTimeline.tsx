@@ -93,6 +93,10 @@ import {
   keepTimelineEndVisibleAfterOverlayGrowth,
 } from "./timelineScrollAnchoring";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { UsageBadge } from "~/neo/UsageBadge";
+import type { TurnUsage } from "~/neo/turnUsage";
+
+const EMPTY_TURN_USAGE: ReadonlyMap<TurnId, TurnUsage> = new Map();
 import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRows,
@@ -104,6 +108,7 @@ import {
   resolveTimelineMinimapHitStripWidth,
   resolveTimelineMinimapIndexFromPointer,
   resolveTimelineMinimapInteractiveWidth,
+  resolveTimelineMinimapPreviewWidth,
   resolveTimelineMinimapTopPercent,
   shouldPreserveAssistantLineBreaks,
   toolGroupAction,
@@ -172,6 +177,8 @@ interface TimelineRowSharedState {
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   agentPanelModel: AgentPanelModel;
   onOpenAgents: () => void;
+  turnUsageByTurnId: ReadonlyMap<TurnId, TurnUsage>;
+  turnUsagePlanLabel: string | null;
 }
 
 interface TimelineRowActivityState {
@@ -254,6 +261,10 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  /** Per-turn cost badges (Settings → Neo); empty when the badges are off. */
+  turnUsageByTurnId?: ReadonlyMap<TurnId, TurnUsage>;
+  /** Plan or provider name appended to usage badges. */
+  turnUsagePlanLabel?: string | null;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   anchorMessageId: MessageId | null;
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
@@ -312,6 +323,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
   loadEarlier = null,
+  turnUsageByTurnId = EMPTY_TURN_USAGE,
+  turnUsagePlanLabel = null,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -468,6 +481,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
   const [minimapHasPersistentGutter, setMinimapHasPersistentGutter] = useState(false);
   const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
+  const [minimapPreviewWidth, setMinimapPreviewWidth] = useState(0);
   const handleAnchorReady = useCallback(
     (info: { anchorIndex: number | undefined }) => {
       if (anchorMessageId !== null && info.anchorIndex !== undefined) {
@@ -533,6 +547,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         current === nextHasPersistentGutter ? current : nextHasPersistentGutter,
       );
       setMinimapHitStripWidth(resolveTimelineMinimapHitStripWidth(viewportWidth));
+      setMinimapPreviewWidth(resolveTimelineMinimapPreviewWidth(viewportWidth));
     };
 
     const frame = requestAnimationFrame(measure);
@@ -566,8 +581,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      turnUsageByTurnId,
+      turnUsagePlanLabel,
     }),
     [
+      turnUsageByTurnId,
+      turnUsagePlanLabel,
       timestampFormat,
       routeThreadKey,
       markdownCwd,
@@ -663,6 +682,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             items={minimapItems}
             hasPersistentGutter={minimapHasPersistentGutter}
             hitStripWidth={minimapHitStripWidth}
+            previewWidth={minimapPreviewWidth}
             stripMap={minimapStripMap}
             onSelect={(item) => {
               onManualNavigation();
@@ -764,12 +784,14 @@ function timelineMinimapEventTargetsPreview(target: EventTarget): boolean {
 function TimelineMinimap({
   hasPersistentGutter,
   hitStripWidth,
+  previewWidth,
   items,
   stripMap,
   onSelect,
 }: {
   hasPersistentGutter: boolean;
   hitStripWidth: number;
+  previewWidth: number;
   items: ReadonlyArray<TimelineMinimapItem>;
   stripMap: Map<string, HTMLSpanElement>;
   onSelect: (item: TimelineMinimapItem) => void;
@@ -890,7 +912,11 @@ function TimelineMinimap({
           }}
           style={{
             height: resolveTimelineMinimapHeightStyle(items.length),
-            width: resolveTimelineMinimapInteractiveWidth(hitStripWidth, activeItem !== null),
+            width: resolveTimelineMinimapInteractiveWidth(
+              hitStripWidth,
+              previewWidth,
+              activeItem !== null,
+            ),
           }}
           type="button"
         >
@@ -926,14 +952,15 @@ function TimelineMinimap({
               />
             );
           })}
-          {activeItem ? (
+          {activeItem && previewWidth > 0 ? (
             <span
-              className="pointer-events-auto absolute left-8 w-80 cursor-text select-text"
+              className="pointer-events-auto absolute left-8 cursor-text select-text"
               data-minimap-preview
               onMouseMove={(event) => event.stopPropagation()}
               style={{
                 top: `${activeTopPercent}%`,
                 transform: `translateY(${activeTooltipTranslate})`,
+                width: previewWidth,
               }}
             >
               <span className="dropdown-glass block rounded-xl p-3 text-left text-popover-foreground shadow-xl shadow-black/25">
@@ -1276,6 +1303,16 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
+        {row.message.turnId &&
+        ctx.turnUsageByTurnId.get(row.message.turnId) &&
+        !row.message.streaming ? (
+          <div className="mt-1.5 flex items-center empty:hidden">
+            <UsageBadge
+              usage={ctx.turnUsageByTurnId.get(row.message.turnId)!}
+              planLabel={ctx.turnUsagePlanLabel}
+            />
+          </div>
+        ) : null}
         {row.showAssistantMeta ? (
           <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
             <AssistantCopyButton row={row} />

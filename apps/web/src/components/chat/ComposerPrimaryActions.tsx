@@ -1,5 +1,5 @@
 import { memo, type PointerEventHandler } from "react";
-import { ChevronDownIcon, ChevronLeftIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronLeftIcon, ListEndIcon } from "lucide-react";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
@@ -28,12 +28,13 @@ interface ComposerPrimaryActionsProps {
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
-  /** Enter-to-send is disabled on mobile viewports, where stop would otherwise
-   * be the only primary action and a running turn could not be steered. */
-  showSendWhileRunning?: boolean;
+  /** False restores upstream behavior: a send while running steers the turn. */
+  queueMessages?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  /** Sends the draft into the running turn right away instead of queueing it. */
+  onSendNow?: () => void;
 }
 
 export const formatPendingPrimaryActionLabel = (input: {
@@ -71,10 +72,11 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isPreparingWorktree,
   hasSendableContent,
   preserveComposerFocusOnPointerDown = false,
-  showSendWhileRunning = false,
+  queueMessages = true,
   onPreviousPendingQuestion,
   onInterrupt,
   onImplementPlanInNewThread,
+  onSendNow,
 }: ComposerPrimaryActionsProps) {
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -92,13 +94,14 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         "flex cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-[0_1px_--theme(--color-white/16%)] transition-all duration-150 hover:bg-destructive hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none",
         insidePendingAction
           ? "size-8 sm:size-7"
-          : showSendWhileRunning && hasSendableContent
+          : hasSendableContent
             ? "size-9 sm:size-8"
             : "size-8 sm:h-8 sm:w-8",
       )}
       {...pointerFocusProps}
       onClick={onInterrupt}
       aria-label="Stop generation"
+      data-composer-stop=""
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
         <rect x="2" y="2" width="8" height="8" rx="1.5" />
@@ -221,6 +224,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   const sendButton = (
     <button
       type="submit"
+      data-composer-send=""
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-[0_1px_--theme(--color-white/16%)] hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8",
         stageBackdropVariant
@@ -250,7 +254,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       }
     >
       {stageBackdropVariant ? (
-        <span className="absolute inset-0 -z-10" aria-hidden="true">
+        <span className="absolute inset-0 -z-10" aria-hidden="true" data-composer-send-backdrop="">
           <StageBackdropButtonArt variant={stageBackdropVariant} />
         </span>
       ) : null}
@@ -274,10 +278,61 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     return sendButton;
   }
 
+  if (!queueMessages) {
+    return (
+      <div className="flex items-center gap-1.5">
+        {renderStopGenerationButton(false)}
+        {hasSendableContent ? sendButton : null}
+      </div>
+    );
+  }
+
+  // While a turn runs, submit queues the draft behind it. "Send now" is the
+  // escape hatch that steers the running turn instead.
+  const queueDisabled =
+    isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable || !hasSendableContent;
+  const queueButton = (
+    <div className="flex items-center" data-chat-composer-queue-actions="true">
+      <button
+        type="submit"
+        className={cn(
+          "flex h-9 items-center gap-1.5 rounded-l-full bg-message-action pl-3 pr-2.5 text-xs font-medium text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer hover:bg-message-action-hover disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none sm:h-8",
+          compact && "pl-2.5 pr-2",
+        )}
+        {...pointerFocusProps}
+        disabled={queueDisabled}
+        aria-label="Queue message"
+      >
+        <ListEndIcon className="size-3.5" aria-hidden="true" />
+        {compact ? null : <span>Queue</span>}
+      </button>
+      <Menu>
+        <MenuTrigger
+          render={
+            <button
+              type="button"
+              className="flex h-9 items-center rounded-r-full border-l border-l-message-action-foreground/20 bg-message-action px-1.5 text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer hover:bg-message-action-hover disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none sm:h-8"
+              aria-label="Queue actions"
+              {...pointerFocusProps}
+              disabled={queueDisabled}
+            />
+          }
+        >
+          <ChevronDownIcon className="size-3.5" />
+        </MenuTrigger>
+        <MenuPopup align="end" side="top">
+          <MenuItem disabled={queueDisabled} onClick={() => onSendNow?.()}>
+            Send now
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </div>
+  );
+
   return (
-    <>
+    <div className="flex items-center gap-1.5">
       {renderStopGenerationButton(false)}
-      {showSendWhileRunning && hasSendableContent ? sendButton : null}
-    </>
+      {hasSendableContent ? queueButton : null}
+    </div>
   );
 });

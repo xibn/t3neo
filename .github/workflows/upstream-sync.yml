@@ -1,0 +1,372 @@
+name: Upstream Sync
+
+# Keeps this fork (T3 Neo) equal to every stable upstream T3 Code release plus
+# the T3 Neo feature set, reapplied by Claude Code on every release.
+#
+# Flow: resolve the upstream release -> main reset to it -> restore
+# the automation -> Claude Code reapplies the features, verify.sh passes, a
+# second session reviews, a third approves -> reusable build/release workflow
+# (quality suite, desktop builds, GitHub release) -> issue that @-mentions the
+# owner. One line only: main tracks the chosen upstream release; releases are
+# tagged v<upstream>-neo.<n>.
+# See .github/upstream-sync/README.md.
+
+on:
+  schedule:
+    # Off minute zero: GitHub delays scheduled runs most at the top of the hour.
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Upstream stable release to sync (the list is refreshed daily by Neo Refresh Upstream Tags)"
+        required: false
+        default: latest
+        type: choice
+        options:
+          - latest
+      upstream_tag_custom:
+        description: "Any other upstream stable tag, e.g. v0.0.30 (overrides the list)"
+        required: false
+        type: string
+      mode:
+        description: "sync reuses the last implementation; redo rebuilds the features from their spec because they are broken"
+        required: false
+        default: sync
+        type: choice
+        options:
+          - sync
+          - redo
+      notes:
+        description: "What is broken or should change (passed to Claude Code)"
+        required: false
+        type: string
+      force:
+        description: "Run even if this upstream release was already published here (publishes the next -neo.<n>)"
+        required: false
+        default: false
+        type: boolean
+  issue_comment:
+    types: [created]
+
+# One sync at a time; a queued run resolves the latest release when it starts.
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_REPOSITORY: pingdotgg/t3code
+  FORK_TAG_SUFFIX: neo
+  # The in-app repository links, release lookups, and download button point here.
+  VITE_T3NEO_REPOSITORY: ${{ github.repository }}
+  CLAUDE_MODEL: claude-fable-5-1
+
+jobs:
+  resolve:
+    name: Resolve upstream release
+    # Comments only count when they start with /redo or /sync and come from
+    # someone with write access to this repository.
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (
+        (startsWith(github.event.comment.body, '/redo') || startsWith(github.event.comment.body, '/sync')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      run_needed: ${{ steps.plan.outputs.run_needed }}
+      skip_reason: ${{ steps.plan.outputs.skip_reason }}
+      mode: ${{ steps.plan.outputs.mode }}
+      notes: ${{ steps.plan.outputs.notes }}
+      upstream_tag: ${{ steps.plan.outputs.upstream_tag }}
+      upstream_sha: ${{ steps.plan.outputs.upstream_sha }}
+      upstream_version: ${{ steps.plan.outputs.upstream_version }}
+      fork_tag: ${{ steps.plan.outputs.fork_tag }}
+      fork_version: ${{ steps.plan.outputs.fork_version }}
+    steps:
+      - name: Acknowledge command
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" \
+            -f content=rocket --silent || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body "Started: $RUN_URL"
+
+      - id: plan
+        name: Plan run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_TAG: ${{ inputs.upstream_tag }}
+          DISPATCH_TAG_CUSTOM: ${{ inputs.upstream_tag_custom }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_NOTES: ${{ inputs.notes }}
+          DISPATCH_FORCE: ${{ inputs.force }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          mode="sync"
+          notes=""
+          requested_tag=""
+          force="false"
+          case "$GITHUB_EVENT_NAME" in
+            workflow_dispatch)
+              mode="${DISPATCH_MODE:-sync}"
+              notes="${DISPATCH_NOTES:-}"
+              requested_tag="${DISPATCH_TAG_CUSTOM:-}"
+              if [[ -z "$requested_tag" && "${DISPATCH_TAG:-latest}" != "latest" ]]; then
+                requested_tag="$DISPATCH_TAG"
+              fi
+              force="${DISPATCH_FORCE:-false}"
+              ;;
+            issue_comment)
+              force="true"
+              first_line="$(printf '%s\n' "$COMMENT_BODY" | head -n 1)"
+              if [[ "$first_line" == /redo* ]]; then
+                mode="redo"
+                notes="${COMMENT_BODY#/redo}"
+              else
+                mode="sync"
+                notes="${COMMENT_BODY#/sync}"
+              fi
+              notes="$(printf '%s' "$notes" | sed -e 's/^[[:space:]]*//')"
+              # Notification issues carry the upstream tag in a hidden marker.
+              requested_tag="$(printf '%s' "$ISSUE_BODY" | sed -n 's/.*<!-- upstream-sync tag=\([^ ]*\) -->.*/\1/p' | head -n 1)"
+              ;;
+          esac
+
+          if [[ -z "$requested_tag" ]]; then
+            requested_tag="$(gh api "repos/$UPSTREAM_REPOSITORY/releases/latest" --jq .tag_name)"
+          fi
+          requested_tag="v${requested_tag#v}"
+          version="${requested_tag#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Upstream tag '$requested_tag' is not a stable release." >&2
+            exit 1
+          fi
+          upstream_sha="$(gh api "repos/$UPSTREAM_REPOSITORY/commits/$requested_tag" --jq .sha)"
+
+          # Fork versions are v<upstream>-neo.<n>, n starting at 0. They stay
+          # valid semver so the desktop updater and GitHub order them correctly.
+          existing="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 300 --json tagName --jq '.[].tagName')"
+          count="$(printf '%s\n' "$existing" | grep -c "^v${version}-${FORK_TAG_SUFFIX}\.[0-9][0-9]*$" || true)"
+          fork_version="${version}-${FORK_TAG_SUFFIX}.${count}"
+
+          run_needed="true"
+          skip_reason=""
+          if [[ "$count" -gt 0 && "$force" != "true" && "$mode" == "sync" ]]; then
+            run_needed="false"
+            skip_reason="upstream $requested_tag is already published here (${count} release(s))"
+          fi
+
+          {
+            echo "run_needed=$run_needed"
+            echo "skip_reason=$skip_reason"
+            echo "mode=$mode"
+            echo "upstream_tag=$requested_tag"
+            echo "upstream_sha=$upstream_sha"
+            echo "upstream_version=$version"
+            echo "fork_tag=v$fork_version"
+            echo "fork_version=$fork_version"
+            echo "notes<<UPSTREAM_SYNC_EOF"
+            printf '%s\n' "$notes"
+            echo "UPSTREAM_SYNC_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "mode=$mode upstream=$requested_tag ($upstream_sha) fork=v$fork_version run_needed=$run_needed $skip_reason"
+
+  reapply:
+    name: Reapply features on ${{ needs.resolve.outputs.upstream_tag }}
+    needs: [resolve]
+    if: needs.resolve.outputs.run_needed == 'true'
+    runs-on: ubuntu-24.04
+    # Implement, review, fix, and approve passes; each can take a while.
+    timeout-minutes: 360
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          # A PAT with contents + workflows scope: the restored automation lives
+          # under .github/workflows, which GITHUB_TOKEN may not push.
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Fetch upstream release
+        env:
+          UPSTREAM_SHA: ${{ needs.resolve.outputs.upstream_sha }}
+        run: |
+          git remote add upstream "https://github.com/$UPSTREAM_REPOSITORY.git"
+          git fetch --no-tags upstream "$UPSTREAM_SHA"
+
+      - id: reset
+        name: Reset to upstream and restore the automation
+        env:
+          UPSTREAM_SHA: ${{ needs.resolve.outputs.upstream_sha }}
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "t3neo[bot]"
+          git config user.email "t3neo@users.noreply.github.com"
+          # Everything listed in automation-paths.txt survives the reset.
+          keep="$RUNNER_TEMP/automation"
+          rm -rf "$keep"
+          mkdir -p "$keep"
+          paths="$(grep -Ev '^\s*(#|$)' .github/upstream-sync/automation-paths.txt)"
+          while IFS= read -r path; do
+            [[ -e "$path" ]] || continue
+            mkdir -p "$keep/$(dirname "$path")"
+            cp -R "$path" "$keep/$path"
+          done <<< "$paths"
+
+          git reset --hard "$UPSTREAM_SHA"
+
+          # Upstream's own issue templates make no sense in the fork.
+          rm -rf .github/ISSUE_TEMPLATE
+          while IFS= read -r path; do
+            [[ -e "$keep/$path" ]] || continue
+            rm -rf "$path"
+            mkdir -p "$(dirname "$path")"
+            cp -R "$keep/$path" "$path"
+          done <<< "$paths"
+          # Keep the dropdown of upstream versions fresh while we are here.
+          bash .github/upstream-sync/refresh-upstream-tags.sh || echo "tag refresh skipped"
+          git add -A .github
+          git commit -q -m "chore: keep T3 Neo automation on $UPSTREAM_TAG"
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Reapply, review, and approve with Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          NEO_MODE: ${{ needs.resolve.outputs.mode }}
+          NEO_NOTES: ${{ needs.resolve.outputs.notes }}
+          NEO_BASE_SHA: ${{ steps.reset.outputs.base_sha }}
+          NEO_LOG_DIR: ${{ runner.temp }}/neo-agent
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+        run: bash .github/upstream-sync/agent.sh reapply
+
+      - name: Upload Claude Code logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-sync-logs-${{ needs.resolve.outputs.fork_version }}
+          path: ${{ runner.temp }}/neo-agent
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Refresh feature patch
+        env:
+          UPSTREAM_SHA: ${{ needs.resolve.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          git diff --binary "$UPSTREAM_SHA" HEAD -- . \
+            ':(exclude).github/upstream-sync' \
+            ':(exclude).github/workflows' \
+            ':(exclude).github/ISSUE_TEMPLATE' \
+            > .github/upstream-sync/feature.patch
+          git add .github/upstream-sync/feature.patch
+          git commit -q -m "chore: refresh feature patch" || echo "patch unchanged"
+
+      - id: push
+        name: Push main
+        run: |
+          set -euo pipefail
+          git push --force origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build and release
+    needs: [resolve, reapply]
+    uses: ./.github/workflows/neo-build-release.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.reapply.outputs.sha }}
+      fork_version: ${{ needs.resolve.outputs.fork_version }}
+      fork_tag: ${{ needs.resolve.outputs.fork_tag }}
+      upstream_tag: ${{ needs.resolve.outputs.upstream_tag }}
+      notes: "- Reapplied in `${{ needs.resolve.outputs.mode }}` mode by Claude Code (`claude-fable-5-1`), reviewed and approved by two further passes."
+
+  notify:
+    name: Notify owner
+    needs: [resolve, reapply, release]
+    if: always() && needs.resolve.result == 'success' && needs.resolve.outputs.run_needed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Open issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          # Optional repository variable, for example "@alice @bob", when the
+          # owner is an organization or several people should be pinged.
+          NOTIFY: ${{ vars.UPSTREAM_SYNC_NOTIFY }}
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+          FORK_TAG: ${{ needs.resolve.outputs.fork_tag }}
+          MODE: ${{ needs.resolve.outputs.mode }}
+          RELEASE_URL: ${{ needs.release.outputs.url }}
+          REAPPLY_RESULT: ${{ needs.reapply.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/upstream-sync.yml
+        run: |
+          set -euo pipefail
+          mention="${NOTIFY:-@$OWNER}"
+          if [[ "$RELEASE_RESULT" == "success" ]]; then
+            title="Upstream $UPSTREAM_TAG synced and released as $FORK_TAG"
+            status="Released **$FORK_TAG**: $RELEASE_URL"
+            labels="neo:released"
+          else
+            title="Upstream $UPSTREAM_TAG sync failed"
+            status="The run failed before publishing a release. Logs: $RUN_URL"
+            labels="neo:needs-human"
+          fi
+          gh label create "$labels" --repo "$GITHUB_REPOSITORY" --color F1A629 --force >/dev/null 2>&1 || true
+          body="$(cat <<EOF
+          $mention $status
+
+          <!-- upstream-sync tag=$UPSTREAM_TAG -->
+
+          | Step | Result |
+          | --- | --- |
+          | Reapply, review, approve (Claude Code, \`$CLAUDE_MODEL\`, mode \`$MODE\`) | $REAPPLY_RESULT |
+          | Quality, desktop builds, release | $RELEASE_RESULT |
+
+          Upstream release: https://github.com/$UPSTREAM_REPOSITORY/releases/tag/$UPSTREAM_TAG
+          Run: $RUN_URL
+
+          **Are the features broken?** Comment on this issue with a line starting with \`/redo\`,
+          optionally followed by what is wrong, and the workflow rebuilds the features from their
+          specification on the same upstream release and publishes the next \`-neo.<n>\` build.
+          Comment \`/sync\` to reapply the previous implementation again. Or use **Run workflow** at
+          $WORKFLOW_URL and pick any upstream version from the list.
+          EOF
+          )"
+          url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label "$labels" --assignee "$OWNER" 2>/dev/null \
+            || gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body")"
+          echo "Opened $url"

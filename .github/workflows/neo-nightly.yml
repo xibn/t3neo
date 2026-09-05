@@ -1,0 +1,294 @@
+name: Neo Nightly
+
+# Rebuilds one upstream T3 Code nightly as a T3 Neo nightly, on demand only.
+# Same pipeline as Upstream Sync (reset to the upstream commit, restore the
+# automation, Claude Code reapplies the features, verify.sh, review, approval,
+# then the reusable build/release workflow) with three differences: main is
+# never touched (the result lands on the `nightly` branch), feature.patch is
+# not refreshed, and the release is a pre-release that is never marked latest.
+# Upstream vX.Y.Z-nightly.<date>.<run> becomes vX.Y.Z-nightly.neo.<date>.<run>.
+# See .github/upstream-sync/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Upstream nightly to rebuild (the list is refreshed daily by Neo Refresh Upstream Tags)"
+        required: false
+        default: latest
+        type: choice
+        options:
+          - latest
+      upstream_tag_custom:
+        description: "Any other upstream nightly tag, e.g. v0.0.39-nightly.20260904.1280 (overrides the list)"
+        required: false
+        type: string
+      mode:
+        description: "sync reuses the last implementation; redo rebuilds the features from their spec because they are broken"
+        required: false
+        default: sync
+        type: choice
+        options:
+          - sync
+          - redo
+      notes:
+        description: "What is broken or should change (passed to Claude Code)"
+        required: false
+        type: string
+      force:
+        description: "Rebuild even if this nightly was already published here (replaces that release)"
+        required: false
+        default: false
+        type: boolean
+
+# One nightly rebuild at a time; it never competes with Upstream Sync for main.
+concurrency:
+  group: neo-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_REPOSITORY: pingdotgg/t3code
+  # The in-app repository links, release lookups, and download button point here.
+  VITE_T3NEO_REPOSITORY: ${{ github.repository }}
+  CLAUDE_MODEL: claude-fable-5-1
+  NIGHTLY_BRANCH: nightly
+
+jobs:
+  resolve:
+    name: Resolve upstream nightly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      run_needed: ${{ steps.plan.outputs.run_needed }}
+      skip_reason: ${{ steps.plan.outputs.skip_reason }}
+      upstream_tag: ${{ steps.plan.outputs.upstream_tag }}
+      upstream_sha: ${{ steps.plan.outputs.upstream_sha }}
+      fork_tag: ${{ steps.plan.outputs.fork_tag }}
+      fork_version: ${{ steps.plan.outputs.fork_version }}
+    steps:
+      - id: plan
+        name: Plan run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_TAG: ${{ inputs.upstream_tag }}
+          DISPATCH_TAG_CUSTOM: ${{ inputs.upstream_tag_custom }}
+          DISPATCH_FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          requested_tag="${DISPATCH_TAG_CUSTOM:-}"
+          if [[ -z "$requested_tag" && "${DISPATCH_TAG:-latest}" != "latest" ]]; then
+            requested_tag="$DISPATCH_TAG"
+          fi
+          if [[ -z "$requested_tag" ]]; then
+            # Upstream publishes nightlies as pre-releases, newest first.
+            requested_tag="$(gh api "repos/$UPSTREAM_REPOSITORY/releases?per_page=50" \
+              --jq '.[] | select(.draft == false and .prerelease == true) | .tag_name' \
+              | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$' || true; } | head -n 1)"
+          fi
+          requested_tag="v${requested_tag#v}"
+          version="${requested_tag#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]; then
+            echo "Upstream tag '$requested_tag' is not a nightly (expected vX.Y.Z-nightly.<date>.<run>)." >&2
+            exit 1
+          fi
+          upstream_sha="$(gh api "repos/$UPSTREAM_REPOSITORY/commits/$requested_tag" --jq .sha)"
+
+          # "nightly" stays the first pre-release word (the desktop updater reads
+          # the update channel from it); "neo" follows, then upstream's date and run.
+          fork_version="${version/-nightly./-nightly.neo.}"
+          fork_tag="v$fork_version"
+
+          run_needed="true"
+          skip_reason=""
+          if gh release view "$fork_tag" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1; then
+            if [[ "${DISPATCH_FORCE:-false}" == "true" ]]; then
+              echo "Replacing the existing $fork_tag release."
+              gh release delete "$fork_tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+            else
+              run_needed="false"
+              skip_reason="$fork_tag is already published here; run with force to replace it"
+            fi
+          fi
+
+          {
+            echo "run_needed=$run_needed"
+            echo "skip_reason=$skip_reason"
+            echo "upstream_tag=$requested_tag"
+            echo "upstream_sha=$upstream_sha"
+            echo "fork_tag=$fork_tag"
+            echo "fork_version=$fork_version"
+          } >> "$GITHUB_OUTPUT"
+          echo "upstream=$requested_tag ($upstream_sha) fork=$fork_tag run_needed=$run_needed $skip_reason"
+
+  reapply:
+    name: Reapply features on ${{ needs.resolve.outputs.upstream_tag }}
+    needs: [resolve]
+    if: needs.resolve.outputs.run_needed == 'true'
+    runs-on: ubuntu-24.04
+    # Implement, review, fix, and approve passes; each can take a while.
+    timeout-minutes: 360
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          # A PAT with contents + workflows scope: the restored automation lives
+          # under .github/workflows, which GITHUB_TOKEN may not push.
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Fetch upstream nightly
+        env:
+          UPSTREAM_SHA: ${{ needs.resolve.outputs.upstream_sha }}
+        run: |
+          git remote add upstream "https://github.com/$UPSTREAM_REPOSITORY.git"
+          git fetch --no-tags upstream "$UPSTREAM_SHA"
+
+      - id: reset
+        name: Reset to upstream and restore the automation
+        env:
+          UPSTREAM_SHA: ${{ needs.resolve.outputs.upstream_sha }}
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "t3neo[bot]"
+          git config user.email "t3neo@users.noreply.github.com"
+          # Everything listed in automation-paths.txt survives the reset. This
+          # is main's automation and main's feature.patch: the nightly starts
+          # from the stable implementation, it never feeds back into it.
+          keep="$RUNNER_TEMP/automation"
+          rm -rf "$keep"
+          mkdir -p "$keep"
+          paths="$(grep -Ev '^\s*(#|$)' .github/upstream-sync/automation-paths.txt)"
+          while IFS= read -r path; do
+            [[ -e "$path" ]] || continue
+            mkdir -p "$keep/$(dirname "$path")"
+            cp -R "$path" "$keep/$path"
+          done <<< "$paths"
+
+          git reset --hard "$UPSTREAM_SHA"
+
+          # Upstream's own issue templates make no sense in the fork.
+          rm -rf .github/ISSUE_TEMPLATE
+          while IFS= read -r path; do
+            [[ -e "$keep/$path" ]] || continue
+            rm -rf "$path"
+            mkdir -p "$(dirname "$path")"
+            cp -R "$keep/$path" "$path"
+          done <<< "$paths"
+          git add -A .github
+          git commit -q -m "chore: keep T3 Neo automation on $UPSTREAM_TAG"
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Reapply, review, and approve with Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          NEO_MODE: ${{ inputs.mode || 'sync' }}
+          NEO_NOTES: ${{ inputs.notes }}
+          NEO_BASE_SHA: ${{ steps.reset.outputs.base_sha }}
+          NEO_LOG_DIR: ${{ runner.temp }}/neo-agent
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+        run: bash .github/upstream-sync/agent.sh reapply
+
+      - name: Upload Claude Code logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: neo-nightly-logs-${{ needs.resolve.outputs.fork_version }}
+          path: ${{ runner.temp }}/neo-agent
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - id: push
+        name: Push nightly branch
+        run: |
+          set -euo pipefail
+          # The release tags this commit; the branch only has to make it
+          # reachable and is overwritten by the next nightly. main is untouched.
+          git push --force origin "HEAD:refs/heads/$NIGHTLY_BRANCH"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build and release
+    needs: [resolve, reapply]
+    uses: ./.github/workflows/neo-build-release.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.reapply.outputs.sha }}
+      fork_version: ${{ needs.resolve.outputs.fork_version }}
+      fork_tag: ${{ needs.resolve.outputs.fork_tag }}
+      upstream_tag: ${{ needs.resolve.outputs.upstream_tag }}
+      channel: nightly
+      notes: "- Reapplied in `${{ inputs.mode || 'sync' }}` mode by Claude Code (`claude-fable-5-1`), reviewed and approved by two further passes."
+
+  report:
+    name: Report
+    needs: [resolve, reapply, release]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Summarize, open an issue on failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          # Optional repository variable, for example "@alice @bob", when the
+          # owner is an organization or several people should be pinged.
+          NOTIFY: ${{ vars.UPSTREAM_SYNC_NOTIFY }}
+          RUN_NEEDED: ${{ needs.resolve.outputs.run_needed }}
+          SKIP_REASON: ${{ needs.resolve.outputs.skip_reason }}
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+          FORK_TAG: ${{ needs.resolve.outputs.fork_tag }}
+          MODE: ${{ inputs.mode || 'sync' }}
+          RELEASE_URL: ${{ needs.release.outputs.url }}
+          REAPPLY_RESULT: ${{ needs.reapply.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUN_NEEDED" != "true" ]]; then
+            echo "Skipped: $SKIP_REASON" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$RELEASE_RESULT" == "success" ]]; then
+            echo "Released **$FORK_TAG** (pre-release, not latest) from upstream $UPSTREAM_TAG: $RELEASE_URL" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Failed to rebuild upstream $UPSTREAM_TAG as $FORK_TAG. Logs: $RUN_URL" >> "$GITHUB_STEP_SUMMARY"
+          mention="${NOTIFY:-@$OWNER}"
+          gh label create "neo:needs-human" --repo "$GITHUB_REPOSITORY" --color F1A629 --force >/dev/null 2>&1 || true
+          body="$(cat <<EOF
+          $mention The nightly rebuild failed before publishing a release. Logs: $RUN_URL
+
+          | Step | Result |
+          | --- | --- |
+          | Reapply, review, approve (Claude Code, \`$CLAUDE_MODEL\`, mode \`$MODE\`) | $REAPPLY_RESULT |
+          | Quality, desktop builds, pre-release | $RELEASE_RESULT |
+
+          Upstream nightly: https://github.com/$UPSTREAM_REPOSITORY/releases/tag/$UPSTREAM_TAG
+          main was not touched. Run **Neo Nightly** again with the same tag (mode \`redo\` rebuilds the features from their spec).
+          EOF
+          )"
+          url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "Nightly $UPSTREAM_TAG rebuild failed" --body "$body" --label "neo:needs-human" --assignee "$OWNER" 2>/dev/null \
+            || gh issue create --repo "$GITHUB_REPOSITORY" --title "Nightly $UPSTREAM_TAG rebuild failed" --body "$body")"
+          echo "Opened $url"

@@ -30,6 +30,14 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
+import {
+  addTurnTokens,
+  buildTurnUsagePayload,
+  normalizeRateLimitSnapshot,
+  turnUsageActivity,
+  type RateLimitSnapshot,
+  type TurnTokenTotals,
+} from "../turnUsage.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
 import { isGitRepository } from "../../git/Utils.ts";
@@ -889,6 +897,13 @@ export function runtimeEventToActivities(
 }
 
 const make = Effect.gen(function* () {
+  // Latest plan-window report per provider instance, and the report seen when
+  // each turn started (keyed by thread:turn), for T3 Neo usage badges.
+  const latestRateLimits = new Map<string, RateLimitSnapshot>();
+  const turnRateLimitBaselines = new Map<string, RateLimitSnapshot | null>();
+  // Tokens reported per model call while a turn runs (keyed by thread:turn),
+  // for providers that never put usage on turn.completed (Codex).
+  const turnTokenTotals = new Map<string, TurnTokenTotals>();
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
   const crypto = yield* Crypto.Crypto;
@@ -1519,6 +1534,38 @@ const make = Effect.gen(function* () {
       const now = event.createdAt;
       const eventTurnId = toTurnId(event.turnId);
       const activeTurnId = thread.session?.activeTurnId ?? null;
+      // T3 Neo usage badges: remember the plan window before a turn and the
+      // latest report per provider instance so turn.completed can diff them.
+      const rateLimitKey = event.providerInstanceId ?? event.provider;
+      if (event.type === "account.rate-limits.updated") {
+        const snapshot = normalizeRateLimitSnapshot(event.payload);
+        if (snapshot) {
+          latestRateLimits.set(rateLimitKey, snapshot);
+          // A turn that started before this account reported anything (the
+          // first turn after a server start) takes the first report it sees
+          // as its baseline. Providers report with each response, so this
+          // undercounts only by the turn's first request.
+          const turnKey = `${thread.id}:${eventTurnId ?? activeTurnId ?? ""}`;
+          if (turnRateLimitBaselines.get(turnKey) === null) {
+            turnRateLimitBaselines.set(turnKey, snapshot);
+          }
+        }
+        // An explicit null withdraws the last report (Cursor, once it answers normally again).
+        else if (event.payload.rateLimits === null) latestRateLimits.delete(rateLimitKey);
+      }
+      if (event.type === "turn.started" && eventTurnId) {
+        turnRateLimitBaselines.set(
+          `${thread.id}:${eventTurnId}`,
+          latestRateLimits.get(rateLimitKey) ?? null,
+        );
+      }
+      if (event.type === "thread.token-usage.updated") {
+        const tokenKey = `${thread.id}:${eventTurnId ?? activeTurnId ?? ""}`;
+        turnTokenTotals.set(
+          tokenKey,
+          addTurnTokens(turnTokenTotals.get(tokenKey), event.payload.usage),
+        );
+      }
       const pendingTurnStart =
         event.type === "session.started" ||
         event.type === "session.state.changed" ||
@@ -2043,7 +2090,32 @@ const make = Effect.gen(function* () {
         }
       }
 
-      const activities = runtimeEventToActivities(event, taskTitle);
+      let usageActivity: OrchestrationThreadActivity | null = null;
+      if (event.type === "turn.completed") {
+        const baselineKey = `${thread.id}:${eventTurnId ?? ""}`;
+        const before = turnRateLimitBaselines.get(baselineKey) ?? null;
+        turnRateLimitBaselines.delete(baselineKey);
+        const accumulatedTokens = turnTokenTotals.get(baselineKey);
+        turnTokenTotals.delete(baselineKey);
+        const usagePayload = buildTurnUsagePayload({
+          provider: event.provider,
+          usage: event.payload.usage ?? accumulatedTokens,
+          totalCostUsd: event.payload.totalCostUsd,
+          before,
+          after: latestRateLimits.get(rateLimitKey) ?? null,
+        });
+        if (usagePayload) {
+          usageActivity = turnUsageActivity({
+            eventId: event.eventId,
+            turnId: eventTurnId ?? null,
+            createdAt: now,
+            payload: usagePayload,
+          });
+        }
+      }
+      const activities = usageActivity
+        ? [...runtimeEventToActivities(event, taskTitle), usageActivity]
+        : runtimeEventToActivities(event, taskTitle);
       yield* Effect.forEach(activities, (activity) =>
         providerCommandId(event, "thread-activity-append").pipe(
           Effect.flatMap((commandId) =>

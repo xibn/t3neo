@@ -128,6 +128,7 @@ export function useRelativeTimeTick(intervalMs = 1_000) {
 export function SettingsSection({
   title,
   icon,
+  badge,
   headerAction,
   children,
   className,
@@ -135,6 +136,8 @@ export function SettingsSection({
 }: ComponentPropsWithoutRef<"section"> & {
   title: string;
   icon?: ReactNode;
+  /** Rendered after the title, e.g. the Neo feature badge. */
+  badge?: ReactNode;
   headerAction?: ReactNode;
   children: ReactNode;
 }) {
@@ -151,6 +154,7 @@ export function SettingsSection({
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-[-0.025em] text-foreground">
           {icon}
           {title}
+          {badge}
         </h2>
         <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>
       </div>

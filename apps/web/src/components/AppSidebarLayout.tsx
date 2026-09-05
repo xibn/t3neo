@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { useAppearanceLook } from "../appearanceLook";
+import { NeoStarSky } from "../neo/NeoStarfield";
 import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -69,8 +71,12 @@ function SidebarControl() {
   const { toggleSidebar } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  // Neo replaces the stage artwork with its starfield (see SidebarChrome), so
+  // the toggle keeps its normal ghost hover instead of the white-on-art one.
+  const appearanceLook = useAppearanceLook();
+  const neoLook = appearanceLook === "neo";
   const stageBackdropVariant = useSidebarStageBackdropVariant(
-    environmentIdentificationMode === "artwork",
+    environmentIdentificationMode === "artwork" && !neoLook,
   );
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
 
@@ -137,6 +143,9 @@ function ProjectProjectionRetention() {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  const appearanceLook = useAppearanceLook();
+  // Only the star trail depends on this; the look's palette applies via CSS.
+  const neoLook = appearanceLook === "neo";
   const navigate = useNavigate();
   const legacySidebarEnabled = useLegacySidebarEnabled();
   // Settings routes show the settings nav in place of whichever thread
@@ -195,6 +204,15 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onMenuAction((action) => {
+      // The desktop pet window asks the main window to show a thread.
+      const openThread = /^open-thread:([^:]+):(.+)$/.exec(action);
+      if (openThread) {
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId: openThread[1]!, threadId: openThread[2]! },
+        });
+        return;
+      }
       if (action === "open-settings") {
         const isSettingsRoute = /^\/settings(\/|$)/.test(pathname);
         if (!isSettingsRoute) {
@@ -226,6 +244,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           onResize: setSidebarWidth,
         }}
       >
+        {neoLook ? <NeoStarSky className="neo-sidebar-trail" variant="sidebar" /> : null}
         {isOnSettings ? (
           <>
             <SidebarChromeHeader isElectron={isElectron} />

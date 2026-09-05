@@ -39,6 +39,14 @@ The main durable unit of conversation and workspace history. In [the orchestrati
 
 A single user-to-assistant work cycle inside a thread. It starts with user input and ends when the session leaves `running` status, which [projector.ts][4] treats as the authoritative completion signal (`settledTurnStateForSessionStatus`). Checkpoint and diff work may settle afterward without changing when the turn ended. See [the contracts][1] and [ProviderRuntimeIngestion.ts][5].
 
+#### Steer
+
+A user message sent while a turn is running. The server treats it as `thread.turn.start` for the same thread; the provider adapter injects it into the running turn instead of starting a new one. Web and desktop only steer on an explicit **Send now**; by default they queue. Mobile always steers.
+
+#### Queued message
+
+A user message held on the web or desktop client until its thread stops being busy, then sent as a fresh turn. The queue lives in `apps/web/src/messageQueueStore.ts` and drains from `useMessageQueueDrain`. Busy means a running or starting session, or a sent user message that no turn has adopted yet (see `hasQueuedTurnStart`). The server has no queue concept.
+
 #### Activity
 
 A user-visible log item attached to a thread. In [the contracts][1], activities cover important non-message events like approvals, tool actions, and failures. They are projected into thread state in [projector.ts][4].
@@ -146,6 +154,22 @@ The patch difference between two checkpoints. Query logic lives in [CheckpointDi
 The file patch and changed-file summary for one turn. It is usually computed in [CheckpointDiffQuery.ts][20], represented in [the contracts][1], and recorded into thread state by [projector.ts][4].
 
 ### Appearance
+
+#### Look
+
+A whole-interface restyle on web and desktop, chosen in Settings → Appearance → Look (**Neo**, the default, or **Default**) and stored per client under `t3code:appearance-look`. Unlike a theme, which only supplies a palette, a look owns typography, shapes, and surfaces too; `apps/web/src/looks/neo.css` restyles the app under `html[data-look="neo"]` and replaces the theme palette while active. See [appearance-looks.md](../user/appearance-looks.md).
+
+#### Neo settings
+
+The T3 Neo settings tab (`/settings/neo`, `apps/web/src/components/settings/NeoSettingsPanel.tsx`) and its per-client store `apps/web/src/neo/neoSettings.ts` (`t3code:neo-settings:v1`): usage badges, message queueing, pet choice, size, and position. No server or contract state. See [neo.md](../user/neo.md).
+
+#### Pet
+
+The optional companion that floats over the client (`apps/web/src/neo/pets/PetWidget.tsx`): a pixel rabbit or the ASCII monkey Wukong, whose mood (sleeping, typing, working) follows composer typing and running threads via `usePetActivitySync`. It carries a badge with the running-thread count or an unseen-completion dot, and on desktop can detach into a transparent always-on-top window (`apps/desktop/src/ipc/methods/pet.ts`, route `/pet`).
+
+#### Usage badge
+
+The per-turn cost label under an assistant reply (`apps/web/src/neo/UsageBadge.tsx`): free, a percentage of the provider's rate-limit window, or billed. Sourced from the `provider.turn.usage` activity that `ProviderRuntimeIngestion` emits on `turn.completed` using `apps/server/src/orchestration/turnUsage.ts`, which diffs the provider's rate-limit reports before and after the turn.
 
 #### Environment theme
 

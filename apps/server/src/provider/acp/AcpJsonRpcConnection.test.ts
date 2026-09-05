@@ -511,12 +511,15 @@ describe("AcpSessionRuntime", () => {
     );
   });
 
-  it.effect("fails session startup when session/load returns an error", () =>
+  it.effect("starts a new session when the agent rejects session/load", () =>
     Effect.gen(function* () {
       const runtime = yield* AcpSessionRuntime.AcpSessionRuntime;
-      const error = yield* runtime.start().pipe(Effect.flip);
+      const result = yield* runtime.start();
 
-      expect(error._tag).toBe("AcpRequestError");
+      // The stale id is dropped for the agent's fresh one, so the adapter
+      // persists a cursor that resumes next time.
+      expect(result.sessionId).not.toBe("stale-session-id");
+      expect(result.sessionId.length).toBeGreaterThan(0);
     }).pipe(
       Effect.provide(
         AcpSessionRuntime.layer({

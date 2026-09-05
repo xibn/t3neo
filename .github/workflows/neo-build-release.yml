@@ -1,0 +1,380 @@
+name: Neo Build and Release
+
+# Reusable: full quality suite, desktop builds for macOS/Linux/Windows, and a
+# GitHub release for one commit. Called by the upstream sync (new upstream
+# release), the issue automation (patch release after an automated fix or
+# feature), and Neo Nightly (rebuild of an upstream nightly). Stable releases
+# are marked latest; nightly ones are pre-releases and never latest.
+# See .github/upstream-sync/README.md.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to build (sha)"
+        required: true
+        type: string
+      fork_version:
+        description: "Version to stamp into packages, e.g. 0.0.37-neo.1"
+        required: true
+        type: string
+      fork_tag:
+        description: "Release tag, e.g. v0.0.37-neo.1"
+        required: true
+        type: string
+      upstream_tag:
+        description: "Upstream tag this build is based on"
+        required: true
+        type: string
+      notes:
+        description: "Extra markdown for the release notes"
+        required: false
+        type: string
+        default: ""
+      channel:
+        description: "stable marks the release latest; nightly publishes a pre-release that is never latest"
+        required: false
+        type: string
+        default: stable
+    outputs:
+      url:
+        description: "URL of the published release"
+        value: ${{ jobs.release.outputs.url }}
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM_REPOSITORY: pingdotgg/t3code
+  VITE_T3NEO_REPOSITORY: ${{ github.repository }}
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Check
+        run: vp check
+
+      - name: Typecheck
+        run: vp run typecheck
+
+      - name: Test
+        run: vp run test
+
+  # node-pty ships no Linux prebuilt; the Windows package bundles this Linux
+  # binary for its WSL backend. Mirrors the upstream release workflow.
+  build_wsl_node_pty:
+    name: Build WSL node-pty (linux-x64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=t3...
+
+      - name: Build node-pty linux-x64 prebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          pty_pkg="$(node -e "console.log(require.resolve('node-pty/package.json', { paths: ['$GITHUB_WORKSPACE/apps/server'] }))")"
+          pty_dir="$(dirname "$pty_pkg")"
+          ( cd "$pty_dir" && npx --yes node-gyp rebuild )
+          mkdir -p wsl-prebuild
+          cp "$pty_dir/build/Release/pty.node" wsl-prebuild/pty.node
+
+      - name: Upload node-pty linux-x64 prebuild
+        uses: actions/upload-artifact@v7
+        with:
+          name: wsl-node-pty-x64-${{ inputs.fork_version }}
+          path: wsl-prebuild/pty.node
+          if-no-files-found: error
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: [build_wsl_node_pty]
+    # A failed WSL prebuild only breaks the Windows entry (its download step fails).
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      # Optional: public T3 Connect client configuration so relay features keep
+      # working in fork builds. Leave unset for a build without T3 Connect.
+      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+      T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+      T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS arm64
+            runner: macos-15
+            platform: mac
+            target: dmg
+            arch: arm64
+            rust_target: aarch64-apple-darwin
+          - label: macOS x64
+            runner: macos-15
+            platform: mac
+            target: dmg
+            arch: x64
+            rust_target: x86_64-apple-darwin
+          - label: Linux x64
+            runner: ubuntu-24.04
+            platform: linux
+            target: AppImage
+            arch: x64
+            rust_target: x86_64-unknown-linux-gnu
+          - label: Windows x64
+            runner: windows-2025
+            platform: win
+            target: nsis
+            arch: x64
+            rust_target: x86_64-pc-windows-msvc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: ${{ matrix.platform != 'win' }}
+          run-install: false
+
+      - name: Install desktop dependencies
+        run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Align package versions to release version
+        run: node scripts/update-release-package-versions.ts "${{ inputs.fork_version }}"
+
+      - name: Download WSL node-pty prebuild
+        if: matrix.platform == 'win'
+        uses: actions/download-artifact@v7
+        with:
+          name: wsl-node-pty-x64-${{ inputs.fork_version }}
+          path: wsl-prebuild
+
+      - name: Install ImageMagick
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+          fi
+
+      - name: Build desktop artifact
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
+          T3CODE_CLERK_PASSKEY_RP_DOMAINS: ${{ vars.CLERK_PASSKEY_RP_DOMAINS }}
+        run: |
+          set -euo pipefail
+          args=(
+            --platform "${{ matrix.platform }}"
+            --target "${{ matrix.target }}"
+            --arch "${{ matrix.arch }}"
+            --build-version "${{ inputs.fork_version }}"
+            --verbose
+          )
+
+          has_all() {
+            for value in "$@"; do
+              [[ -n "$value" ]] || return 1
+            done
+          }
+
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            if has_all "$CSC_LINK" "$CSC_KEY_PASSWORD" "$APPLE_API_KEY" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER" "$APPLE_TEAM_ID" "$MACOS_PROVISIONING_PROFILE"; then
+              key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+              printf '%s' "$APPLE_API_KEY" > "$key_path"
+              export APPLE_API_KEY="$key_path"
+              profile_path="$RUNNER_TEMP/t3code.provisionprofile"
+              printf '%s' "$MACOS_PROVISIONING_PROFILE" | base64 -D > "$profile_path"
+              export T3CODE_APPLE_TEAM_ID="$APPLE_TEAM_ID"
+              export T3CODE_MACOS_PROVISIONING_PROFILE="$profile_path"
+              echo "macOS signing enabled."
+              args+=(--signed)
+            elif has_all "$CSC_LINK" "$CSC_KEY_PASSWORD"; then
+              # A certificate without Apple credentials: sign with it (a
+              # self-signed one is fine), skip notarization. Squirrel accepts
+              # updates between builds signed with the same certificate, so
+              # in-place updates work; the first launch needs Gatekeeper's
+              # "Open Anyway" once.
+              echo "macOS self-signing enabled (certificate only, no notarization)."
+              args+=(--self-signed)
+            else
+              echo "macOS signing disabled (no Apple signing secrets); the DMG is unsigned and cannot auto-update itself."
+            fi
+          elif [[ "${{ matrix.platform }}" == "win" ]]; then
+            args+=(--wsl-prebuild "$GITHUB_WORKSPACE/wsl-prebuild/pty.node")
+            echo "Windows signing disabled; the installer is unsigned."
+          fi
+
+          vp run dist:desktop:artifact "${args[@]}"
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-publish
+          shopt -s nullglob
+          # The updater manifests (*.yml) and blockmaps are what make installed
+          # builds update in place instead of downloading a new installer.
+          for file in release/*.dmg release/*.zip release/*.AppImage release/*.exe release/*.blockmap release/*.yml; do
+            cp "$file" release-publish/
+          done
+          if [[ "${{ matrix.platform }}" == "mac" && "${{ matrix.arch }}" != "arm64" ]]; then
+            for manifest in release-publish/*-mac.yml; do
+              mv "$manifest" "${manifest%.yml}-${{ matrix.arch }}.yml"
+            done
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ inputs.fork_version }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release-publish/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [quality, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=@t3tools/scripts...
+
+      - name: Download all desktop artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-${{ inputs.fork_version }}-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Merge macOS updater manifests
+        run: |
+          shopt -s nullglob
+          for x64_manifest in release-assets/*-mac-x64.yml; do
+            arm64_manifest="${x64_manifest%-x64.yml}.yml"
+            if [[ -f "$arm64_manifest" ]]; then
+              node scripts/merge-update-manifests.ts --platform mac "$arm64_manifest" "$x64_manifest"
+              rm -f "$x64_manifest"
+            fi
+          done
+
+      - name: Write release notes
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+          FORK_TAG: ${{ inputs.fork_tag }}
+          EXTRA_NOTES: ${{ inputs.notes }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            intro="T3 Neo nightly $FORK_TAG on top of T3 Code nightly $UPSTREAM_TAG. A pre-release: never marked latest, ignored by stable installs and the download page, picked up only by desktop installs on the Nightly update channel."
+            upstream_line="- Upstream nightly: https://github.com/$UPSTREAM_REPOSITORY/releases/tag/$UPSTREAM_TAG"
+          else
+            intro="T3 Neo $FORK_TAG on top of T3 Code $UPSTREAM_TAG."
+            upstream_line="- Upstream release: https://github.com/$UPSTREAM_REPOSITORY/releases/tag/$UPSTREAM_TAG"
+          fi
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          $intro
+
+          $upstream_line
+          - Queued messages, the Neo look, pets, usage badges, the movable branch manager, and the Neo settings tab. See \`docs/user/neo.md\`.
+          $EXTRA_NOTES
+          - Built by: $RUN_URL
+
+          Installed desktop builds update in place through the updater manifests attached here. macOS builds are notarized only with full Apple credentials; with a certificate alone they are signed but not notarized (first launch needs "Open Anyway" once, updates still work), and without any certificate they are unsigned and cannot self-update.
+          EOF
+
+      - id: publish
+        name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.fork_tag }}
+          target_commitish: ${{ inputs.ref }}
+          name: ${{ inputs.channel == 'nightly' && format('T3 Neo Nightly {0}', inputs.fork_tag) || format('T3 Neo {0}', inputs.fork_tag) }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          prerelease: ${{ inputs.channel == 'nightly' }}
+          make_latest: ${{ inputs.channel != 'nightly' }}
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/*.dmg
+            release-assets/*.zip
+            release-assets/*.AppImage
+            release-assets/*.exe
+            release-assets/*.blockmap
+            release-assets/*.yml

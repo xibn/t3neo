@@ -14,6 +14,7 @@ import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClie
 import * as ResourceAttribution from "../resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
 import * as ProcessDiagnostics from "./ProcessDiagnostics.ts";
+import { registerProcessOrigin, resetProcessOriginsForTest } from "./ProcessOrigins.ts";
 
 function makeNativeSnapshot(
   processes: ResourceMonitorSnapshotEvent["processes"],
@@ -110,6 +111,70 @@ describe("ProcessDiagnostics", () => {
       expect(diagnostics.processes[0]?.startTimeMs).toBe(2_000);
       expect(diagnostics.processes[0]?.cpuPercent).toBe(1.5);
       expect(diagnostics.processes[0]?.rssBytes).toBe(2_048);
+      expect(diagnostics.processes[0]?.origin).toBeUndefined();
+    }),
+  );
+
+  it.effect("labels processes with the thread whose provider spawned their ancestor", () =>
+    Effect.gen(function* () {
+      resetProcessOriginsForTest();
+      registerProcessOrigin(4_242, { kind: "provider", provider: "codex", threadId: "thread-1" });
+      const base = {
+        status: "Running",
+        cpuTimeMs: 20,
+        virtualBytes: 1_024,
+        ioReadBytes: 0,
+        ioWriteBytes: 0,
+        ioSemantics: "storage" as const,
+      };
+      const snapshot = makeNativeSnapshot([
+        {
+          ...base,
+          pid: process.pid,
+          ppid: 1,
+          startTimeMs: 1_000,
+          runTimeMs: 60_000,
+          name: "node",
+          command: "t3 server",
+          cpuPercent: 0,
+          residentBytes: 1_024,
+        },
+        {
+          ...base,
+          pid: 4_242,
+          ppid: process.pid,
+          startTimeMs: 2_000,
+          runTimeMs: 4_000,
+          name: "codex",
+          command: "codex app-server",
+          cpuPercent: 1,
+          residentBytes: 2_048,
+        },
+        {
+          ...base,
+          pid: 4_343,
+          ppid: 4_242,
+          startTimeMs: 3_000,
+          runTimeMs: 1_000,
+          name: "zsh",
+          command: "/bin/zsh -lc 'pnpm test'",
+          cpuPercent: 3,
+          residentBytes: 512,
+        },
+      ]);
+      const layer = ProcessDiagnostics.layer.pipe(Layer.provideMerge(makeTelemetryLayer(snapshot)));
+      const diagnostics = yield* Effect.gen(function* () {
+        const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
+        return yield* processDiagnostics.read;
+      }).pipe(Effect.provide(layer));
+      const byPid = new Map(diagnostics.processes.map((entry) => [entry.pid, entry]));
+      expect(byPid.get(4_242)?.origin).toEqual({
+        kind: "provider",
+        provider: "codex",
+        threadId: "thread-1",
+      });
+      expect(byPid.get(4_343)?.origin?.threadId).toBe("thread-1");
+      resetProcessOriginsForTest();
     }),
   );
 

@@ -7,6 +7,8 @@ import {
   clampPromptFontSize,
   cssFontFamilies,
   resolveDefaultFamilyLabel,
+  resolveSansFamilyLabel,
+  resolveSansFontChoices,
   resolveTerminalFontPreference,
   resolveTerminalFontSizePreference,
 } from "./appearanceFonts";
@@ -52,6 +54,39 @@ describe("resolveDefaultFamilyLabel", () => {
   it("skips generic keywords and returns null for a stack of only generics", () => {
     expect(resolveDefaultFamilyLabel("system-ui, sans-serif")).toBeNull();
     expect(resolveDefaultFamilyLabel("ui-monospace, monospace")).toBeNull();
+  });
+});
+
+describe("resolveSansFontChoices", () => {
+  it("makes Schibsted Grotesk the unset default under Neo and keeps the platform face selectable", () => {
+    const choices = resolveSansFontChoices({ look: "neo", systemFamily: "SF Pro" });
+    expect(choices.map((choice) => [choice.value, choice.family, choice.badge])).toEqual([
+      ["", "Schibsted Grotesk", "Neo Default"],
+      ["system-ui", "SF Pro", "Default"],
+    ]);
+  });
+
+  it("makes the platform face the unset default under the standard look", () => {
+    const choices = resolveSansFontChoices({ look: "default", systemFamily: "Segoe UI" });
+    expect(choices.map((choice) => [choice.value, choice.family, choice.badge])).toEqual([
+      ["", "Segoe UI", "Default"],
+      ["Schibsted Grotesk", "Schibsted Grotesk", "Neo Default"],
+    ]);
+  });
+
+  it("renders the platform row with a CSS keyword, never the display name", () => {
+    const [, system] = resolveSansFontChoices({ look: "neo", systemFamily: "SF Pro" });
+    expect(system?.css).toBe("system-ui");
+    expect(cssFontFamilies(system?.value ?? "")).toBe("system-ui");
+  });
+});
+
+describe("resolveSansFamilyLabel", () => {
+  it("names pinned choices and passes other families through", () => {
+    const choices = resolveSansFontChoices({ look: "neo", systemFamily: "SF Pro" });
+    expect(resolveSansFamilyLabel("", choices)).toBe("Schibsted Grotesk");
+    expect(resolveSansFamilyLabel(" system-ui ", choices)).toBe("SF Pro");
+    expect(resolveSansFamilyLabel("Inter", choices)).toBe("Inter");
   });
 });
 

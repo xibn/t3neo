@@ -342,37 +342,40 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     return Queue.offer(serverQueue, message).pipe(Effect.asVoid);
   };
 
-  const handleExitEncoded = (message: RpcMessage.ResponseExitEncoded) =>
-    Ref.get(extPending).pipe(
-      Effect.flatMap((pending) => {
-        const pendingRequest = pending.get(String(message.requestId));
-        if (!pendingRequest) {
-          return Queue.offer(clientQueue, message).pipe(Effect.asVoid);
-        }
-        if (message.exit._tag === "Success") {
-          return completeExtPendingSuccess(message.requestId, message.exit.value);
-        }
-        const failure = message.exit.cause.find((entry) => entry._tag === "Fail");
-        if (failure && isProtocolError(failure.error)) {
+  const handleExitEncoded = (rawMessage: RpcMessage.ResponseExitEncoded) =>
+    Effect.suspend(() => {
+      const message = normalizeExitEncoded(rawMessage);
+      return Ref.get(extPending).pipe(
+        Effect.flatMap((pending) => {
+          const pendingRequest = pending.get(String(message.requestId));
+          if (!pendingRequest) {
+            return Queue.offer(clientQueue, message).pipe(Effect.asVoid);
+          }
+          if (message.exit._tag === "Success") {
+            return completeExtPendingSuccess(message.requestId, message.exit.value);
+          }
+          const failure = message.exit.cause.find((entry) => entry._tag === "Fail");
+          if (failure && isProtocolError(failure.error)) {
+            return completeExtPendingFailure(
+              message.requestId,
+              AcpError.AcpRequestError.fromProtocolError(failure.error, {
+                method: pendingRequest.method,
+                requestId: message.requestId,
+                cause: message.exit.cause,
+              }),
+            );
+          }
           return completeExtPendingFailure(
             message.requestId,
-            AcpError.AcpRequestError.fromProtocolError(failure.error, {
-              method: pendingRequest.method,
-              requestId: message.requestId,
-              cause: message.exit.cause,
-            }),
+            AcpError.AcpRequestError.fromExtensionResponseFailure(
+              pendingRequest.method,
+              message.requestId,
+              message.exit.cause,
+            ),
           );
-        }
-        return completeExtPendingFailure(
-          message.requestId,
-          AcpError.AcpRequestError.fromExtensionResponseFailure(
-            pendingRequest.method,
-            message.requestId,
-            message.exit.cause,
-          ),
-        );
-      }),
-    );
+        }),
+      );
+    });
 
   const routeDecodedMessage = (
     message: RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded,
@@ -577,4 +580,26 @@ function isProtocolError(
     "message" in value &&
     typeof value.message === "string"
   );
+}
+
+/**
+ * Agents answer a failed request with a plain JSON-RPC error object. The
+ * serialization layer only recognizes Effect's own cause envelope and files
+ * anything else under a `Die`, which would surface as a defect instead of the
+ * rpc's declared error. Re-file protocol-shaped defects as `Fail` so callers
+ * get an `AcpRequestError` they can act on.
+ */
+function normalizeExitEncoded(
+  message: RpcMessage.ResponseExitEncoded,
+): RpcMessage.ResponseExitEncoded {
+  if (message.exit._tag !== "Failure") return message;
+  let changed = false;
+  const cause = message.exit.cause.map((entry) => {
+    if (entry._tag === "Die" && isProtocolError(entry.defect)) {
+      changed = true;
+      return { _tag: "Fail" as const, error: entry.defect };
+    }
+    return entry;
+  });
+  return changed ? { ...message, exit: { _tag: "Failure", cause } } : message;
 }

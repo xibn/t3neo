@@ -25,6 +25,7 @@ import {
   type ThreadShell,
 } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
+import { isThreadBusyForQueue } from "../messageQueueStore";
 import * as Schema from "effect/Schema";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentThreadDetails } from "../state/threads";
@@ -51,6 +52,48 @@ export function codexArtifactTemplatePromptToAppend(
   return appendCodexArtifactTemplateUsePrompt(currentDraft, template) === currentDraft
     ? null
     : codexArtifactTemplateUsePrompt(template);
+}
+
+/**
+ * A message sent while its thread is busy waits in the client-side queue
+ * instead of steering the running turn. Anything already queued keeps later
+ * messages behind it, so order holds even once the thread goes idle.
+ */
+export function shouldQueueComposerSubmission(input: {
+  submissionIntent: ComposerSubmissionIntent;
+  /** Settings → Neo → Queue messages; off restores upstream's steer-on-send. */
+  queueEnabled?: boolean;
+  isServerThread: boolean;
+  thread: Pick<Thread, "session" | "latestTurn" | "messages">;
+  queuedCount: number;
+  now: string;
+}): boolean {
+  if (input.queueEnabled === false) {
+    return false;
+  }
+  // The composer moves a draft aside (to edit a queued message) by queueing it
+  // whatever the thread is doing; a draft thread has no queue to move it to.
+  if (input.submissionIntent === "queue") {
+    return input.isServerThread;
+  }
+  if (input.submissionIntent === "immediate" || !input.isServerThread) {
+    return false;
+  }
+  if (input.queuedCount > 0) {
+    return true;
+  }
+  let latestUserMessageAt: string | null = null;
+  for (let index = input.thread.messages.length - 1; index >= 0; index -= 1) {
+    const message = input.thread.messages[index];
+    if (message?.role === "user") {
+      latestUserMessageAt = message.createdAt;
+      break;
+    }
+  }
+  return isThreadBusyForQueue(
+    { session: input.thread.session, latestTurn: input.thread.latestTurn, latestUserMessageAt },
+    { now: input.now },
+  );
 }
 
 export function shouldDockDraftHeroForSubmission(input: {

@@ -6,6 +6,15 @@ import { ClerkProvider as ElectronClerkProvider } from "@clerk/electron/react";
 import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
 
 import "./index.css";
+// The Neo look's interface face, bundled so it renders on every machine.
+// Only the weights the UI uses; each subset downloads on first use.
+import "@fontsource/schibsted-grotesk/400.css";
+import "@fontsource/schibsted-grotesk/400-italic.css";
+import "@fontsource/schibsted-grotesk/500.css";
+import "@fontsource/schibsted-grotesk/600.css";
+import "@fontsource/schibsted-grotesk/700.css";
+import "./looks/neo.css";
+import "./neo/neo.css";
 
 import { isElectron } from "./env";
 import { ManagedRelayAuthProvider } from "./cloud/managedAuth";

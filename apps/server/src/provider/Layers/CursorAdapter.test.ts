@@ -250,6 +250,51 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     }),
   );
 
+  it.effect("reports a full plan window when Cursor answers with its upgrade notice", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CursorAdapter;
+      const settings = yield* ServerSettingsService;
+      const threadId = ThreadId.make("cursor-plan-limit-thread");
+
+      const wrapperPath = yield* Effect.promise(() =>
+        makeMockAgentWrapper({ T3_ACP_PROMPT_RESPONSE_TEXT: "Upgrade your plan to continue" }),
+      );
+      yield* settings.updateSettings({ providers: { cursor: { binaryPath: wrapperPath } } });
+
+      const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.takeUntil((event) => event.type === "turn.completed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("cursor"),
+        cwd: process.cwd(),
+        runtimeMode: "full-access",
+        modelSelection: { instanceId: ProviderInstanceId.make("cursor"), model: "default" },
+      });
+      yield* adapter.sendTurn({ threadId, input: "hello", attachments: [] });
+
+      const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+      const types = runtimeEvents.map((event) => event.type);
+      const limitIndex = types.indexOf("account.rate-limits.updated");
+      assert.notEqual(limitIndex, -1, types.join(","));
+      // The report lands before the turn settles, so the usage badge can read it.
+      assert.isBelow(limitIndex, types.indexOf("turn.completed"));
+      const limitEvent = runtimeEvents[limitIndex];
+      if (limitEvent?.type === "account.rate-limits.updated") {
+        assert.deepStrictEqual(limitEvent.payload.rateLimits, {
+          windows: [{ label: "Plan Limit", usedPercent: 100 }],
+          status: "rejected",
+        });
+      }
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("steers a running turn instead of opening a new one on mid-turn sendTurn", () =>
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;

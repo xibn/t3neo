@@ -30,6 +30,45 @@
             accent: "#818cf8",
           },
         };
+        // The Neo look (looks/neo.css) replaces every theme palette; keep its
+        // canvas, chrome and accent here so the splash matches before mount.
+        const NEO_SPLASH_COLORS = {
+          light: {
+            background: "#e3d9cb",
+            foreground: "#17110d",
+            accent: "#c8641f",
+            chrome: "#dad0c1",
+          },
+          dark: {
+            background: "#110f0d",
+            foreground: "#ffedd9",
+            accent: "#f2a26e",
+            chrome: "#0c0b0a",
+          },
+        };
+        // The interface look (Settings -> Appearance -> Look) restyles the
+        // whole app; apply it before first paint like the theme. Neo is the
+        // default; only an explicit "default" keeps the standard look.
+        const isNeoLook = (() => {
+          try {
+            return window.localStorage.getItem("t3code:appearance-look") !== "default";
+          } catch {
+            return true;
+          }
+        })();
+        if (isNeoLook) {
+          document.documentElement.dataset.look = "neo";
+        }
+        // Chevron animations (Settings -> Appearance) are on by default; only
+        // an explicit "off" marks the document, so closed chevrons never flip
+        // after mount.
+        try {
+          if (window.localStorage.getItem("t3code:chevron-animations") === "off") {
+            document.documentElement.dataset.chevronAnimations = "off";
+          }
+        } catch {
+          // Storage blocked; keep the default.
+        }
         // These are the runtime defaults used to complete a custom palette
         // when a stored theme omits a role. Keep them separate from the
         // unselected splash so a partial custom theme does not flash generic
@@ -351,7 +390,9 @@
                   : (customDefaults?.accent ?? fallbackSplash.accent),
               }
             : null;
-          if (effectiveIsThemed) {
+          // Neo paints its own palette, so the theme never marks the document
+          // while it is on (mirrors the runtime's applyThemePalette).
+          if (effectiveIsThemed && !isNeoLook) {
             document.documentElement.dataset.themeId = effectiveCustomTheme
               ? effectiveCustomTheme.id
               : effectiveThemeId;
@@ -367,20 +408,23 @@
             delete document.documentElement.dataset.themeSelected;
           }
           document.documentElement.classList.toggle("dark", isDark);
-          const chromeColor = customColors
-            ? isThemeColor(customColors.chrome)
-              ? customColors.chrome
-              : (customDefaults?.chrome ?? fallbackSplash.background)
-            : builtInSplash
-              ? builtInSplash.chrome
-              : isDark
-                ? DARK_BACKGROUND
-                : LIGHT_BACKGROUND;
+          const neoSplash = isNeoLook ? NEO_SPLASH_COLORS[isDark ? "dark" : "light"] : null;
+          const chromeColor = neoSplash
+            ? neoSplash.chrome
+            : customColors
+              ? isThemeColor(customColors.chrome)
+                ? customColors.chrome
+                : (customDefaults?.chrome ?? fallbackSplash.background)
+              : builtInSplash
+                ? builtInSplash.chrome
+                : isDark
+                  ? DARK_BACKGROUND
+                  : LIGHT_BACKGROUND;
           document.documentElement.style.backgroundColor = chromeColor;
           if (hasSelection) {
-            const splashColors = customSplash ?? builtInSplash ?? fallbackSplash;
-            for (const [name, value] of Object.entries(splashColors)) {
-              document.documentElement.style.setProperty(`--boot-${name}`, value);
+            const splashColors = neoSplash ?? customSplash ?? builtInSplash ?? fallbackSplash;
+            for (const name of ["background", "foreground", "accent"]) {
+              document.documentElement.style.setProperty(`--boot-${name}`, splashColors[name]);
             }
           }
           setThemeColor(chromeColor);
@@ -395,7 +439,11 @@
           delete document.documentElement.dataset.themeId;
           delete document.documentElement.dataset.themeSelected;
           document.documentElement.classList.toggle("dark", prefersDark);
-          const fallbackColor = prefersDark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
+          const fallbackColor = isNeoLook
+            ? NEO_SPLASH_COLORS[prefersDark ? "dark" : "light"].chrome
+            : prefersDark
+              ? DARK_BACKGROUND
+              : LIGHT_BACKGROUND;
           document.documentElement.style.backgroundColor = fallbackColor;
           setThemeColor(fallbackColor);
         }
@@ -453,7 +501,7 @@
         object-fit: contain;
       }
     </style>
-    <title>T3 Code (Alpha)</title>
+    <title>T3 Neo (Alpha)</title>
   </head>
   <body>
     <div id="root">

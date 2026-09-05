@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
+import { resolveProcessOrigins } from "./ProcessOrigins.ts";
 
 export class ProcessSignalFailed extends Schema.TaggedErrorClass<ProcessSignalFailed>()(
   "ProcessSignalFailed",
@@ -59,6 +60,15 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
   const refreshedTelemetry = telemetry.refresh.pipe(Effect.catch(() => telemetry.latest));
   const read: ProcessDiagnostics["Service"]["read"] = refreshedTelemetry.pipe(
     Effect.map((snapshot) => {
+      // Origins resolve over the whole tree, so a tool spawned three levels
+      // under a provider still lands on that provider's thread.
+      const origins = resolveProcessOrigins(
+        snapshot.processes.map((entry) => ({
+          pid: entry.identity.pid,
+          ppid: entry.ppid,
+          command: entry.command,
+        })),
+      );
       const processes = snapshot.processes
         .filter((entry) => canSignalCategory(entry.category))
         .map(
@@ -74,6 +84,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
             command: entry.command || entry.name || "unknown",
             depth: Math.max(0, entry.depth - 1),
             childPids: entry.childPids,
+            ...(origins.has(entry.identity.pid) ? { origin: origins.get(entry.identity.pid) } : {}),
           }),
         );
       return {

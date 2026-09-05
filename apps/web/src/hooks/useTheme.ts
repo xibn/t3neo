@@ -2,6 +2,7 @@ import type { DesktopBridge } from "@t3tools/contracts";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { subscribeAppearanceLook } from "../appearanceLook";
 import {
   applyThemePalette,
   CUSTOM_THEMES_STORAGE_KEY,
@@ -480,6 +481,14 @@ function handleStorageChange(e: StorageEvent) {
   }
 }
 
+// Switching the look decides whether the stored theme paints the document
+// (see applyThemePalette), so the cached application is stale either way.
+function handleAppearanceLookChange() {
+  lastAppliedTheme = null;
+  applyTheme(getStored(), { suppressTransitions: true });
+  emitChange();
+}
+
 let removeWindowListeners: (() => void) | null = null;
 
 function subscribe(listener: () => void): () => void {
@@ -490,11 +499,13 @@ function subscribe(listener: () => void): () => void {
   // subscribers; each event applies the theme once and notifies everyone.
   if (!removeWindowListeners) {
     const mq = typeof window.matchMedia === "function" ? window.matchMedia(MEDIA_QUERY) : null;
+    const unsubscribeLook = subscribeAppearanceLook(handleAppearanceLookChange);
     mq?.addEventListener("change", handleSystemAppearanceChange);
     window.addEventListener("storage", handleStorageChange);
     removeWindowListeners = () => {
       mq?.removeEventListener("change", handleSystemAppearanceChange);
       window.removeEventListener("storage", handleStorageChange);
+      unsubscribeLook();
     };
   }
 

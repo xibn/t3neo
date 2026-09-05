@@ -1,0 +1,9 @@
+# Paths that belong to the T3 Neo automation and survive every hard reset to
+# an upstream release. One path per line; directories are copied whole.
+.github/upstream-sync
+.github/workflows/upstream-sync.yml
+.github/workflows/neo-build-release.yml
+.github/workflows/neo-issues.yml
+.github/workflows/neo-refresh-tags.yml
+.github/workflows/neo-nightly.yml
+.github/ISSUE_TEMPLATE

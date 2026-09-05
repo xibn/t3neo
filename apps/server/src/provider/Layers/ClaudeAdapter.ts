@@ -19,6 +19,7 @@ import {
   type SDKUserMessage,
   type ModelUsage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { registerCommandTokenOrigin } from "../../diagnostics/ProcessOrigins.ts";
 import { parseCliArgs } from "@t3tools/shared/cliArgs";
 import {
   ApprovalRequestId,
@@ -4341,6 +4342,17 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
             }
           : {}),
       };
+
+      // T3 Neo Processes dialog: the SDK spawns `claude` itself, so the
+      // session id on its command line is what ties the process to the thread.
+      const claudeSessionToken = existingResumeSessionId ?? newSessionId;
+      if (claudeSessionToken) {
+        registerCommandTokenOrigin(claudeSessionToken, {
+          kind: "provider",
+          provider: "claude",
+          ...(threadId ? { threadId } : {}),
+        });
+      }
 
       yield* Effect.annotateCurrentSpan({
         "provider.kind": PROVIDER,

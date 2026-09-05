@@ -15,6 +15,7 @@ import {
 import type { ReactNode } from "react";
 
 import type { DraftId } from "../../composerDraftStore";
+import { applyNeoModelOptionDefaults, type NeoModelDefaultPrefs } from "../../neo/neoModelDefaults";
 import { getProviderModelCapabilities } from "../../providerModels";
 import { shouldRenderTraitsControls, TraitsMenuContent, TraitsPicker } from "./TraitsPicker";
 
@@ -25,6 +26,8 @@ export type ComposerProviderStateInput = {
   promptInjectionState?: ComposerPromptInjectionState;
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined;
   planModeEnabled: boolean;
+  /** Fork policy for a new chat's context-window and fast-mode defaults. */
+  neoModelDefaults?: NeoModelDefaultPrefs;
 };
 
 export type ComposerPromptInjectionState = "none" | "ultrathink";
@@ -63,6 +66,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
     modelOptions,
     promptInjectionState = "none",
     planModeEnabled,
+    neoModelDefaults,
   } = input;
   if (provider === "opencode") {
     const normalizedModel = normalizeModelSlug(model, provider);
@@ -79,7 +83,10 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
       };
     }
   }
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const baseCaps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const caps = neoModelDefaults
+    ? applyNeoModelOptionDefaults(baseCaps, neoModelDefaults)
+    : baseCaps;
   const descriptors = getProviderOptionDescriptors({ caps, selections: modelOptions });
   const primarySelectDescriptor = descriptors.find(
     (descriptor): descriptor is Extract<(typeof descriptors)[number], { type: "select" }> =>

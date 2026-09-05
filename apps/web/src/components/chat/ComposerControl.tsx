@@ -17,6 +17,7 @@ export function ComposerControl({
   return (
     <Button
       className={cn(composerControlClassName, className)}
+      data-composer-control
       size={size}
       variant={variant}
       {...props}
@@ -62,6 +63,7 @@ export function ComposerSelectControl({
   return (
     <SelectTrigger
       className={cn(composerControlClassName, className)}
+      data-composer-control
       icon={<ComposerControlChevron />}
       size={size}
       variant={variant}

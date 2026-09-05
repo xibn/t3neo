@@ -412,6 +412,7 @@ describe("MessagesTimeline", () => {
       resolveTimelineMinimapHitStripWidth,
       resolveTimelineMinimapIndexFromPointer,
       resolveTimelineMinimapInteractiveWidth,
+      resolveTimelineMinimapPreviewWidth,
       resolveTimelineMinimapTopPercent,
     } = await import("./MessagesTimeline.logic");
 
@@ -481,14 +482,26 @@ describe("MessagesTimeline", () => {
     expect(resolveTimelineMinimapHitStripWidth(0)).toBe(0);
     expect(resolveTimelineMinimapHitStripWidth(Number.NaN)).toBe(0);
 
-    // The collapsed target stays narrow, but an open preview keeps its full
-    // 20rem width plus the 2rem offset from the minimap rail interactive.
-    expect(resolveTimelineMinimapInteractiveWidth(0, false)).toBe(0);
-    expect(resolveTimelineMinimapInteractiveWidth(14, false)).toBe(14);
-    expect(resolveTimelineMinimapInteractiveWidth(40, false)).toBe(40);
-    expect(resolveTimelineMinimapInteractiveWidth(0, true)).toBe("22rem");
-    expect(resolveTimelineMinimapInteractiveWidth(14, true)).toBe("22rem");
-    expect(resolveTimelineMinimapInteractiveWidth(40, true)).toBe("22rem");
+    // The hover preview must also stay inside the gutter: no preview when the
+    // gutter cannot fit a readable card, a shrunk card for a partial gutter,
+    // and the full 320px card only once the gutter is wide enough.
+    expect(resolveTimelineMinimapPreviewWidth(768)).toBe(0);
+    expect(resolveTimelineMinimapPreviewWidth(1198)).toBe(0);
+    expect(resolveTimelineMinimapPreviewWidth(1200)).toBe(160);
+    expect(resolveTimelineMinimapPreviewWidth(1300)).toBe(210);
+    expect(resolveTimelineMinimapPreviewWidth(1520)).toBe(320);
+    expect(resolveTimelineMinimapPreviewWidth(2400)).toBe(320);
+    expect(resolveTimelineMinimapPreviewWidth(Number.NaN)).toBe(0);
+
+    // The collapsed target stays narrow, but an open preview keeps the card
+    // plus the 32px offset from the minimap rail interactive. Without a
+    // preview the target never grows past the gutter-capped strip.
+    expect(resolveTimelineMinimapInteractiveWidth(0, 320, false)).toBe(0);
+    expect(resolveTimelineMinimapInteractiveWidth(14, 320, false)).toBe(14);
+    expect(resolveTimelineMinimapInteractiveWidth(40, 320, false)).toBe(40);
+    expect(resolveTimelineMinimapInteractiveWidth(40, 320, true)).toBe(352);
+    expect(resolveTimelineMinimapInteractiveWidth(40, 226, true)).toBe(258);
+    expect(resolveTimelineMinimapInteractiveWidth(14, 0, true)).toBe(14);
   });
 
   it("anchors the first user message using its measured height", () => {

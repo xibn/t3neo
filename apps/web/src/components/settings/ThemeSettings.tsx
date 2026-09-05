@@ -53,6 +53,7 @@ import {
   type ThemeMode,
 } from "./ThemePreviewCircles";
 import { ThemeWireframe } from "./ThemeWireframe";
+import { NEO_THEME_PREVIEW_COLORS } from "~/neo/neoThemePreview";
 
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
   T3_CHAT_THEME,
@@ -513,9 +514,12 @@ export function ThemeLibrary({
   onImportOpenChange,
   themeHalves,
   setThemeHalf,
+  themesLocked = false,
 }: {
   theme: string;
   setTheme: (theme: string) => boolean;
+  /** The active look owns the palette: show the appearance mode only, with a note. */
+  themesLocked?: boolean;
   appearanceMode: ThemeMode;
   setAppearanceMode: (mode: ThemeMode) => boolean;
   customThemes: ReadonlyArray<ThemeDefinition>;
@@ -701,8 +705,11 @@ export function ThemeLibrary({
     return rings;
   };
 
+  // A locked look paints over the picked theme, so the mockups show the look.
   const wireframeColors = (appearance: ThemeAppearance) =>
-    pickColors(appearance === "light" ? lightOwner : darkOwner, appearance);
+    themesLocked
+      ? NEO_THEME_PREVIEW_COLORS[appearance]
+      : pickColors(appearance === "light" ? lightOwner : darkOwner, appearance);
 
   const renderWireframe = (mode: ThemeMode) => (
     <ThemeWireframe
@@ -886,6 +893,22 @@ export function ThemeLibrary({
       </div>
     </TooltipProvider>
   );
+
+  if (themesLocked) {
+    return (
+      <div className="space-y-3">
+        <h3 className="px-3 text-sm font-medium tracking-[-0.005em] text-foreground sm:px-4">
+          {searchableSetting("color-scheme").title}
+        </h3>
+        {renderModeTiles()}
+        <div className="mx-3 rounded-xl border border-primary/30 bg-primary/6 px-4 py-3 text-[13px] leading-[1.45] text-muted-foreground sm:mx-4">
+          Themes are not available with the Neo look: it brings its own light and dark palette.
+          Switch the look below to <span className="text-foreground">Default (Themes)</span> to pick
+          or create themes again.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

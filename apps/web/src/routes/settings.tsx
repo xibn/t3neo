@@ -15,6 +15,7 @@ import { Button } from "../components/ui/button";
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
 import { isElectron } from "../env";
+import { NeoVersionCard } from "../neo/NeoVersionCard";
 
 function RestoreDefaultsButton({ onRestored }: { onRestored: () => void }) {
   const { changedSettingLabels, restoreDefaults } = useSettingsRestore(onRestored);
@@ -83,6 +84,15 @@ function SettingsContentLayout() {
         </WorkspacePageHeader>
 
         <div key={restoreSignal} className="min-h-0 flex flex-1 flex-col">
+          {/* Same scroller gutters, page container and row inset as the tabs below, so the
+              card's edges line up with the settings text rather than the row backgrounds. */}
+          <div className="scrollbar-gutter-both shrink-0 overflow-y-auto">
+            <div className="mx-auto w-full max-w-4xl px-5 pt-4 sm:px-6">
+              <div className="px-3 sm:px-4">
+                <NeoVersionCard />
+              </div>
+            </div>
+          </div>
           <Outlet />
         </div>
       </div>

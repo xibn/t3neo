@@ -83,3 +83,7 @@ export const PREVIEW_RECORDING_SAVE_CHANNEL = "desktop:preview-recording-save";
 export const PREVIEW_RECORDING_FRAME_CHANNEL = "desktop:preview-recording-frame";
 export const PREVIEW_STATE_CHANGE_CHANNEL = "desktop:preview-state-change";
 export const PREVIEW_POINTER_EVENT_CHANNEL = "desktop:preview-pointer-event";
+export const PET_OPEN_WINDOW_CHANNEL = "desktop:pet-open-window";
+export const PET_CLOSE_WINDOW_CHANNEL = "desktop:pet-close-window";
+export const PET_MOVE_WINDOW_CHANNEL = "desktop:pet-move-window";
+export const PET_FOCUS_MAIN_CHANNEL = "desktop:pet-focus-main";

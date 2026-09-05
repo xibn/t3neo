@@ -526,6 +526,44 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
     }),
   );
 
+  it.effect("files a plain JSON-RPC error for a core request as a failure, not a defect", () =>
+    Effect.gen(function* () {
+      const { stdio, input } = yield* makeInMemoryStdio();
+      const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
+        stdio,
+        serverRequestMethods: new Set(),
+      });
+      const delivered = yield* Deferred.make<unknown>();
+
+      yield* transport.clientProtocol
+        .run(0, (message) => Deferred.succeed(delivered, message).pipe(Effect.asVoid))
+        .pipe(Effect.forkScoped);
+
+      // What a real agent sends when it rejects session/load: no Effect cause
+      // envelope, just the JSON-RPC error object.
+      yield* Queue.offer(
+        input,
+        encoder.encode(
+          `${encodeUnknownJsonString({
+            jsonrpc: "2.0",
+            id: 7,
+            error: { code: -32602, message: "Invalid params" },
+          })}\n`,
+        ),
+      );
+
+      const message = yield* Deferred.await(delivered);
+      assert.deepEqual(message, {
+        _tag: "Exit",
+        requestId: 7,
+        exit: {
+          _tag: "Failure",
+          cause: [{ _tag: "Fail", error: { code: -32602, message: "Invalid params" } }],
+        },
+      });
+    }),
+  );
+
   it.effect("cleans up interrupted extension requests before a late response arrives", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();

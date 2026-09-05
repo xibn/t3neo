@@ -113,3 +113,18 @@ export function applyCursorAcpModelSelection<E>(input: {
     }
   });
 }
+
+/**
+ * Cursor never reports usage windows. When the plan is exhausted the agent
+ * answers a prompt with this text instead of an error, so it is the only
+ * signal the usage badge can turn into "Limit Reached".
+ */
+export function isCursorPlanLimitReply(text: string): boolean {
+  return /^\s*upgrade your plan to continue\b/i.test(text);
+}
+
+/** The exhausted plan as a rate-limit report, in the shape `normalizeRateLimitSnapshot` reads. */
+export const cursorPlanLimitRateLimits = {
+  windows: [{ label: "Plan Limit", usedPercent: 100 }],
+  status: "rejected",
+} as const;

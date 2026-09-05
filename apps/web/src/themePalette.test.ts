@@ -365,6 +365,58 @@ describe("theme files", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not mark or paint a stored theme while the Neo look is on", () => {
+    const setProperty = vi.fn();
+    const removeProperty = vi.fn();
+    const dataset: Record<string, string | undefined> = { look: "neo", themeId: "t3-chat" };
+    vi.stubGlobal("document", {
+      documentElement: {
+        classList: { toggle: vi.fn() },
+        dataset,
+        style: { removeProperty, setProperty },
+      },
+    });
+
+    applyThemePalette("t3-chat", "dark");
+    expect(dataset.themeId).toBeUndefined();
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).toHaveBeenCalled();
+
+    delete dataset.look;
+    applyThemePalette("t3-chat", "dark");
+    expect(dataset.themeId).toBe("t3-chat");
+    expect(setProperty).toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("gives Neo's pet both of the theme's action colors under the default look", () => {
+    const setProperty = vi.fn();
+    const removeProperty = vi.fn();
+    const dataset: Record<string, string | undefined> = {};
+    vi.stubGlobal("document", {
+      documentElement: {
+        classList: { toggle: vi.fn() },
+        dataset,
+        style: { removeProperty, setProperty },
+      },
+    });
+
+    applyThemePalette("t3-chat", "dark");
+    const light = getThemeColorsForMode(T3_CHAT_THEME, "light") ?? T3_CHAT_THEME.colors;
+    const dark = getThemeColorsForMode(T3_CHAT_THEME, "dark") ?? T3_CHAT_THEME.colors;
+    expect(setProperty).toHaveBeenCalledWith("--neo-ascii-pet-light", light.messageAction);
+    expect(setProperty).toHaveBeenCalledWith("--neo-ascii-pet-dark", dark.messageAction);
+
+    // The Neo look paints its own amber, so the theme's colors come off again.
+    dataset.look = "neo";
+    applyThemePalette("t3-chat", "dark");
+    expect(removeProperty).toHaveBeenCalledWith("--neo-ascii-pet-light");
+    expect(removeProperty).toHaveBeenCalledWith("--neo-ascii-pet-dark");
+
+    vi.unstubAllGlobals();
+  });
+
   it("keeps optional light and dark palettes under one theme id", () => {
     const theme = parseThemeFile({
       version: THEME_FILE_VERSION,

@@ -100,7 +100,11 @@ export function ThemeWireframePane({
               className="block aspect-square h-[26%] rounded-full"
               style={{
                 backgroundColor:
-                  row === 0 ? "#34d399" : row === 1 ? colors.messageAction : "#fbbf24",
+                  row === 0
+                    ? "var(--color-emerald-400)"
+                    : row === 1
+                      ? colors.messageAction
+                      : "var(--color-amber-400)",
                 opacity: 0.55,
               }}
             />
