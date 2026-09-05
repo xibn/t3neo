@@ -74311,16 +74311,17 @@ index 8709be2a2..9281484ec 100644
      Flag.optional,
 diff --git a/scripts/neo/generate-neo-icons.ts b/scripts/neo/generate-neo-icons.ts
 new file mode 100644
-index 000000000..fbd6424ba
+index 000000000..e7f5f027f
 --- /dev/null
 +++ b/scripts/neo/generate-neo-icons.ts
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,117 @@
 +/**
 + * Renders the T3 Neo app icon (the lucide "moon-star" glyph in amber on a
 + * warm dark rounded square) into every production icon slot: macOS, iOS,
 + * universal/Linux, Windows .ico, and the web favicons. Run with
 + * `node scripts/neo/generate-neo-icons.ts` after changing the artwork.
 + */
++// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - a one-off asset generator, not an Effect program.
 +import * as NodeFS from "node:fs";
 +import * as NodeModule from "node:module";
 +import * as NodePath from "node:path";
@@ -74330,7 +74331,14 @@ index 000000000..fbd6424ba
 +const repoRoot = NodePath.resolve(import.meta.dirname, "../..");
 +const require = NodeModule.createRequire(import.meta.url);
 +
-+function loadSharp(): typeof import("sharp") {
++/**
++ * The slice of sharp this script uses. sharp is not a workspace dependency,
++ * it rides along with electron-builder in the pnpm store, so the module is
++ * required at runtime and typed here by hand.
++ */
++type Sharp = (input: Buffer) => { png(): { toBuffer(): Promise<Buffer> } };
++
++function loadSharp(): Sharp {
 +  try {
 +    return require("sharp");
 +  } catch {

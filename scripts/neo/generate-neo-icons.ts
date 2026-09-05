@@ -4,6 +4,7 @@
  * universal/Linux, Windows .ico, and the web favicons. Run with
  * `node scripts/neo/generate-neo-icons.ts` after changing the artwork.
  */
+// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - a one-off asset generator, not an Effect program.
 import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
@@ -13,7 +14,14 @@ import { encodePngIco, WINDOWS_ICON_SIZES } from "../lib/icon-export.ts";
 const repoRoot = NodePath.resolve(import.meta.dirname, "../..");
 const require = NodeModule.createRequire(import.meta.url);
 
-function loadSharp(): typeof import("sharp") {
+/**
+ * The slice of sharp this script uses. sharp is not a workspace dependency,
+ * it rides along with electron-builder in the pnpm store, so the module is
+ * required at runtime and typed here by hand.
+ */
+type Sharp = (input: Buffer) => { png(): { toBuffer(): Promise<Buffer> } };
+
+function loadSharp(): Sharp {
   try {
     return require("sharp");
   } catch {
