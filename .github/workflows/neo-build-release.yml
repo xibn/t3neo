@@ -325,7 +325,7 @@ jobs:
             verify_dir="$RUNNER_TEMP/verify-signature"
             rm -rf "$verify_dir"
             mkdir -p "$verify_dir"
-            ditto -x -k release-publish/*.zip "$verify_dir"
+            ditto -x -k release/*.zip "$verify_dir"
             app="$(find "$verify_dir" -maxdepth 2 -name '*.app' -print -quit)"
             [[ -n "$app" ]] || { echo "No .app found in the zip artifact"; exit 1; }
             codesign --verify --deep --strict --verbose=2 "$app"
