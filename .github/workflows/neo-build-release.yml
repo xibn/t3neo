@@ -8,6 +8,40 @@ name: Neo Build and Release
 # See .github/upstream-sync/README.md.
 
 on:
+  # Run workflow: build and publish the current branch by hand. Uses the same
+  # inputs as the call below; leave ref empty to build the selected branch.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit to build (sha); empty builds the selected branch"
+        required: false
+        type: string
+        default: ""
+      fork_version:
+        description: "Version to stamp into packages, e.g. 0.0.38-neo.0"
+        required: true
+        type: string
+      fork_tag:
+        description: "Release tag, e.g. v0.0.38-neo.0"
+        required: true
+        type: string
+      upstream_tag:
+        description: "Upstream tag this build is based on, e.g. v0.0.38"
+        required: true
+        type: string
+      notes:
+        description: "Extra markdown for the release notes"
+        required: false
+        type: string
+        default: ""
+      channel:
+        description: "stable marks the release latest; nightly publishes a pre-release"
+        required: false
+        type: choice
+        default: stable
+        options:
+          - stable
+          - nightly
   workflow_call:
     inputs:
       ref:

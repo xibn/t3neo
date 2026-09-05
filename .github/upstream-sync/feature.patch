@@ -1,3 +1,10 @@
+diff --git a/.repos/alchemy-effect/.vendor/alchemy b/.repos/alchemy-effect/.vendor/alchemy
+deleted file mode 160000
+index c9f5e549c..000000000
+--- a/.repos/alchemy-effect/.vendor/alchemy
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit c9f5e549cf023632c3df948c207a58336192b3c7
 diff --git a/README.md b/README.md
 index 8ec101387..5fd7a7148 100644
 --- a/README.md

@@ -33,6 +33,11 @@ and approval work, driven by three workflows and a handful of labels.
 Runs every six hours, on **Run workflow** (pick any stable upstream tag from the dropdown, or
 type one), and on `/redo` or `/sync` comments in notification issues.
 
+To publish the current `main` as it is, without a sync or a Claude Code run, use **Run workflow**
+on **Neo Build and Release** instead and fill in the version, tag, and upstream tag by hand, e.g.
+`0.0.38-neo.0`, `v0.0.38-neo.0`, `v0.0.38`. The next sync on that upstream release then counts
+it as already published.
+
 1. **Resolve** the upstream release. The dropdown lists every stable upstream release (refreshed
    daily); `upstream_tag_custom` accepts any other tag. Picks the next `-neo.<n>`; skips when that
    upstream version is already published unless `force`, `redo`, or a comment asked for it.
