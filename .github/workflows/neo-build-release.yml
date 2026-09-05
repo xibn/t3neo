@@ -283,6 +283,25 @@ jobs:
               echo "macOS signing enabled."
               args+=(--signed)
             elif has_all "$CSC_LINK" "$CSC_KEY_PASSWORD"; then
+              # electron-builder only signs with identities macOS deems valid,
+              # and a self-signed certificate is not until the runner trusts
+              # it for code signing. Without this the app ships with Electron's
+              # broken ad-hoc signature and Gatekeeper calls it damaged.
+              cert_dir="$RUNNER_TEMP/self-signed"
+              mkdir -p "$cert_dir"
+              if [[ -f "$CSC_LINK" ]]; then
+                cp "$CSC_LINK" "$cert_dir/cert.p12"
+              else
+                printf '%s' "$CSC_LINK" | base64 --decode > "$cert_dir/cert.p12"
+              fi
+              security create-keychain -p "" "$cert_dir/extract.keychain-db"
+              security import "$cert_dir/cert.p12" -k "$cert_dir/extract.keychain-db" \
+                -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign >/dev/null
+              security find-certificate -a -p "$cert_dir/extract.keychain-db" > "$cert_dir/cert.pem"
+              sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+                -k /Library/Keychains/System.keychain "$cert_dir/cert.pem"
+              security delete-keychain "$cert_dir/extract.keychain-db"
+              rm -f "$cert_dir/cert.p12"
               # A certificate without Apple credentials: sign with it (a
               # self-signed one is fine), skip notarization. Squirrel accepts
               # updates between builds signed with the same certificate, so
@@ -299,6 +318,19 @@ jobs:
           fi
 
           vp run dist:desktop:artifact "${args[@]}"
+
+          # A signing identity that electron-builder silently skips ships an app
+          # Gatekeeper calls damaged. Prove the seal on the zip artifact's app.
+          if [[ "${{ matrix.platform }}" == "mac" && " ${args[*]} " == *"-signed "* ]]; then
+            verify_dir="$RUNNER_TEMP/verify-signature"
+            rm -rf "$verify_dir"
+            mkdir -p "$verify_dir"
+            ditto -x -k release-publish/*.zip "$verify_dir"
+            app="$(find "$verify_dir" -maxdepth 2 -name '*.app' -print -quit)"
+            [[ -n "$app" ]] || { echo "No .app found in the zip artifact"; exit 1; }
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign -dvv "$app" 2>&1 | grep -E "Authority|Signature"
+          fi
 
       - name: Collect release assets
         shell: bash

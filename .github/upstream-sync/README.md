@@ -122,8 +122,9 @@ Secrets (Settings → Secrets and variables → Actions):
 - Cheaper macOS option, no Apple Developer account: only `CSC_LINK` and `CSC_KEY_PASSWORD`. Create a
   self-signed **Code Signing** certificate in Keychain Access (Certificate Assistant → Create a
   Certificate, type Code Signing), export it as a `.p12` with a password, and store the file
-  base64-encoded as `CSC_LINK` and the password as `CSC_KEY_PASSWORD`. The workflow then passes
-  `--self-signed`: builds are signed with that certificate but not notarized. Because every build
+  base64-encoded as `CSC_LINK` and the password as `CSC_KEY_PASSWORD`. The workflow trusts the
+  certificate on the runner first (electron-builder only signs with identities macOS considers
+  valid), then passes `--self-signed`: builds are signed with that certificate but not notarized. Because every build
   carries the same certificate, Squirrel accepts the in-place updates. The first launch of a fresh
   download needs System Settings → Privacy & Security → **Open Anyway** once; updates the app
   downloads itself do not ask again. Keep using the same certificate, a new one breaks the update
