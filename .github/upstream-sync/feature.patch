@@ -47,6 +47,21 @@ index b4d6e8d73..3d9ac4fda 100644
 -  "productName": "T3 Code (Alpha)"
 +  "productName": "T3 Neo (Alpha)"
  }
+diff --git a/apps/desktop/src/app/DesktopAppIdentity.test.ts b/apps/desktop/src/app/DesktopAppIdentity.test.ts
+index 5c39ff304..ca222d251 100644
+--- a/apps/desktop/src/app/DesktopAppIdentity.test.ts
++++ b/apps/desktop/src/app/DesktopAppIdentity.test.ts
+@@ -195,8 +195,8 @@ describe("DesktopAppIdentity", () => {
+         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+         yield* identity.configure;
+ 
+-        assert.deepEqual(calls.setName, ["T3 Code (Alpha)"]);
+-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T3 Code (Alpha)");
++        assert.deepEqual(calls.setName, ["T3 Neo (Alpha)"]);
++        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T3 Neo (Alpha)");
+         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
+         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
+         // Packaged: the bundle's own icon stands, so a custom one the user
 diff --git a/apps/desktop/src/app/DesktopEnvironment.ts b/apps/desktop/src/app/DesktopEnvironment.ts
 index 4583e5124..b6f1fd121 100644
 --- a/apps/desktop/src/app/DesktopEnvironment.ts
@@ -10660,6 +10675,28 @@ index 000000000..380716318
 +  currentLook = readStoredAppearanceLook();
 +  notify();
 +}
+diff --git a/apps/web/src/branding.test.ts b/apps/web/src/branding.test.ts
+index e1c87bcf0..a63a229d6 100644
+--- a/apps/web/src/branding.test.ts
++++ b/apps/web/src/branding.test.ts
+@@ -47,7 +47,7 @@ describe("branding", () => {
+     expect(branding.HOSTED_APP_CHANNEL).toBe("nightly");
+     expect(branding.HOSTED_APP_CHANNEL_LABEL).toBe("Nightly");
+     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
+-    expect(branding.APP_DISPLAY_NAME).toBe("T3 Code (Nightly)");
++    expect(branding.APP_DISPLAY_NAME).toBe("T3 Neo (Nightly)");
+   });
+ 
+   it("does not label the latest hosted app channel", async () => {
+@@ -58,7 +58,7 @@ describe("branding", () => {
+     expect(branding.HOSTED_APP_CHANNEL).toBe("latest");
+     expect(branding.HOSTED_APP_CHANNEL_LABEL).toBe("Latest");
+     expect(branding.APP_STAGE_LABEL).toBe("Latest");
+-    expect(branding.APP_DISPLAY_NAME).toBe("T3 Code");
++    expect(branding.APP_DISPLAY_NAME).toBe("T3 Neo");
+   });
+ 
+   it("ignores unknown hosted app channels", async () => {
 diff --git a/apps/web/src/branding.ts b/apps/web/src/branding.ts
 index 7fc57cf0d..2dc398483 100644
 --- a/apps/web/src/branding.ts
@@ -13430,6 +13467,26 @@ index 3e72b6ea6..0bc7d6370 100644
    const descriptors = getProviderOptionDescriptors({ caps, selections: modelOptions });
    const primarySelectDescriptor = descriptors.find(
      (descriptor): descriptor is Extract<(typeof descriptors)[number], { type: "select" }> =>
+diff --git a/apps/web/src/components/desktopUpdate.logic.test.ts b/apps/web/src/components/desktopUpdate.logic.test.ts
+index 918ffe0c3..3c6a3382c 100644
+--- a/apps/web/src/components/desktopUpdate.logic.test.ts
++++ b/apps/web/src/components/desktopUpdate.logic.test.ts
+@@ -187,13 +187,13 @@ describe("getDesktopUpdateActionError", () => {
+ describe("desktop update UI helpers", () => {
+   it("builds the stable release URL for a downloaded version", () => {
+     expect(getDesktopUpdateReleaseUrl("0.0.30")).toBe(
+-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30",
++      "https://github.com/xibn/t3neo/releases/tag/v0.0.30",
+     );
+   });
+ 
+   it("builds the nightly release URL without dropping its version suffix", () => {
+     expect(getDesktopUpdateReleaseUrl("0.0.30-nightly.20260728.931")).toBe(
+-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30-nightly.20260728.931",
++      "https://github.com/xibn/t3neo/releases/tag/v0.0.30-nightly.20260728.931",
+     );
+   });
+ 
 diff --git a/apps/web/src/components/desktopUpdate.logic.ts b/apps/web/src/components/desktopUpdate.logic.ts
 index 59dfbd385..b250529a4 100644
 --- a/apps/web/src/components/desktopUpdate.logic.ts
@@ -13447,6 +13504,28 @@ index 59dfbd385..b250529a4 100644
  
  /**
   * The main process fills `downloadedVersion` from the updater's `update-downloaded`
+diff --git a/apps/web/src/components/desktopUpdate.toast.test.tsx b/apps/web/src/components/desktopUpdate.toast.test.tsx
+index 369a3cdf4..f2ec1261d 100644
+--- a/apps/web/src/components/desktopUpdate.toast.test.tsx
++++ b/apps/web/src/components/desktopUpdate.toast.test.tsx
+@@ -72,7 +72,7 @@ describe("showDesktopUpdateDownloadedToast", () => {
+     link?.props.onClick?.();
+     await vi.waitFor(() => {
+       expect(openExternal).toHaveBeenCalledWith(
+-        "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30",
++        "https://github.com/xibn/t3neo/releases/tag/v0.0.30",
+       );
+     });
+     expect(testState.addToast).toHaveBeenCalledTimes(1);
+@@ -90,7 +90,7 @@ describe("showDesktopUpdateDownloadedToast", () => {
+ 
+     await vi.waitFor(() => {
+       expect(openExternal).toHaveBeenCalledWith(
+-        "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30",
++        "https://github.com/xibn/t3neo/releases/tag/v0.0.30",
+       );
+     });
+   });
 diff --git a/apps/web/src/components/settings/FontFamilyPicker.tsx b/apps/web/src/components/settings/FontFamilyPicker.tsx
 index 6cc28567c..a17e6855d 100644
 --- a/apps/web/src/components/settings/FontFamilyPicker.tsx
