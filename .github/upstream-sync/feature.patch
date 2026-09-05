@@ -73822,6 +73822,19 @@ index 000000000..7fe94338f
 +spending per provider. A small pill after each window label counts down to when that window
 +resets. Badges depend on what each provider CLI reports: Claude Code and Codex report limits and
 +costs; providers that report nothing show no badge.
+diff --git a/infra/relay/scripts/deploy.test.ts b/infra/relay/scripts/deploy.test.ts
+index 4447c3493..ea0d7d6a9 100644
+--- a/infra/relay/scripts/deploy.test.ts
++++ b/infra/relay/scripts/deploy.test.ts
+@@ -187,6 +187,8 @@ describe("release workflow tracing config propagation", () => {
+       const workflowPath = yield* path.fromFileUrl(
+         new URL("../../../.github/workflows/release.yml", import.meta.url),
+       );
++      // T3 Neo ships without upstream's release workflow; nothing to check then.
++      if (!(yield* fileSystem.exists(workflowPath))) return;
+       const workflow = yield* fileSystem.readFileString(workflowPath);
+ 
+       expect(workflow).not.toContain("client_tracing_token:");
 diff --git a/packages/contracts/src/ipc.ts b/packages/contracts/src/ipc.ts
 index 2d2cf29ec..5c9f4059f 100644
 --- a/packages/contracts/src/ipc.ts
