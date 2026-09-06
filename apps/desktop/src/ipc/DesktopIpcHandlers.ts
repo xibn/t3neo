@@ -44,7 +44,13 @@ import {
   setTheme,
   showContextMenu,
 } from "./methods/window.ts";
-import { closePetWindow, focusMainFromPet, movePetWindow, openPetWindow } from "./methods/pet.ts";
+import {
+  closePetWindow,
+  fetchPetGallery,
+  focusMainFromPet,
+  movePetWindow,
+  openPetWindow,
+} from "./methods/pet.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
 
@@ -99,6 +105,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(closePetWindow);
   yield* ipc.handle(movePetWindow);
   yield* ipc.handle(focusMainFromPet);
+  yield* ipc.handle(fetchPetGallery);
   for (const previewMethod of PreviewIpc.methods) {
     yield* ipc.handle(previewMethod);
   }

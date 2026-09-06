@@ -142,6 +142,35 @@ html[data-neo-ascii-color="dark"] .neo-ascii-pet {
   opacity: 0.65;
 }
 
+/* Codex pets: one frame of the spritesheet shown through a frame-sized box.
+   The sheet is positioned inline; nothing here may add padding or a border,
+   which would shift the frame. */
+.neo-sprite-pet {
+  flex-shrink: 0;
+}
+
+/* Sprite pets are pixel art on a transparent sheet; the widget's dark drop
+   shadow reads fine under them, so nothing is turned off here. Gallery
+   thumbnails keep their pixel edges and sit like the sheet frames do. */
+.neo-codex-pet-thumbnail {
+  display: block;
+  image-rendering: auto;
+  object-fit: contain;
+}
+
+/* A gallery card without a thumbnail shows the sheet's first cell: the whole
+   sheet loads lazily as an image and only its top-left frame shows through. */
+.neo-sheet-thumbnail {
+  display: block;
+  overflow: hidden;
+}
+
+.neo-sheet-thumbnail img {
+  display: block;
+  max-width: none;
+  height: auto;
+}
+
 /* Speech bubble above the pet: one run, or every run once unfolded. Same corner
    radius as the chat composer; overflow clipped so row hovers stay inside. */
 .neo-pet-bubble {

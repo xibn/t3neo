@@ -94,9 +94,13 @@ export function petRunningThreads(input: {
   return running;
 }
 
-export function petMoodFor(snapshot: Pick<PetActivitySnapshot, "typing" | "running">): PetMood {
+export function petMoodFor(
+  snapshot: Pick<PetActivitySnapshot, "typing" | "running"> &
+    Partial<Pick<PetActivitySnapshot, "unseenCompleted">>,
+): PetMood {
   if (snapshot.typing) return "typing";
   if (snapshot.running.length > 0) return "working";
+  if ((snapshot.unseenCompleted?.length ?? 0) > 0) return "done";
   return "idle";
 }
 

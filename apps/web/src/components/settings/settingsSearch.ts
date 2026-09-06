@@ -183,6 +183,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["pet scale position drag reset"],
   },
   {
+    id: "neo-codex-pets",
+    title: "Codex pets",
+    to: "/settings/pets",
+    searchTerms: [
+      "codex pet gallery import download sprite community codexpet openpets browse search",
+    ],
+  },
+  {
     id: "neo-pet-working-interval",
     title: "Working animation interval",
     to: "/settings/pets",

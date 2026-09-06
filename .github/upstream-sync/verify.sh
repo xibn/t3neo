@@ -165,6 +165,18 @@ require_files \
   apps/web/src/neo/pets/RabbitPet.tsx \
   apps/web/src/neo/pets/WukongPet.tsx \
   apps/web/src/neo/pets/AsciiAnimation.tsx \
+  apps/web/src/neo/pets/spriteSheet.ts \
+  apps/web/src/neo/pets/spriteSheet.test.ts \
+  apps/web/src/neo/pets/SpritePet.tsx \
+  apps/web/src/neo/pets/petGalleries.ts \
+  apps/web/src/neo/pets/petGalleries.test.ts \
+  apps/web/src/neo/pets/galleryFetch.ts \
+  apps/web/src/neo/pets/importedPets.ts \
+  apps/web/src/neo/pets/importedPets.test.ts \
+  apps/web/src/neo/pets/PetGalleryBrowser.tsx \
+  apps/desktop/src/ipc/methods/pet.test.ts \
+  apps/web/src/neo/pets/ImportedPetCard.tsx \
+  apps/web/src/neo/openExternal.ts \
   apps/web/src/components/settings/NeoSettingsPanel.tsx \
   apps/web/src/routes/settings.neo.tsx \
   apps/web/src/routes/pet.tsx \
@@ -174,7 +186,9 @@ require_files \
   apps/server/src/diagnostics/ListenerProcesses.ts \
   apps/server/src/diagnostics/ListenerProcesses.test.ts \
   docs/user/neo.md
-require_grep 'PetWidget' apps/web/src/routes/__root.tsx "PetWidget is not mounted in routes/__root.tsx"
+require_grep 'usePetWindowSync' apps/web/src/routes/__root.tsx \
+  "routes/__root.tsx no longer opens the desktop pet window"
+require_grep 'PetWidget' apps/web/src/routes/pet.tsx "PetWidget is not mounted in routes/pet.tsx"
 require_grep 'turnUsageByTurnId' apps/web/src/components/chat/MessagesTimeline.tsx \
   "MessagesTimeline does not render usage badges"
 require_grep 'ComposerUsageBadge' apps/web/src/components/chat/ChatComposer.tsx \
@@ -197,6 +211,16 @@ require_grep 'Lunar (No Animation)' apps/web/src/neo/pets/petRegistry.ts "Lunar 
 require_files apps/web/src/neo/pets/LunarPet.tsx
 require_grep "PET_DEFINITIONS" apps/web/src/components/settings/PetSettingsPanel.tsx \
   "the pet settings panel has no pet picker"
+require_grep "PetGalleryBrowser" apps/web/src/components/settings/PetSettingsPanel.tsx \
+  "the pet settings panel lost the pet gallery browser"
+require_grep "ImportedPetCard" apps/web/src/components/settings/PetSettingsPanel.tsx \
+  "the pet settings panel does not list imported pets"
+for repo in legeling/awesome-codex-pet BeiXiao/awesome-codex-pets eyichan/awesome-codex-pets alterhq/openpets; do
+  require_grep "$repo" apps/web/src/neo/pets/petGalleries.ts "pet gallery $repo is missing"
+done
+require_grep "fetchGallery" apps/desktop/src/preload.ts "preload does not expose desktopBridge.pet.fetchGallery"
+require_grep "fetchPetGallery" apps/desktop/src/ipc/DesktopIpcHandlers.ts \
+  "desktop IPC does not register the pet gallery fetch"
 require_grep '/settings/neo' apps/web/src/components/settings/settingsSearch.ts \
   "settings search does not know the Neo tab"
 require_grep '/settings/pets' apps/web/src/components/settings/settingsSearch.ts \

@@ -7,11 +7,11 @@ import { PetSprite } from "./PetSprite";
 import { createClipShuffle, WukongPet } from "./WukongPet";
 
 /** The preview tours every mood so the card shows what the pet can do. */
-const PREVIEW_MOODS: ReadonlyArray<PetMood> = ["idle", "typing", "working"];
+const PREVIEW_MOODS: ReadonlyArray<PetMood> = ["idle", "typing", "working", "done"];
 /** Long enough to see what a clip is before the next one starts. */
 const PREVIEW_STEP_MS = 4_000;
 
-function usePreviewMood(): PetMood {
+export function usePreviewMood(): PetMood {
   const [index, setIndex] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setIndex((value) => value + 1), PREVIEW_STEP_MS);
@@ -39,6 +39,18 @@ const WukongPreview = memo(function WukongPreview() {
   const clip = useWukongPreviewClip();
   return <WukongPet mood="working" clip={clip} width={120} />;
 });
+
+/** Width for a pet's card preview; the X renders at half its size, so it asks for more. */
+export function previewPetSize(pet: PetId): number {
+  switch (pet) {
+    case "rabbit":
+      return 96;
+    case "none":
+      return 220;
+    default:
+      return 120;
+  }
+}
 
 /** A pet card for Settings: the live animation with its label. */
 export const PetPreview = memo(function PetPreview({
@@ -71,12 +83,7 @@ export const PetPreview = memo(function PetPreview({
         {pet === "wukong" ? (
           <WukongPreview />
         ) : (
-          // The X renders at half its size; ask for more so it fills the card like the pets do.
-          <PetSprite
-            pet={pet}
-            mood={mood}
-            size={pet === "rabbit" ? 96 : pet === "none" ? 220 : 120}
-          />
+          <PetSprite pet={pet} mood={mood} size={previewPetSize(pet)} />
         )}
       </div>
       <div className="min-w-0">

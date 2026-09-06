@@ -1,5 +1,5 @@
-import { PawPrintIcon } from "lucide-react";
-import { type CSSProperties } from "react";
+import { GithubIcon, InfoIcon, PawPrintIcon, StoreIcon } from "lucide-react";
+import { useCallback, useState, type CSSProperties } from "react";
 
 import { isElectron } from "~/env";
 import {
@@ -12,12 +12,32 @@ import {
   MIN_PET_SIZE,
   MIN_PET_WORKING_INTERVAL_SEC,
   useNeoSettings,
+  useNeoSettingsStore,
   useUpdateNeoSettings,
 } from "~/neo/neoSettings";
+import { openExternalUrl } from "~/neo/openExternal";
+import { ImportedPetCard } from "~/neo/pets/ImportedPetCard";
+import {
+  DEFAULT_PET_GALLERY,
+  petGallery,
+  type GalleryPet,
+  type PetGalleryId,
+} from "~/neo/pets/petGalleries";
+import { PetGalleryBrowser } from "~/neo/pets/PetGalleryBrowser";
+import {
+  removeImportedPet,
+  useImportedPets,
+  useImportedPetsStore,
+  type ImportedPet,
+  type ImportedPetId,
+} from "~/neo/pets/importedPets";
 import { PET_DEFINITIONS } from "~/neo/pets/petRegistry";
 import { PetPreview } from "~/neo/pets/PetPreview";
 import { NeoFeatureBadge } from "~/neo/NeoBadge";
+import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -33,6 +53,27 @@ function isAsciiPetColor(value: unknown): value is AsciiPetColor {
 export function PetSettingsPanel() {
   const settings = useNeoSettings();
   const updateSettings = useUpdateNeoSettings();
+  const importedPets = useImportedPets();
+  const renameImportedPet = useImportedPetsStore((state) => state.rename);
+  const [galleryId, setGalleryId] = useState<PetGalleryId>(DEFAULT_PET_GALLERY);
+  const gallery = petGallery(galleryId);
+  /** A fresh import is meant to be used, so it becomes the pet right away. */
+  const onImported = useCallback((pet: ImportedPet) => {
+    useNeoSettingsStore.getState().update({ pet: pet.id });
+  }, []);
+  const onImportFailed = useCallback((pet: GalleryPet, error: unknown) => {
+    toastManager.add({
+      type: "error",
+      title: `Could not import ${pet.name}`,
+      description: error instanceof Error ? error.message : "The download failed.",
+    });
+  }, []);
+  const deleteImportedPet = useCallback((id: ImportedPetId) => {
+    if (useNeoSettingsStore.getState().settings.pet === id) {
+      useNeoSettingsStore.getState().update({ pet: "none" });
+    }
+    void removeImportedPet(id);
+  }, []);
   const petSizeRatio = (settings.petSize - MIN_PET_SIZE) / (MAX_PET_SIZE - MIN_PET_SIZE);
   const petSizeSliderStyle = {
     "--settings-slider-progress": `${petSizeRatio * 100}%`,
@@ -66,6 +107,16 @@ export function PetSettingsPanel() {
               description={pet.description}
               selected={settings.pet === pet.id}
               onSelect={(id) => updateSettings({ pet: id })}
+            />
+          ))}
+          {importedPets.map((pet) => (
+            <ImportedPetCard
+              key={pet.id}
+              pet={pet}
+              selected={settings.pet === pet.id}
+              onSelect={(id) => updateSettings({ pet: id })}
+              onRename={renameImportedPet}
+              onDelete={deleteImportedPet}
             />
           ))}
         </div>
@@ -189,6 +240,67 @@ export function PetSettingsPanel() {
               <span aria-hidden className="neo-ascii-swatch" data-choice={settings.asciiPetColor} />
             </div>
           }
+        />
+      </SettingsSection>
+
+      <SettingsSection
+        id="codex-pets"
+        title="Codex pets"
+        icon={<StoreIcon className="size-4 text-primary" />}
+        badge={<NeoFeatureBadge />}
+        headerAction={
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <a
+                    className="neo-source-badge inline-flex h-6 items-center gap-1 rounded-full border border-border/70 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    href={gallery.siteUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openExternalUrl(gallery.siteUrl);
+                    }}
+                  >
+                    <InfoIcon className="size-3" />
+                    {gallery.host}
+                  </a>
+                }
+              />
+              <TooltipPopup side="top">Pets from the {gallery.host} gallery</TooltipPopup>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-xs"
+                    variant="ghost-muted"
+                    aria-label={`Open ${gallery.repository} on GitHub`}
+                    onClick={() => openExternalUrl(gallery.repositoryUrl)}
+                  >
+                    <GithubIcon />
+                  </Button>
+                }
+              />
+              <TooltipPopup side="top">{gallery.repository} on GitHub</TooltipPopup>
+            </Tooltip>
+          </div>
+        }
+      >
+        <p
+          className="px-3 text-xs text-muted-foreground sm:px-4"
+          id={searchableSetting("neo-codex-pets").id}
+        >
+          Pets made by the community for Codex, from four galleries. Import one to use it here.
+          Imports are copies: rename or delete them above, import the same pet again, and later
+          changes in the gallery stay out of yours.
+        </p>
+        <PetGalleryBrowser
+          gallery={galleryId}
+          onGalleryChange={setGalleryId}
+          onImported={onImported}
+          onImportFailed={onImportFailed}
         />
       </SettingsSection>
     </SettingsPageContainer>

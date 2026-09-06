@@ -39,12 +39,12 @@ function useWukongClip(clip: WukongClip): AsciiFrames | null {
  * Shuffle-bag order over a set of clips: every clip plays once before any
  * repeats, and a new bag never starts with the clip that just ended.
  */
-export function createClipShuffle(
-  clips: ReadonlyArray<WukongClip> = WUKONG_WORKING_CLIPS,
+export function createClipShuffle<Clip extends string>(
+  clips: ReadonlyArray<Clip>,
   random: () => number = Math.random,
-): () => WukongClip {
-  let bag: WukongClip[] = [];
-  let last: WukongClip | null = null;
+): () => Clip {
+  let bag: Clip[] = [];
+  let last: Clip | null = null;
   const refill = () => {
     bag = [...clips];
     for (let index = bag.length - 1; index > 0; index -= 1) {
@@ -79,7 +79,7 @@ export const WukongPet = memo(function WukongPet({
   clip?: WukongClip;
 }) {
   const shuffle = useRef<(() => WukongClip) | null>(null);
-  if (shuffle.current === null) shuffle.current = createClipShuffle();
+  if (shuffle.current === null) shuffle.current = createClipShuffle(WUKONG_WORKING_CLIPS);
   const [workingClip, setWorkingClip] = useState<WukongClip>(() => shuffle.current!());
 
   useEffect(() => {

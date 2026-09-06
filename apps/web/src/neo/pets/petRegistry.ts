@@ -1,9 +1,10 @@
-import type { PetId } from "../neoSettings";
+import type { BuiltinPetId } from "../neoSettings";
 
-export type PetMood = "idle" | "typing" | "working";
+/** "done" is idle with finished work nobody has looked at yet. */
+export type PetMood = "idle" | "typing" | "working" | "done";
 
 export interface PetDefinition {
-  readonly id: PetId;
+  readonly id: BuiltinPetId;
   readonly label: string;
   readonly description: string;
 }
@@ -32,7 +33,7 @@ export const PET_DEFINITIONS: ReadonlyArray<PetDefinition> = [
   },
 ];
 
-export function petDefinition(id: PetId): PetDefinition {
+export function petDefinition(id: string): PetDefinition {
   return PET_DEFINITIONS.find((pet) => pet.id === id) ?? PET_DEFINITIONS[0]!;
 }
 
@@ -89,6 +90,7 @@ export function wukongClipForMood(
 ): WukongClip {
   switch (mood) {
     case "idle":
+    case "done":
       return "sleeping";
     case "typing":
       return "typing";

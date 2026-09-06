@@ -1,7 +1,9 @@
+import * as Data from "effect/Data";
 import * as Electron from "electron";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { HttpClient } from "effect/unstable/http";
 
 import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
@@ -117,6 +119,77 @@ export const movePetWindow = DesktopIpc.makeIpcMethod({
       const [x = 0, y = 0] = existing.getPosition();
       existing.setPosition(Math.round(x + delta.dx), Math.round(y + delta.dy));
     });
+  }),
+});
+
+/**
+ * Hosts the pet gallery browser may fetch through the main process. Some
+ * galleries refuse cross-origin requests from the renderer, and the app's
+ * own scheme is always cross-origin to them; a main-process request carries
+ * no Origin header. Everything else stays in the renderer.
+ */
+export const PET_GALLERY_HOSTS: ReadonlyArray<string> = [
+  "raw.githubusercontent.com",
+  "codexpet.top",
+  "codex-pet.com",
+  "codexpets.org",
+  "openpets.sh",
+];
+
+export class DesktopPetGalleryFetchError extends Data.TaggedError("DesktopPetGalleryFetchError")<{
+  readonly url: string;
+  readonly reason: "invalid-url" | "host-not-allowed" | "request-failed";
+  readonly cause?: unknown;
+}> {
+  override get message(): string {
+    switch (this.reason) {
+      case "invalid-url":
+        return `Pet gallery URL is not valid: ${this.url}`;
+      case "host-not-allowed":
+        return `Pet gallery host is not allowed: ${this.url}`;
+      case "request-failed":
+        return `Pet gallery request failed: ${this.url}`;
+    }
+  }
+}
+
+export function isAllowedPetGalleryUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && PET_GALLERY_HOSTS.includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export const fetchPetGallery = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PET_FETCH_GALLERY_CHANNEL,
+  payload: Schema.String,
+  result: Schema.Struct({
+    status: Schema.Number,
+    contentType: Schema.NullOr(Schema.String),
+    body: Schema.Uint8Array,
+  }),
+  handler: Effect.fn("desktop.ipc.pet.fetchGallery")(function* (url) {
+    if (!isAllowedPetGalleryUrl(url)) {
+      const reason = URL.canParse(url) ? "host-not-allowed" : "invalid-url";
+      return yield* new DesktopPetGalleryFetchError({ url, reason });
+    }
+    const response = yield* HttpClient.get(url).pipe(
+      Effect.mapError(
+        (cause) => new DesktopPetGalleryFetchError({ url, reason: "request-failed", cause }),
+      ),
+    );
+    const body = yield* response.arrayBuffer.pipe(
+      Effect.mapError(
+        (cause) => new DesktopPetGalleryFetchError({ url, reason: "request-failed", cause }),
+      ),
+    );
+    return {
+      status: response.status,
+      contentType: response.headers["content-type"] ?? null,
+      body: new Uint8Array(body),
+    };
   }),
 });
 

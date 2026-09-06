@@ -46,7 +46,7 @@ export function asciiFontSize(columns: number, width: number): number {
   return width / (columns * asciiCharAspect());
 }
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&

@@ -118,6 +118,25 @@ window. It stays above other apps and never steals keyboard focus. Drag the pet 
 Clicking it brings T3 Neo forward. The pet window closes with the main window. Pets need the
 desktop app; the web app has no window to put them in.
 
+### Codex pets
+
+Below the pet picker, **Codex pets** lists four community galleries. Pick one in the first
+select: [codexpet.top](https://codexpet.top), [codex-pet.com](https://codex-pet.com),
+[codexpets.org](https://codexpets.org) or [openpets.sh](https://openpets.sh). Search by name,
+author or category, or narrow the list with the category select where the gallery has one; the
+list loads fresh every time you open the tab, so new pets show up on their own. Hover a card to
+see the pet move. The pill in the section header opens the selected gallery's site, the GitHub
+button next to it opens the repository the pets come from. The link on each card opens that
+pet's files and license. openpets.sh only answers the desktop app.
+
+**Import** downloads the pet and picks it right away. Every import is a copy of its own: it gets a
+card in the pet picker with the gallery name, author and site, you can **Rename** or **Delete**
+it there, you can import the same pet again, and changes in the gallery never reach the pets you
+already have. Imported pets react like Wukong: they idle while you read, wait while you type, run,
+jump and review while agents work (switching at the **Working animation interval**), and wave
+when work finished while you were looking elsewhere. Deleting the pet you are using switches to
+**No pet**.
+
 ## Usage badges
 
 After an agent finishes a turn, the reply shows a small amber badge with what that turn cost:

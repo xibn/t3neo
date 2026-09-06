@@ -172,6 +172,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     closeWindow: () => ipcRenderer.invoke(IpcChannels.PET_CLOSE_WINDOW_CHANNEL),
     moveWindow: (delta) => ipcRenderer.invoke(IpcChannels.PET_MOVE_WINDOW_CHANNEL, delta),
     focusMain: (target) => ipcRenderer.invoke(IpcChannels.PET_FOCUS_MAIN_CHANNEL, target),
+    fetchGallery: (url) => ipcRenderer.invoke(IpcChannels.PET_FETCH_GALLERY_CHANNEL, url),
   },
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {

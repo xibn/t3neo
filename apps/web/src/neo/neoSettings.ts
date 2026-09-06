@@ -6,10 +6,22 @@
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
 
+import { isImportedPetId, type ImportedPetId } from "./pets/importedPets";
+
 export const NEO_SETTINGS_STORAGE_KEY = "t3code:neo-settings:v1";
 
 export const PET_IDS = ["none", "rabbit", "wukong", "lunar"] as const;
-export type PetId = (typeof PET_IDS)[number];
+export type BuiltinPetId = (typeof PET_IDS)[number];
+/** A built-in pet, or one imported from the Codex pet gallery (`import:<uuid>`). */
+export type PetId = BuiltinPetId | ImportedPetId;
+
+export function isBuiltinPetId(value: unknown): value is BuiltinPetId {
+  return typeof value === "string" && (PET_IDS as ReadonlyArray<string>).includes(value);
+}
+
+export function isPetId(value: unknown): value is PetId {
+  return isBuiltinPetId(value) || isImportedPetId(value);
+}
 
 /**
  * Glyph color of the ASCII pets (the "no pet" X and Wukong). "system" follows
@@ -43,7 +55,8 @@ const NeoSettingsSchema = Schema.Struct({
   queueMessages: Schema.optionalKey(Schema.Boolean),
   /** Ask for confirmation in a popover before discarding a queued message. */
   queueDiscardConfirm: Schema.optionalKey(Schema.Boolean),
-  pet: Schema.optionalKey(Schema.Literals(PET_IDS)),
+  /** A built-in id or an imported pet's id; anything unknown falls back to no pet. */
+  pet: Schema.optionalKey(Schema.String),
   petSize: Schema.optionalKey(Schema.Number),
   petPosition: Schema.optionalKey(Schema.NullOr(PetPosition)),
   /** Seconds between Wukong's working animations. */
@@ -185,7 +198,7 @@ export function readStoredNeoSettings(
       usageBadges: stored.usageBadges ?? DEFAULT_NEO_SETTINGS.usageBadges,
       queueMessages: stored.queueMessages ?? DEFAULT_NEO_SETTINGS.queueMessages,
       queueDiscardConfirm: stored.queueDiscardConfirm ?? DEFAULT_NEO_SETTINGS.queueDiscardConfirm,
-      pet: stored.pet ?? DEFAULT_NEO_SETTINGS.pet,
+      pet: isPetId(stored.pet) ? stored.pet : DEFAULT_NEO_SETTINGS.pet,
       petSize: clampPetSize(stored.petSize ?? DEFAULT_NEO_SETTINGS.petSize),
       petPosition: stored.petPosition ?? null,
       petWorkingIntervalSec: clampPetWorkingInterval(

@@ -1147,6 +1147,15 @@ export interface DesktopBridge {
     moveWindow: (delta: { dx: number; dy: number }) => Promise<void>;
     /** Bring the main window forward, optionally on a thread. */
     focusMain: (target: { environmentId: string; threadId: string } | null) => Promise<void>;
+    /**
+     * GET a pet gallery URL from the main process, which sends no Origin
+     * header. Only the known gallery hosts are allowed; anything else rejects.
+     */
+    fetchGallery: (url: string) => Promise<{
+      status: number;
+      contentType: string | null;
+      body: Uint8Array;
+    }>;
   };
   /**
    * Probe this desktop machine for installed remote-capable editor CLIs

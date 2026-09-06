@@ -44,6 +44,10 @@ describe("pet activity", () => {
     expect(petMoodFor({ typing: false, running: [] })).toBe("idle");
     expect(petMoodFor({ typing: false, running: [thread("a")] })).toBe("working");
     expect(petMoodFor({ typing: true, running: [thread("a")] })).toBe("typing");
+    expect(petMoodFor({ typing: false, running: [], unseenCompleted: [thread("a")] })).toBe("done");
+    expect(
+      petMoodFor({ typing: false, running: [thread("b")], unseenCompleted: [thread("a")] }),
+    ).toBe("working");
   });
 
   it("remembers threads that finished while not being viewed", () => {

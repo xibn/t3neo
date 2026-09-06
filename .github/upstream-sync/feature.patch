@@ -98,18 +98,24 @@ index 4583e5124..dbbd00d6c 100644
      linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
      linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
 diff --git a/apps/desktop/src/ipc/DesktopIpcHandlers.ts b/apps/desktop/src/ipc/DesktopIpcHandlers.ts
-index 8e8317db7..b5d54398b 100644
+index 8e8317db7..35b6073e4 100644
 --- a/apps/desktop/src/ipc/DesktopIpcHandlers.ts
 +++ b/apps/desktop/src/ipc/DesktopIpcHandlers.ts
-@@ -44,6 +44,7 @@ import {
+@@ -44,6 +44,13 @@ import {
    setTheme,
    showContextMenu,
  } from "./methods/window.ts";
-+import { closePetWindow, focusMainFromPet, movePetWindow, openPetWindow } from "./methods/pet.ts";
++import {
++  closePetWindow,
++  fetchPetGallery,
++  focusMainFromPet,
++  movePetWindow,
++  openPetWindow,
++} from "./methods/pet.ts";
  import * as PreviewIpc from "./methods/preview.ts";
  import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
  
-@@ -94,6 +95,10 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
+@@ -94,6 +101,11 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
    yield* ipc.handle(downloadUpdate);
    yield* ipc.handle(installUpdate);
    yield* ipc.handle(checkForUpdate);
@@ -117,14 +123,15 @@ index 8e8317db7..b5d54398b 100644
 +  yield* ipc.handle(closePetWindow);
 +  yield* ipc.handle(movePetWindow);
 +  yield* ipc.handle(focusMainFromPet);
++  yield* ipc.handle(fetchPetGallery);
    for (const previewMethod of PreviewIpc.methods) {
      yield* ipc.handle(previewMethod);
    }
 diff --git a/apps/desktop/src/ipc/channels.ts b/apps/desktop/src/ipc/channels.ts
-index c4ef82ec8..9aa48de12 100644
+index c4ef82ec8..c42d063dd 100644
 --- a/apps/desktop/src/ipc/channels.ts
 +++ b/apps/desktop/src/ipc/channels.ts
-@@ -83,3 +83,7 @@ export const PREVIEW_RECORDING_SAVE_CHANNEL = "desktop:preview-recording-save";
+@@ -83,3 +83,8 @@ export const PREVIEW_RECORDING_SAVE_CHANNEL = "desktop:preview-recording-save";
  export const PREVIEW_RECORDING_FRAME_CHANNEL = "desktop:preview-recording-frame";
  export const PREVIEW_STATE_CHANGE_CHANNEL = "desktop:preview-state-change";
  export const PREVIEW_POINTER_EVENT_CHANNEL = "desktop:preview-pointer-event";
@@ -132,16 +139,19 @@ index c4ef82ec8..9aa48de12 100644
 +export const PET_CLOSE_WINDOW_CHANNEL = "desktop:pet-close-window";
 +export const PET_MOVE_WINDOW_CHANNEL = "desktop:pet-move-window";
 +export const PET_FOCUS_MAIN_CHANNEL = "desktop:pet-focus-main";
++export const PET_FETCH_GALLERY_CHANNEL = "desktop:pet-fetch-gallery";
 diff --git a/apps/desktop/src/ipc/methods/pet.ts b/apps/desktop/src/ipc/methods/pet.ts
 new file mode 100644
-index 000000000..abba609d6
+index 000000000..cf8bb28ac
 --- /dev/null
 +++ b/apps/desktop/src/ipc/methods/pet.ts
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,214 @@
++import * as Data from "effect/Data";
 +import * as Electron from "electron";
 +import * as Effect from "effect/Effect";
 +import * as Option from "effect/Option";
 +import * as Schema from "effect/Schema";
++import { HttpClient } from "effect/unstable/http";
 +
 +import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
 +import * as ElectronWindow from "../../electron/ElectronWindow.ts";
@@ -260,6 +270,77 @@ index 000000000..abba609d6
 +  }),
 +});
 +
++/**
++ * Hosts the pet gallery browser may fetch through the main process. Some
++ * galleries refuse cross-origin requests from the renderer, and the app's
++ * own scheme is always cross-origin to them; a main-process request carries
++ * no Origin header. Everything else stays in the renderer.
++ */
++export const PET_GALLERY_HOSTS: ReadonlyArray<string> = [
++  "raw.githubusercontent.com",
++  "codexpet.top",
++  "codex-pet.com",
++  "codexpets.org",
++  "openpets.sh",
++];
++
++export class DesktopPetGalleryFetchError extends Data.TaggedError("DesktopPetGalleryFetchError")<{
++  readonly url: string;
++  readonly reason: "invalid-url" | "host-not-allowed" | "request-failed";
++  readonly cause?: unknown;
++}> {
++  override get message(): string {
++    switch (this.reason) {
++      case "invalid-url":
++        return `Pet gallery URL is not valid: ${this.url}`;
++      case "host-not-allowed":
++        return `Pet gallery host is not allowed: ${this.url}`;
++      case "request-failed":
++        return `Pet gallery request failed: ${this.url}`;
++    }
++  }
++}
++
++export function isAllowedPetGalleryUrl(url: string): boolean {
++  try {
++    const parsed = new URL(url);
++    return parsed.protocol === "https:" && PET_GALLERY_HOSTS.includes(parsed.hostname);
++  } catch {
++    return false;
++  }
++}
++
++export const fetchPetGallery = DesktopIpc.makeIpcMethod({
++  channel: IpcChannels.PET_FETCH_GALLERY_CHANNEL,
++  payload: Schema.String,
++  result: Schema.Struct({
++    status: Schema.Number,
++    contentType: Schema.NullOr(Schema.String),
++    body: Schema.Uint8Array,
++  }),
++  handler: Effect.fn("desktop.ipc.pet.fetchGallery")(function* (url) {
++    if (!isAllowedPetGalleryUrl(url)) {
++      const reason = URL.canParse(url) ? "host-not-allowed" : "invalid-url";
++      return yield* new DesktopPetGalleryFetchError({ url, reason });
++    }
++    const response = yield* HttpClient.get(url).pipe(
++      Effect.mapError(
++        (cause) => new DesktopPetGalleryFetchError({ url, reason: "request-failed", cause }),
++      ),
++    );
++    const body = yield* response.arrayBuffer.pipe(
++      Effect.mapError(
++        (cause) => new DesktopPetGalleryFetchError({ url, reason: "request-failed", cause }),
++      ),
++    );
++    return {
++      status: response.status,
++      contentType: response.headers["content-type"] ?? null,
++      body: new Uint8Array(body),
++    };
++  }),
++});
++
 +export const focusMainFromPet = DesktopIpc.makeIpcMethod({
 +  channel: IpcChannels.PET_FOCUS_MAIN_CHANNEL,
 +  payload: Schema.NullOr(Schema.Struct({ environmentId: Schema.String, threadId: Schema.String })),
@@ -280,10 +361,10 @@ index 000000000..abba609d6
 +  }),
 +});
 diff --git a/apps/desktop/src/preload.ts b/apps/desktop/src/preload.ts
-index 2e79f0645..88f71382c 100644
+index 2e79f0645..f940c4b39 100644
 --- a/apps/desktop/src/preload.ts
 +++ b/apps/desktop/src/preload.ts
-@@ -167,6 +167,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
+@@ -167,6 +167,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
    checkForUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_CHECK_CHANNEL),
    downloadUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_DOWNLOAD_CHANNEL),
    installUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_INSTALL_CHANNEL),
@@ -292,6 +373,7 @@ index 2e79f0645..88f71382c 100644
 +    closeWindow: () => ipcRenderer.invoke(IpcChannels.PET_CLOSE_WINDOW_CHANNEL),
 +    moveWindow: (delta) => ipcRenderer.invoke(IpcChannels.PET_MOVE_WINDOW_CHANNEL, delta),
 +    focusMain: (target) => ipcRenderer.invoke(IpcChannels.PET_FOCUS_MAIN_CHANNEL, target),
++    fetchGallery: (url) => ipcRenderer.invoke(IpcChannels.PET_FETCH_GALLERY_CHANNEL, url),
 +  },
    onUpdateState: (listener) => {
      const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
@@ -14773,12 +14855,12 @@ index 000000000..2e64d13dc
 +}
 diff --git a/apps/web/src/components/settings/PetSettingsPanel.tsx b/apps/web/src/components/settings/PetSettingsPanel.tsx
 new file mode 100644
-index 000000000..bc8b049e9
+index 000000000..52ff97b5a
 --- /dev/null
 +++ b/apps/web/src/components/settings/PetSettingsPanel.tsx
-@@ -0,0 +1,196 @@
-+import { PawPrintIcon } from "lucide-react";
-+import { type CSSProperties } from "react";
+@@ -0,0 +1,308 @@
++import { GithubIcon, InfoIcon, PawPrintIcon, StoreIcon } from "lucide-react";
++import { useCallback, useState, type CSSProperties } from "react";
 +
 +import { isElectron } from "~/env";
 +import {
@@ -14791,12 +14873,32 @@ index 000000000..bc8b049e9
 +  MIN_PET_SIZE,
 +  MIN_PET_WORKING_INTERVAL_SEC,
 +  useNeoSettings,
++  useNeoSettingsStore,
 +  useUpdateNeoSettings,
 +} from "~/neo/neoSettings";
++import { openExternalUrl } from "~/neo/openExternal";
++import { ImportedPetCard } from "~/neo/pets/ImportedPetCard";
++import {
++  DEFAULT_PET_GALLERY,
++  petGallery,
++  type GalleryPet,
++  type PetGalleryId,
++} from "~/neo/pets/petGalleries";
++import { PetGalleryBrowser } from "~/neo/pets/PetGalleryBrowser";
++import {
++  removeImportedPet,
++  useImportedPets,
++  useImportedPetsStore,
++  type ImportedPet,
++  type ImportedPetId,
++} from "~/neo/pets/importedPets";
 +import { PET_DEFINITIONS } from "~/neo/pets/petRegistry";
 +import { PetPreview } from "~/neo/pets/PetPreview";
 +import { NeoFeatureBadge } from "~/neo/NeoBadge";
++import { Button } from "../ui/button";
 +import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
++import { toastManager } from "../ui/toast";
++import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 +import {
 +  SettingResetButton,
 +  SettingsPageContainer,
@@ -14812,6 +14914,27 @@ index 000000000..bc8b049e9
 +export function PetSettingsPanel() {
 +  const settings = useNeoSettings();
 +  const updateSettings = useUpdateNeoSettings();
++  const importedPets = useImportedPets();
++  const renameImportedPet = useImportedPetsStore((state) => state.rename);
++  const [galleryId, setGalleryId] = useState<PetGalleryId>(DEFAULT_PET_GALLERY);
++  const gallery = petGallery(galleryId);
++  /** A fresh import is meant to be used, so it becomes the pet right away. */
++  const onImported = useCallback((pet: ImportedPet) => {
++    useNeoSettingsStore.getState().update({ pet: pet.id });
++  }, []);
++  const onImportFailed = useCallback((pet: GalleryPet, error: unknown) => {
++    toastManager.add({
++      type: "error",
++      title: `Could not import ${pet.name}`,
++      description: error instanceof Error ? error.message : "The download failed.",
++    });
++  }, []);
++  const deleteImportedPet = useCallback((id: ImportedPetId) => {
++    if (useNeoSettingsStore.getState().settings.pet === id) {
++      useNeoSettingsStore.getState().update({ pet: "none" });
++    }
++    void removeImportedPet(id);
++  }, []);
 +  const petSizeRatio = (settings.petSize - MIN_PET_SIZE) / (MAX_PET_SIZE - MIN_PET_SIZE);
 +  const petSizeSliderStyle = {
 +    "--settings-slider-progress": `${petSizeRatio * 100}%`,
@@ -14845,6 +14968,16 @@ index 000000000..bc8b049e9
 +              description={pet.description}
 +              selected={settings.pet === pet.id}
 +              onSelect={(id) => updateSettings({ pet: id })}
++            />
++          ))}
++          {importedPets.map((pet) => (
++            <ImportedPetCard
++              key={pet.id}
++              pet={pet}
++              selected={settings.pet === pet.id}
++              onSelect={(id) => updateSettings({ pet: id })}
++              onRename={renameImportedPet}
++              onDelete={deleteImportedPet}
 +            />
 +          ))}
 +        </div>
@@ -14968,6 +15101,67 @@ index 000000000..bc8b049e9
 +              <span aria-hidden className="neo-ascii-swatch" data-choice={settings.asciiPetColor} />
 +            </div>
 +          }
++        />
++      </SettingsSection>
++
++      <SettingsSection
++        id="codex-pets"
++        title="Codex pets"
++        icon={<StoreIcon className="size-4 text-primary" />}
++        badge={<NeoFeatureBadge />}
++        headerAction={
++          <div className="flex items-center gap-1">
++            <Tooltip>
++              <TooltipTrigger
++                render={
++                  <a
++                    className="neo-source-badge inline-flex h-6 items-center gap-1 rounded-full border border-border/70 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
++                    href={gallery.siteUrl}
++                    rel="noopener noreferrer"
++                    target="_blank"
++                    onClick={(event) => {
++                      event.preventDefault();
++                      openExternalUrl(gallery.siteUrl);
++                    }}
++                  >
++                    <InfoIcon className="size-3" />
++                    {gallery.host}
++                  </a>
++                }
++              />
++              <TooltipPopup side="top">Pets from the {gallery.host} gallery</TooltipPopup>
++            </Tooltip>
++            <Tooltip>
++              <TooltipTrigger
++                render={
++                  <Button
++                    size="icon-xs"
++                    variant="ghost-muted"
++                    aria-label={`Open ${gallery.repository} on GitHub`}
++                    onClick={() => openExternalUrl(gallery.repositoryUrl)}
++                  >
++                    <GithubIcon />
++                  </Button>
++                }
++              />
++              <TooltipPopup side="top">{gallery.repository} on GitHub</TooltipPopup>
++            </Tooltip>
++          </div>
++        }
++      >
++        <p
++          className="px-3 text-xs text-muted-foreground sm:px-4"
++          id={searchableSetting("neo-codex-pets").id}
++        >
++          Pets made by the community for Codex, from four galleries. Import one to use it here.
++          Imports are copies: rename or delete them above, import the same pet again, and later
++          changes in the gallery stay out of yours.
++        </p>
++        <PetGalleryBrowser
++          gallery={galleryId}
++          onGalleryChange={setGalleryId}
++          onImported={onImported}
++          onImportFailed={onImportFailed}
 +        />
 +      </SettingsSection>
 +    </SettingsPageContainer>
@@ -15366,7 +15560,7 @@ index 5fdcb2443..aa3063a44 100644
          <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>
        </div>
 diff --git a/apps/web/src/components/settings/settingsSearch.ts b/apps/web/src/components/settings/settingsSearch.ts
-index a3e5cf4b9..f538e7e0c 100644
+index a3e5cf4b9..c8274cdf0 100644
 --- a/apps/web/src/components/settings/settingsSearch.ts
 +++ b/apps/web/src/components/settings/settingsSearch.ts
 @@ -3,6 +3,8 @@ import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/uti
@@ -15387,7 +15581,7 @@ index a3e5cf4b9..f538e7e0c 100644
    "/settings/appearance": "Appearance",
    "/settings/keybindings": "Keybindings",
    "/settings/providers": "Providers",
-@@ -80,6 +84,116 @@ export const SETTINGS_SEARCH_ITEMS = [
+@@ -80,6 +84,124 @@ export const SETTINGS_SEARCH_ITEMS = [
      // stable scroll destination for both.
      targetId: "appearance",
    },
@@ -15488,6 +15682,14 @@ index a3e5cf4b9..f538e7e0c 100644
 +    title: "Pet size",
 +    to: "/settings/pets",
 +    searchTerms: ["pet scale position drag reset"],
++  },
++  {
++    id: "neo-codex-pets",
++    title: "Codex pets",
++    to: "/settings/pets",
++    searchTerms: [
++      "codex pet gallery import download sprite community codexpet openpets browse search",
++    ],
 +  },
 +  {
 +    id: "neo-pet-working-interval",
@@ -18756,10 +18958,10 @@ index 000000000..68c94d57b
 +});
 diff --git a/apps/web/src/neo/neo.css b/apps/web/src/neo/neo.css
 new file mode 100644
-index 000000000..9623030fe
+index 000000000..07edd06f0
 --- /dev/null
 +++ b/apps/web/src/neo/neo.css
-@@ -0,0 +1,925 @@
+@@ -0,0 +1,954 @@
 +/*
 + * T3 Neo fork styles that apply under every look: the pet, the sidebar
 + * starfield, and the small Neo pills. Animations are stepped or transform
@@ -18902,6 +19104,35 @@ index 000000000..9623030fe
 +
 +.neo-ascii-nothing {
 +  opacity: 0.65;
++}
++
++/* Codex pets: one frame of the spritesheet shown through a frame-sized box.
++   The sheet is positioned inline; nothing here may add padding or a border,
++   which would shift the frame. */
++.neo-sprite-pet {
++  flex-shrink: 0;
++}
++
++/* Sprite pets are pixel art on a transparent sheet; the widget's dark drop
++   shadow reads fine under them, so nothing is turned off here. Gallery
++   thumbnails keep their pixel edges and sit like the sheet frames do. */
++.neo-codex-pet-thumbnail {
++  display: block;
++  image-rendering: auto;
++  object-fit: contain;
++}
++
++/* A gallery card without a thumbnail shows the sheet's first cell: the whole
++   sheet loads lazily as an image and only its top-left frame shows through. */
++.neo-sheet-thumbnail {
++  display: block;
++  overflow: hidden;
++}
++
++.neo-sheet-thumbnail img {
++  display: block;
++  max-width: none;
++  height: auto;
 +}
 +
 +/* Speech bubble above the pet: one run, or every run once unfolded. Same corner
@@ -20222,10 +20453,10 @@ index 000000000..19f34313e
 +});
 diff --git a/apps/web/src/neo/neoSettings.ts b/apps/web/src/neo/neoSettings.ts
 new file mode 100644
-index 000000000..c41992a69
+index 000000000..9ddd18bdc
 --- /dev/null
 +++ b/apps/web/src/neo/neoSettings.ts
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,282 @@
 +/**
 + * Fork-only preferences (Settings → Neo). Client-local like the look and the
 + * message queue: nothing here crosses the wire or touches the server.
@@ -20234,10 +20465,22 @@ index 000000000..c41992a69
 +import * as Schema from "effect/Schema";
 +import { create } from "zustand";
 +
++import { isImportedPetId, type ImportedPetId } from "./pets/importedPets";
++
 +export const NEO_SETTINGS_STORAGE_KEY = "t3code:neo-settings:v1";
 +
 +export const PET_IDS = ["none", "rabbit", "wukong", "lunar"] as const;
-+export type PetId = (typeof PET_IDS)[number];
++export type BuiltinPetId = (typeof PET_IDS)[number];
++/** A built-in pet, or one imported from the Codex pet gallery (`import:<uuid>`). */
++export type PetId = BuiltinPetId | ImportedPetId;
++
++export function isBuiltinPetId(value: unknown): value is BuiltinPetId {
++  return typeof value === "string" && (PET_IDS as ReadonlyArray<string>).includes(value);
++}
++
++export function isPetId(value: unknown): value is PetId {
++  return isBuiltinPetId(value) || isImportedPetId(value);
++}
 +
 +/**
 + * Glyph color of the ASCII pets (the "no pet" X and Wukong). "system" follows
@@ -20271,7 +20514,8 @@ index 000000000..c41992a69
 +  queueMessages: Schema.optionalKey(Schema.Boolean),
 +  /** Ask for confirmation in a popover before discarding a queued message. */
 +  queueDiscardConfirm: Schema.optionalKey(Schema.Boolean),
-+  pet: Schema.optionalKey(Schema.Literals(PET_IDS)),
++  /** A built-in id or an imported pet's id; anything unknown falls back to no pet. */
++  pet: Schema.optionalKey(Schema.String),
 +  petSize: Schema.optionalKey(Schema.Number),
 +  petPosition: Schema.optionalKey(Schema.NullOr(PetPosition)),
 +  /** Seconds between Wukong's working animations. */
@@ -20413,7 +20657,7 @@ index 000000000..c41992a69
 +      usageBadges: stored.usageBadges ?? DEFAULT_NEO_SETTINGS.usageBadges,
 +      queueMessages: stored.queueMessages ?? DEFAULT_NEO_SETTINGS.queueMessages,
 +      queueDiscardConfirm: stored.queueDiscardConfirm ?? DEFAULT_NEO_SETTINGS.queueDiscardConfirm,
-+      pet: stored.pet ?? DEFAULT_NEO_SETTINGS.pet,
++      pet: isPetId(stored.pet) ? stored.pet : DEFAULT_NEO_SETTINGS.pet,
 +      petSize: clampPetSize(stored.petSize ?? DEFAULT_NEO_SETTINGS.petSize),
 +      petPosition: stored.petPosition ?? null,
 +      petWorkingIntervalSec: clampPetWorkingInterval(
@@ -20562,7 +20806,7 @@ index 000000000..58ca90ca2
 +});
 diff --git a/apps/web/src/neo/pets/AsciiAnimation.tsx b/apps/web/src/neo/pets/AsciiAnimation.tsx
 new file mode 100644
-index 000000000..0b7918186
+index 000000000..780b2ac71
 --- /dev/null
 +++ b/apps/web/src/neo/pets/AsciiAnimation.tsx
 @@ -0,0 +1,142 @@
@@ -20614,7 +20858,7 @@ index 000000000..0b7918186
 +  return width / (columns * asciiCharAspect());
 +}
 +
-+function prefersReducedMotion(): boolean {
++export function prefersReducedMotion(): boolean {
 +  return (
 +    typeof window !== "undefined" &&
 +    typeof window.matchMedia === "function" &&
@@ -20763,10 +21007,10 @@ index 000000000..f6aeb94ef
 +});
 diff --git a/apps/web/src/neo/pets/PetPreview.tsx b/apps/web/src/neo/pets/PetPreview.tsx
 new file mode 100644
-index 000000000..4aceb77b5
+index 000000000..ade4fd2ba
 --- /dev/null
 +++ b/apps/web/src/neo/pets/PetPreview.tsx
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,95 @@
 +import { memo, useEffect, useRef, useState } from "react";
 +
 +import { cn } from "~/lib/utils";
@@ -20776,11 +21020,11 @@ index 000000000..4aceb77b5
 +import { createClipShuffle, WukongPet } from "./WukongPet";
 +
 +/** The preview tours every mood so the card shows what the pet can do. */
-+const PREVIEW_MOODS: ReadonlyArray<PetMood> = ["idle", "typing", "working"];
++const PREVIEW_MOODS: ReadonlyArray<PetMood> = ["idle", "typing", "working", "done"];
 +/** Long enough to see what a clip is before the next one starts. */
 +const PREVIEW_STEP_MS = 4_000;
 +
-+function usePreviewMood(): PetMood {
++export function usePreviewMood(): PetMood {
 +  const [index, setIndex] = useState(0);
 +  useEffect(() => {
 +    const timer = setInterval(() => setIndex((value) => value + 1), PREVIEW_STEP_MS);
@@ -20808,6 +21052,18 @@ index 000000000..4aceb77b5
 +  const clip = useWukongPreviewClip();
 +  return <WukongPet mood="working" clip={clip} width={120} />;
 +});
++
++/** Width for a pet's card preview; the X renders at half its size, so it asks for more. */
++export function previewPetSize(pet: PetId): number {
++  switch (pet) {
++    case "rabbit":
++      return 96;
++    case "none":
++      return 220;
++    default:
++      return 120;
++  }
++}
 +
 +/** A pet card for Settings: the live animation with its label. */
 +export const PetPreview = memo(function PetPreview({
@@ -20840,12 +21096,7 @@ index 000000000..4aceb77b5
 +        {pet === "wukong" ? (
 +          <WukongPreview />
 +        ) : (
-+          // The X renders at half its size; ask for more so it fills the card like the pets do.
-+          <PetSprite
-+            pet={pet}
-+            mood={mood}
-+            size={pet === "rabbit" ? 96 : pet === "none" ? 220 : 120}
-+          />
++          <PetSprite pet={pet} mood={mood} size={previewPetSize(pet)} />
 +        )}
 +      </div>
 +      <div className="min-w-0">
@@ -20857,10 +21108,10 @@ index 000000000..4aceb77b5
 +});
 diff --git a/apps/web/src/neo/pets/PetSprite.tsx b/apps/web/src/neo/pets/PetSprite.tsx
 new file mode 100644
-index 000000000..c9fcdb2c5
+index 000000000..1a0dcaabc
 --- /dev/null
 +++ b/apps/web/src/neo/pets/PetSprite.tsx
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,60 @@
 +import { memo } from "react";
 +
 +import type { PetId } from "../neoSettings";
@@ -20868,6 +21119,7 @@ index 000000000..c9fcdb2c5
 +import { NOTHING_FRAMES, type PetMood } from "./petRegistry";
 +import { LunarPet } from "./LunarPet";
 +import { RabbitPet } from "./RabbitPet";
++import { ImportedPetSprite } from "./SpritePet";
 +import { WukongPet } from "./WukongPet";
 +
 +/** Renders the chosen pet at `size` pixels wide for the given mood. */
@@ -20882,10 +21134,19 @@ index 000000000..c9fcdb2c5
 +  mood: PetMood;
 +  size: number;
 +  playing?: boolean;
-+  /** How often Wukong changes exercise while working. */
++  /** How often Wukong and the imported pets change exercise while working. */
 +  rotationMs?: number;
 +}) {
 +  switch (pet) {
++    case "none":
++      return (
++        <AsciiAnimation
++          clip={NOTHING_FRAMES}
++          width={Math.round(size * 0.5)}
++          playing={playing}
++          className="neo-ascii-pet neo-ascii-nothing"
++        />
++      );
 +    case "rabbit":
 +      return <RabbitPet size={size} playing={playing} />;
 +    case "lunar":
@@ -20899,23 +21160,24 @@ index 000000000..c9fcdb2c5
 +          {...(rotationMs !== undefined ? { rotationMs } : {})}
 +        />
 +      );
-+    case "none":
++    default:
 +      return (
-+        <AsciiAnimation
-+          clip={NOTHING_FRAMES}
-+          width={Math.round(size * 0.5)}
++        <ImportedPetSprite
++          id={pet}
++          mood={mood}
++          width={size}
 +          playing={playing}
-+          className="neo-ascii-pet neo-ascii-nothing"
++          {...(rotationMs !== undefined ? { rotationMs } : {})}
 +        />
 +      );
 +  }
 +});
 diff --git a/apps/web/src/neo/pets/PetWidget.tsx b/apps/web/src/neo/pets/PetWidget.tsx
 new file mode 100644
-index 000000000..79fd57b8f
+index 000000000..dfd83d6f5
 --- /dev/null
 +++ b/apps/web/src/neo/pets/PetWidget.tsx
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,180 @@
 +import {
 +  ArrowDownNarrowWideIcon,
 +  ArrowUpNarrowWideIcon,
@@ -20926,6 +21188,7 @@ index 000000000..79fd57b8f
 +
 +import { NEO_PRODUCT_NAME } from "../neoRepository";
 +import { useNeoSettings } from "../neoSettings";
++import { useImportedPet } from "./importedPets";
 +import { petBadgeFor, petMoodFor, usePetActivityStore, type PetRunningThread } from "./petActivity";
 +import { petDefinition } from "./petRegistry";
 +import { PetSprite } from "./PetSprite";
@@ -20948,6 +21211,7 @@ index 000000000..79fd57b8f
 +  const typing = usePetActivityStore((state) => state.typing);
 +  const running = usePetActivityStore((state) => state.running);
 +  const unseenCompleted = usePetActivityStore((state) => state.unseenCompleted);
++  const importedPet = useImportedPet(pet);
 +  const [expanded, setExpanded] = useState(false);
 +  const dragRef = useRef<{
 +    pointerId: number;
@@ -20958,7 +21222,7 @@ index 000000000..79fd57b8f
 +    moved: boolean;
 +  } | null>(null);
 +
-+  const mood = petMoodFor({ typing, running });
++  const mood = petMoodFor({ typing, running, unseenCompleted });
 +  const badge = petBadgeFor({ running, unseenCompleted });
 +
 +  /** List entries open their thread in the main window; the pet itself never navigates. */
@@ -21019,7 +21283,7 @@ index 000000000..79fd57b8f
 +    ...running.map((thread) => ({ thread, state: "running" as const })),
 +    ...unseenCompleted.map((thread) => ({ thread, state: "done" as const })),
 +  ];
-+  const definition = petDefinition(pet);
++  const label = importedPet?.name ?? petDefinition(pet).label;
 +  const shownItems = expanded ? listItems : listItems.slice(0, 1);
 +
 +  return (
@@ -21049,7 +21313,7 @@ index 000000000..79fd57b8f
 +      <div
 +        role="button"
 +        tabIndex={0}
-+        aria-label={`${definition.label}: bring ${NEO_PRODUCT_NAME} forward`}
++        aria-label={`${label}: bring ${NEO_PRODUCT_NAME} forward`}
 +        className="neo-pet-sprite"
 +        onPointerDown={onPointerDown}
 +        onPointerMove={onPointerMove}
@@ -21179,7 +21443,7 @@ index 000000000..8a26366e8
 +});
 diff --git a/apps/web/src/neo/pets/WukongPet.tsx b/apps/web/src/neo/pets/WukongPet.tsx
 new file mode 100644
-index 000000000..249f586ff
+index 000000000..07563c6cf
 --- /dev/null
 +++ b/apps/web/src/neo/pets/WukongPet.tsx
 @@ -0,0 +1,97 @@
@@ -21224,12 +21488,12 @@ index 000000000..249f586ff
 + * Shuffle-bag order over a set of clips: every clip plays once before any
 + * repeats, and a new bag never starts with the clip that just ended.
 + */
-+export function createClipShuffle(
-+  clips: ReadonlyArray<WukongClip> = WUKONG_WORKING_CLIPS,
++export function createClipShuffle<Clip extends string>(
++  clips: ReadonlyArray<Clip>,
 +  random: () => number = Math.random,
-+): () => WukongClip {
-+  let bag: WukongClip[] = [];
-+  let last: WukongClip | null = null;
++): () => Clip {
++  let bag: Clip[] = [];
++  let last: Clip | null = null;
 +  const refill = () => {
 +    bag = [...clips];
 +    for (let index = bag.length - 1; index > 0; index -= 1) {
@@ -21264,7 +21528,7 @@ index 000000000..249f586ff
 +  clip?: WukongClip;
 +}) {
 +  const shuffle = useRef<(() => WukongClip) | null>(null);
-+  if (shuffle.current === null) shuffle.current = createClipShuffle();
++  if (shuffle.current === null) shuffle.current = createClipShuffle(WUKONG_WORKING_CLIPS);
 +  const [workingClip, setWorkingClip] = useState<WukongClip>(() => shuffle.current!());
 +
 +  useEffect(() => {
@@ -21487,10 +21751,10 @@ index 000000000..f4ca92392
 +}
 diff --git a/apps/web/src/neo/pets/petActivity.test.ts b/apps/web/src/neo/pets/petActivity.test.ts
 new file mode 100644
-index 000000000..0008a24d0
+index 000000000..902a93a3d
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petActivity.test.ts
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,83 @@
 +import { beforeEach, describe, expect, it } from "vite-plus/test";
 +
 +import {
@@ -21537,6 +21801,10 @@ index 000000000..0008a24d0
 +    expect(petMoodFor({ typing: false, running: [] })).toBe("idle");
 +    expect(petMoodFor({ typing: false, running: [thread("a")] })).toBe("working");
 +    expect(petMoodFor({ typing: true, running: [thread("a")] })).toBe("typing");
++    expect(petMoodFor({ typing: false, running: [], unseenCompleted: [thread("a")] })).toBe("done");
++    expect(
++      petMoodFor({ typing: false, running: [thread("b")], unseenCompleted: [thread("a")] }),
++    ).toBe("working");
 +  });
 +
 +  it("remembers threads that finished while not being viewed", () => {
@@ -21572,10 +21840,10 @@ index 000000000..0008a24d0
 +});
 diff --git a/apps/web/src/neo/pets/petActivity.ts b/apps/web/src/neo/pets/petActivity.ts
 new file mode 100644
-index 000000000..dc2f94a7a
+index 000000000..2116bfc45
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petActivity.ts
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,132 @@
 +/**
 + * What the pet reacts to: whether the user is typing in the composer, which
 + * threads have agents working, and which finished while nobody looked. Kept
@@ -21672,9 +21940,13 @@ index 000000000..dc2f94a7a
 +  return running;
 +}
 +
-+export function petMoodFor(snapshot: Pick<PetActivitySnapshot, "typing" | "running">): PetMood {
++export function petMoodFor(
++  snapshot: Pick<PetActivitySnapshot, "typing" | "running"> &
++    Partial<Pick<PetActivitySnapshot, "unseenCompleted">>,
++): PetMood {
 +  if (snapshot.typing) return "typing";
 +  if (snapshot.running.length > 0) return "working";
++  if ((snapshot.unseenCompleted?.length ?? 0) > 0) return "done";
 +  return "idle";
 +}
 +
@@ -21706,16 +21978,17 @@ index 000000000..dc2f94a7a
 +}
 diff --git a/apps/web/src/neo/pets/petRegistry.ts b/apps/web/src/neo/pets/petRegistry.ts
 new file mode 100644
-index 000000000..0b6033f4c
+index 000000000..a3c23f723
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petRegistry.ts
-@@ -0,0 +1,145 @@
-+import type { PetId } from "../neoSettings";
+@@ -0,0 +1,147 @@
++import type { BuiltinPetId } from "../neoSettings";
 +
-+export type PetMood = "idle" | "typing" | "working";
++/** "done" is idle with finished work nobody has looked at yet. */
++export type PetMood = "idle" | "typing" | "working" | "done";
 +
 +export interface PetDefinition {
-+  readonly id: PetId;
++  readonly id: BuiltinPetId;
 +  readonly label: string;
 +  readonly description: string;
 +}
@@ -21744,7 +22017,7 @@ index 000000000..0b6033f4c
 +  },
 +];
 +
-+export function petDefinition(id: PetId): PetDefinition {
++export function petDefinition(id: string): PetDefinition {
 +  return PET_DEFINITIONS.find((pet) => pet.id === id) ?? PET_DEFINITIONS[0]!;
 +}
 +
@@ -21801,6 +22074,7 @@ index 000000000..0b6033f4c
 +): WukongClip {
 +  switch (mood) {
 +    case "idle":
++    case "done":
 +      return "sleeping";
 +    case "typing":
 +      return "typing";
@@ -74539,10 +74813,10 @@ index 97f1f5cb1..aaf138d6c 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..530de3497
+index 000000000..2e39a8436
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,165 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -74663,6 +74937,25 @@ index 000000000..530de3497
 +Clicking it brings T3 Neo forward. The pet window closes with the main window. Pets need the
 +desktop app; the web app has no window to put them in.
 +
++### Codex pets
++
++Below the pet picker, **Codex pets** lists four community galleries. Pick one in the first
++select: [codexpet.top](https://codexpet.top), [codex-pet.com](https://codex-pet.com),
++[codexpets.org](https://codexpets.org) or [openpets.sh](https://openpets.sh). Search by name,
++author or category, or narrow the list with the category select where the gallery has one; the
++list loads fresh every time you open the tab, so new pets show up on their own. Hover a card to
++see the pet move. The pill in the section header opens the selected gallery's site, the GitHub
++button next to it opens the repository the pets come from. The link on each card opens that
++pet's files and license. openpets.sh only answers the desktop app.
++
++**Import** downloads the pet and picks it right away. Every import is a copy of its own: it gets a
++card in the pet picker with the gallery name, author and site, you can **Rename** or **Delete**
++it there, you can import the same pet again, and changes in the gallery never reach the pets you
++already have. Imported pets react like Wukong: they idle while you read, wait while you type, run,
++jump and review while agents work (switching at the **Working animation interval**), and wave
++when work finished while you were looking elsewhere. Deleting the pet you are using switches to
++**No pet**.
++
 +## Usage badges
 +
 +After an agent finishes a turn, the reply shows a small amber badge with what that turn cost:
@@ -74703,10 +74996,10 @@ index 4447c3493..ea0d7d6a9 100644
  
        expect(workflow).not.toContain("client_tracing_token:");
 diff --git a/packages/contracts/src/ipc.ts b/packages/contracts/src/ipc.ts
-index 2d2cf29ec..5c9f4059f 100644
+index 2d2cf29ec..52322e668 100644
 --- a/packages/contracts/src/ipc.ts
 +++ b/packages/contracts/src/ipc.ts
-@@ -1136,6 +1136,18 @@ export interface DesktopBridge {
+@@ -1136,6 +1136,27 @@ export interface DesktopBridge {
      position?: { x: number; y: number },
    ) => Promise<T | null>;
    openExternal: (url: string) => Promise<boolean>;
@@ -74721,6 +75014,15 @@ index 2d2cf29ec..5c9f4059f 100644
 +    moveWindow: (delta: { dx: number; dy: number }) => Promise<void>;
 +    /** Bring the main window forward, optionally on a thread. */
 +    focusMain: (target: { environmentId: string; threadId: string } | null) => Promise<void>;
++    /**
++     * GET a pet gallery URL from the main process, which sends no Origin
++     * header. Only the known gallery hosts are allowed; anything else rejects.
++     */
++    fetchGallery: (url: string) => Promise<{
++      status: number;
++      contentType: string | null;
++      body: Uint8Array;
++    }>;
 +  };
    /**
     * Probe this desktop machine for installed remote-capable editor CLIs

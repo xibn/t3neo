@@ -8,6 +8,7 @@ import { memo, useCallback, useRef, useState, type PointerEvent } from "react";
 
 import { NEO_PRODUCT_NAME } from "../neoRepository";
 import { useNeoSettings } from "../neoSettings";
+import { useImportedPet } from "./importedPets";
 import { petBadgeFor, petMoodFor, usePetActivityStore, type PetRunningThread } from "./petActivity";
 import { petDefinition } from "./petRegistry";
 import { PetSprite } from "./PetSprite";
@@ -30,6 +31,7 @@ export const PetWidget = memo(function PetWidget() {
   const typing = usePetActivityStore((state) => state.typing);
   const running = usePetActivityStore((state) => state.running);
   const unseenCompleted = usePetActivityStore((state) => state.unseenCompleted);
+  const importedPet = useImportedPet(pet);
   const [expanded, setExpanded] = useState(false);
   const dragRef = useRef<{
     pointerId: number;
@@ -40,7 +42,7 @@ export const PetWidget = memo(function PetWidget() {
     moved: boolean;
   } | null>(null);
 
-  const mood = petMoodFor({ typing, running });
+  const mood = petMoodFor({ typing, running, unseenCompleted });
   const badge = petBadgeFor({ running, unseenCompleted });
 
   /** List entries open their thread in the main window; the pet itself never navigates. */
@@ -101,7 +103,7 @@ export const PetWidget = memo(function PetWidget() {
     ...running.map((thread) => ({ thread, state: "running" as const })),
     ...unseenCompleted.map((thread) => ({ thread, state: "done" as const })),
   ];
-  const definition = petDefinition(pet);
+  const label = importedPet?.name ?? petDefinition(pet).label;
   const shownItems = expanded ? listItems : listItems.slice(0, 1);
 
   return (
@@ -131,7 +133,7 @@ export const PetWidget = memo(function PetWidget() {
       <div
         role="button"
         tabIndex={0}
-        aria-label={`${definition.label}: bring ${NEO_PRODUCT_NAME} forward`}
+        aria-label={`${label}: bring ${NEO_PRODUCT_NAME} forward`}
         className="neo-pet-sprite"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

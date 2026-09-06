@@ -5,6 +5,7 @@ import { AsciiAnimation } from "./AsciiAnimation";
 import { NOTHING_FRAMES, type PetMood } from "./petRegistry";
 import { LunarPet } from "./LunarPet";
 import { RabbitPet } from "./RabbitPet";
+import { ImportedPetSprite } from "./SpritePet";
 import { WukongPet } from "./WukongPet";
 
 /** Renders the chosen pet at `size` pixels wide for the given mood. */
@@ -19,10 +20,19 @@ export const PetSprite = memo(function PetSprite({
   mood: PetMood;
   size: number;
   playing?: boolean;
-  /** How often Wukong changes exercise while working. */
+  /** How often Wukong and the imported pets change exercise while working. */
   rotationMs?: number;
 }) {
   switch (pet) {
+    case "none":
+      return (
+        <AsciiAnimation
+          clip={NOTHING_FRAMES}
+          width={Math.round(size * 0.5)}
+          playing={playing}
+          className="neo-ascii-pet neo-ascii-nothing"
+        />
+      );
     case "rabbit":
       return <RabbitPet size={size} playing={playing} />;
     case "lunar":
@@ -36,13 +46,14 @@ export const PetSprite = memo(function PetSprite({
           {...(rotationMs !== undefined ? { rotationMs } : {})}
         />
       );
-    case "none":
+    default:
       return (
-        <AsciiAnimation
-          clip={NOTHING_FRAMES}
-          width={Math.round(size * 0.5)}
+        <ImportedPetSprite
+          id={pet}
+          mood={mood}
+          width={size}
           playing={playing}
-          className="neo-ascii-pet neo-ascii-nothing"
+          {...(rotationMs !== undefined ? { rotationMs } : {})}
         />
       );
   }

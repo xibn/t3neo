@@ -562,6 +562,78 @@ contracts or server settings.
    `open-thread:<environmentId>:<threadId>`, handled in `AppSidebarLayout`). Exposed on
    `desktopBridge.pet` (optional in `packages/contracts/src/ipc.ts`). The pet window closes with the
    main window.
+8. **Codex pets.** A second section on the Pets tab, **Codex pets** (`id="codex-pets"`, store
+   icon, search id `neo-codex-pets`), browses four community galleries and imports from them.
+   - `petGalleries.ts` lists the galleries (`PET_GALLERIES`, ids `codexpet-top`,
+     `codex-pet-com`, `codexpets-org`, `openpets-sh`; each has a host, site URL and GitHub
+     repository) and the per-gallery parsers into one `GalleryPet` shape (name, names for
+     search, author, category, description, sprite version, thumbnail/animation/spritesheet
+     URLs, a `download` of kind `spritesheet` or `zip`, page and source URLs):
+     - **codexpet.top** (`legeling/awesome-codex-pet`): `pets.json` and `spritesheet.webp`
+       from `raw.githubusercontent.com`; only the preview images (untracked in git) come from
+       the site (`thumbnail.webp`, `webp/idle.webp` on hover).
+     - **codex-pet.com** (`BeiXiao/awesome-codex-pets`): the repository holds one
+       `pets/<slug>/thumb.webp` per pet and lists them in `README.md`, which
+       `parseCodexPetComReadme` reads (slug, thumbnail, HTML-unescaped name). Sprites only
+       exist as zips on the site (`/api/download/<slug>`); `downloadGalleryPet` unpacks
+       `spritesheet.webp` with jszip. No author or category.
+     - **codexpets.org** (`eyichan/awesome-codex-pets`): `pets.json` from GitHub with
+       `spritesheetUrl` on the site (CORS `*`); no thumbnails, so cards show the sheet's first
+       cell (`SheetThumbnail`: a lazily loaded image behind a frame-sized window). `kind` is
+       the category, tags join the search names.
+     - **openpets.sh** (`alterhq/openpets`): the site's `/api/pets?page&pageSize=30&q&kind`
+       API searches and pages (`mode: "api"`, fixed kinds animal/creature/person/object,
+       ~5,700 mirrored pets); `previewUrl` is the thumbnail, the sheet animates on hover.
+       The API refuses any foreign `Origin`, so the gallery is `needsDesktop`.
+     - `galleryFetch.ts`: on desktop every gallery request goes through
+       `desktopBridge.pet.fetchGallery(url)`; in a browser it is a plain `fetch`.
+       `apps/desktop/src/ipc/methods/pet.ts` adds `fetchPetGallery`
+       (`desktop:pet-fetch-gallery`): https only, hosts limited to `PET_GALLERY_HOSTS`
+       (raw.githubusercontent.com and the four sites), GET via the Effect `HttpClient`
+       (no Origin header), returns `{ status, contentType, body: Uint8Array }`; errors are
+       `DesktopPetGalleryFetchError` (`invalid-url` | `host-not-allowed` | `request-failed`).
+       Tested in `pet.test.ts`. Exposed in `preload.ts` and typed in
+       `packages/contracts/src/ipc.ts`.
+     - `filterGalleryPets` matches every query word against names, author, slug, category and
+       description and combines with a category filter (catalog galleries);
+       `downloadGalleryPet` decodes the image and takes the sheet version from its exact size
+       (1536×1872 → v1, 1536×2288 → v2), falling back to the gallery's claim, then v1.
+   - `PetGalleryBrowser.tsx`: gallery select (host names), search box (debounced 300 ms for
+     api galleries), category select (hidden when the gallery has none), cards in pages of 40
+     (catalog) or the site's 30 (api) with a **Show more** button, per-card **Import** and an
+     external-link button to the pet's files/license. Lists are fetched fresh each time the
+     panel mounts. Loading, error (with **Try again**), "desktop only" and empty states.
+   - The section header carries a source pill (info icon + the selected gallery's host,
+     links to the site) and a GitHub icon button (links to that gallery's repository), so the
+     origin stays traceable even if a domain lapses. The panel owns the selected gallery.
+   - `importedPets.ts`: an import is an independent copy. The spritesheet blob goes to
+     IndexedDB (`t3code:neo-pets` / `spritesheets`, keyed by the pet id), the metadata
+     `{ id, name, spriteVersion, source: { slug, name, author, gallery? }, importedAt }` to
+     localStorage `t3code:neo-imported-pets:v1` (`author` is empty when unknown, `gallery` is
+     the host). Ids are `import:<uuid>` (`ImportedPetId`); `PetId` is now
+     `BuiltinPetId | ImportedPetId` and `neoSettings.pet` is stored as a plain string validated
+     by `isPetId` (unknown ids fall back to `none`). The same gallery pet can be imported any
+     number of times; nothing is looked up upstream afterwards. A `storage` listener keeps the
+     pet window's list in step. Importing selects the new pet; deleting the selected pet
+     switches to **No pet** and removes the blob.
+   - `ImportedPetCard.tsx` sits in the pet picker grid after the built-ins: live preview (tours
+     idle → typing → working → done), name and "<source> by <author> · <gallery>", plus
+     **Rename** (in-place input, Enter/check saves, Escape/X cancels, 40 characters max, empty
+     falls back to the source name) and **Delete**.
+   - `spriteSheet.ts` + `SpritePet.tsx` render Codex sheets: 8 columns of 192×208 cells, one
+     row per clip with the Codex timing tables (`idle`, `running-right`, `running-left`,
+     `waving`, `jumping`, `failed`, `waiting`, `running`, `review`; v2 look rows unused). The
+     sprite is a frame-sized box whose `background-position` moves per frame (`setTimeout` chain
+     with per-frame holds, paused while hidden, first frame under reduced motion;
+     `image-rendering: pixelated` only when drawn larger than a cell; an unknown sheet version
+     sizes the background by the image's own aspect). Moods: idle → `idle`, typing → `waiting`,
+     done → `waving`, working → shuffle-bag rotation over `running`, `review`, `jumping`,
+     `running-right`, `running-left` at the **Working animation interval**.
+   - `PetMood` gained **done** (idle with unseen finished work; `petMoodFor` takes
+     `unseenCompleted`); Wukong sleeps for it, the sprite pets wave. `createClipShuffle` is
+     generic over the clip type.
+   - Pets in the web app stay unavailable (no window); the galleries that allow cross-origin
+     requests still browse and import there.
 
 ## Usage badges
 
