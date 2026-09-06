@@ -19,6 +19,46 @@ on:
         type: choice
         options:
           - latest
+          - v0.0.39-nightly.20260906.1293
+          - v0.0.39-nightly.20260906.1292
+          - v0.0.39-nightly.20260906.1291
+          - v0.0.39-nightly.20260905.1290
+          - v0.0.39-nightly.20260905.1289
+          - v0.0.39-nightly.20260905.1288
+          - v0.0.39-nightly.20260905.1287
+          - v0.0.39-nightly.20260905.1286
+          - v0.0.39-nightly.20260905.1285
+          - v0.0.39-nightly.20260905.1284
+          - v0.0.39-nightly.20260905.1283
+          - v0.0.39-nightly.20260904.1280
+          - v0.0.39-nightly.20260904.1279
+          - v0.0.39-nightly.20260904.1278
+          - v0.0.39-nightly.20260904.1277
+          - v0.0.39-nightly.20260904.1276
+          - v0.0.39-nightly.20260904.1275
+          - v0.0.39-nightly.20260904.1274
+          - v0.0.39-nightly.20260903.1273
+          - v0.0.39-nightly.20260903.1272
+          - v0.0.39-nightly.20260903.1270
+          - v0.0.39-nightly.20260903.1268
+          - v0.0.39-nightly.20260903.1267
+          - v0.0.39-nightly.20260903.1265
+          - v0.0.39-nightly.20260903.1262
+          - v0.0.39-nightly.20260902.1261
+          - v0.0.39-nightly.20260902.1260
+          - v0.0.39-nightly.20260902.1257
+          - v0.0.39-nightly.20260902.1256
+          - v0.0.39-nightly.20260902.1253
+          - v0.0.39-nightly.20260902.1252
+          - v0.0.38-nightly.20260901.1250
+          - v0.0.38-nightly.20260901.1249
+          - v0.0.38-nightly.20260901.1248
+          - v0.0.38-nightly.20260901.1246
+          - v0.0.38-nightly.20260901.1245
+          - v0.0.38-nightly.20260901.1244
+          - v0.0.38-nightly.20260901.1243
+          - v0.0.38-nightly.20260901.1242
+          - v0.0.38-nightly.20260831.1241
       upstream_tag_custom:
         description: "Any other upstream nightly tag, e.g. v0.0.39-nightly.20260904.1280 (overrides the list)"
         required: false
