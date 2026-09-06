@@ -79,7 +79,14 @@ export const openPetWindow = DesktopIpc.makeIpcMethod({
     });
     petWindow = window;
     window.setAlwaysOnTop(true, "floating");
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // Without skipTransformProcessType, Electron turns the whole app into a
+    // macOS accessory process to get the window above fullscreen apps, which
+    // removes it from the Dock. The Dock icon matters more than floating over
+    // fullscreen apps, so the process type stays as it is.
+    window.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true,
+    });
     window.setMenuBarVisibility(false);
     window.once("ready-to-show", () => {
       if (!window.isDestroyed()) window.showInactive();

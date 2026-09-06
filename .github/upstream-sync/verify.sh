@@ -219,6 +219,8 @@ for repo in legeling/awesome-codex-pet BeiXiao/awesome-codex-pets eyichan/awesom
   require_grep "$repo" apps/web/src/neo/pets/petGalleries.ts "pet gallery $repo is missing"
 done
 require_grep "fetchGallery" apps/desktop/src/preload.ts "preload does not expose desktopBridge.pet.fetchGallery"
+require_grep "skipTransformProcessType: true" apps/desktop/src/ipc/methods/pet.ts \
+  "the pet window would hide the app's Dock icon on macOS"
 require_grep "fetchPetGallery" apps/desktop/src/ipc/DesktopIpcHandlers.ts \
   "desktop IPC does not register the pet gallery fetch"
 require_grep '/settings/neo' apps/web/src/components/settings/settingsSearch.ts \

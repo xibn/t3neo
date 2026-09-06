@@ -140,12 +140,99 @@ index c4ef82ec8..c42d063dd 100644
 +export const PET_MOVE_WINDOW_CHANNEL = "desktop:pet-move-window";
 +export const PET_FOCUS_MAIN_CHANNEL = "desktop:pet-focus-main";
 +export const PET_FETCH_GALLERY_CHANNEL = "desktop:pet-fetch-gallery";
+diff --git a/apps/desktop/src/ipc/methods/pet.test.ts b/apps/desktop/src/ipc/methods/pet.test.ts
+new file mode 100644
+index 000000000..bc6338b24
+--- /dev/null
++++ b/apps/desktop/src/ipc/methods/pet.test.ts
+@@ -0,0 +1,81 @@
++import { assert, describe, it } from "@effect/vitest";
++import * as Cause from "effect/Cause";
++import * as Effect from "effect/Effect";
++import * as Exit from "effect/Exit";
++import * as Layer from "effect/Layer";
++import * as Option from "effect/Option";
++import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
++
++import { DesktopPetGalleryFetchError, fetchPetGallery, isAllowedPetGalleryUrl } from "./pet.ts";
++
++function makeHttpClientLayer(
++  handler: (
++    request: HttpClientRequest.HttpClientRequest,
++  ) => Effect.Effect<HttpClientResponse.HttpClientResponse, never>,
++) {
++  return Layer.succeed(
++    HttpClient.HttpClient,
++    HttpClient.make((request) => handler(request)),
++  );
++}
++
++describe("pet gallery fetch IPC", () => {
++  it("allows only https URLs on the known gallery hosts", () => {
++    assert.isTrue(isAllowedPetGalleryUrl("https://openpets.sh/api/pets?page=1"));
++    assert.isTrue(
++      isAllowedPetGalleryUrl(
++        "https://raw.githubusercontent.com/legeling/awesome-codex-pet/main/pets.json",
++      ),
++    );
++    assert.isFalse(isAllowedPetGalleryUrl("http://openpets.sh/api/pets"));
++    assert.isFalse(isAllowedPetGalleryUrl("https://evil.example/openpets.sh"));
++    assert.isFalse(isAllowedPetGalleryUrl("not a url"));
++  });
++
++  it.effect("returns status, content type and body bytes", () => {
++    const requestUrls: string[] = [];
++    const layer = makeHttpClientLayer((request) =>
++      Effect.sync(() => {
++        requestUrls.push(request.url);
++        return HttpClientResponse.fromWeb(
++          request,
++          new Response(new Uint8Array([1, 2, 3]), {
++            status: 200,
++            headers: { "content-type": "image/webp" },
++          }),
++        );
++      }),
++    );
++
++    return Effect.gen(function* () {
++      // The method handler hands back the encoded result, typed as unknown.
++      const result = (yield* fetchPetGallery.handler(
++        "https://openpets.sh/api/pets/tater/spritesheet",
++      )) as { status: number; contentType: string | null; body: Uint8Array };
++      assert.equal(result.status, 200);
++      assert.equal(result.contentType, "image/webp");
++      assert.deepEqual(Array.from(result.body), [1, 2, 3]);
++      assert.deepEqual(requestUrls, ["https://openpets.sh/api/pets/tater/spritesheet"]);
++    }).pipe(Effect.provide(layer));
++  });
++
++  it.effect("rejects hosts outside the allowlist without making a request", () => {
++    let requests = 0;
++    const layer = makeHttpClientLayer((request) =>
++      Effect.sync(() => {
++        requests += 1;
++        return HttpClientResponse.fromWeb(request, new Response("", { status: 200 }));
++      }),
++    );
++
++    return Effect.gen(function* () {
++      const exit = yield* Effect.exit(fetchPetGallery.handler("https://example.com/pets.json"));
++      assert(Exit.isFailure(exit));
++      const failure = Cause.findErrorOption(exit.cause);
++      assert(Option.isSome(failure));
++      assert.instanceOf(failure.value, DesktopPetGalleryFetchError);
++      assert.equal(failure.value.reason, "host-not-allowed");
++      assert.equal(requests, 0);
++    }).pipe(Effect.provide(layer));
++  });
++});
 diff --git a/apps/desktop/src/ipc/methods/pet.ts b/apps/desktop/src/ipc/methods/pet.ts
 new file mode 100644
-index 000000000..cf8bb28ac
+index 000000000..ef4b0aaaf
 --- /dev/null
 +++ b/apps/desktop/src/ipc/methods/pet.ts
-@@ -0,0 +1,214 @@
+@@ -0,0 +1,221 @@
 +import * as Data from "effect/Data";
 +import * as Electron from "electron";
 +import * as Effect from "effect/Effect";
@@ -227,7 +314,14 @@ index 000000000..cf8bb28ac
 +    });
 +    petWindow = window;
 +    window.setAlwaysOnTop(true, "floating");
-+    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
++    // Without skipTransformProcessType, Electron turns the whole app into a
++    // macOS accessory process to get the window above fullscreen apps, which
++    // removes it from the Dock. The Dock icon matters more than floating over
++    // fullscreen apps, so the process type stays as it is.
++    window.setVisibleOnAllWorkspaces(true, {
++      visibleOnFullScreen: true,
++      skipTransformProcessType: true,
++    });
 +    window.setMenuBarVisibility(false);
 +    window.once("ready-to-show", () => {
 +      if (!window.isDestroyed()) window.showInactive();
@@ -20773,6 +20867,22 @@ index 000000000..4920f2048
 +    messageAction: "#f2a26e",
 +  },
 +};
+diff --git a/apps/web/src/neo/openExternal.ts b/apps/web/src/neo/openExternal.ts
+new file mode 100644
+index 000000000..9112f5902
+--- /dev/null
++++ b/apps/web/src/neo/openExternal.ts
+@@ -0,0 +1,10 @@
++import { isElectron } from "~/env";
++
++/** Opens a link in the system browser on desktop, in a new tab on the web. */
++export function openExternalUrl(url: string): void {
++  if (isElectron && window.desktopBridge?.openExternal) {
++    void window.desktopBridge.openExternal(url);
++    return;
++  }
++  window.open(url, "_blank", "noopener,noreferrer");
++}
 diff --git a/apps/web/src/neo/pets/AsciiAnimation.test.ts b/apps/web/src/neo/pets/AsciiAnimation.test.ts
 new file mode 100644
 index 000000000..58ca90ca2
@@ -20952,6 +21062,147 @@ index 000000000..780b2ac71
 +    </div>
 +  );
 +});
+diff --git a/apps/web/src/neo/pets/ImportedPetCard.tsx b/apps/web/src/neo/pets/ImportedPetCard.tsx
+new file mode 100644
+index 000000000..3c9b181a7
+--- /dev/null
++++ b/apps/web/src/neo/pets/ImportedPetCard.tsx
+@@ -0,0 +1,135 @@
++import { CheckIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
++import { memo, useState, type FormEvent, type KeyboardEvent } from "react";
++
++import { Button } from "~/components/ui/button";
++import { Input } from "~/components/ui/input";
++import { cn } from "~/lib/utils";
++import {
++  MAX_IMPORTED_PET_NAME_LENGTH,
++  normalizeImportedPetName,
++  type ImportedPet,
++  type ImportedPetId,
++} from "./importedPets";
++import { previewPetSize, usePreviewMood } from "./PetPreview";
++import { PetSprite } from "./PetSprite";
++
++/**
++ * A card for an imported pet in Settings → Pets. The preview selects it like
++ * the built-in cards; the row below renames or deletes it. Renaming happens
++ * in place: Enter or the check saves, Escape or the X gives up.
++ */
++export const ImportedPetCard = memo(function ImportedPetCard({
++  pet,
++  selected,
++  onSelect,
++  onRename,
++  onDelete,
++}: {
++  pet: ImportedPet;
++  selected: boolean;
++  onSelect: (id: ImportedPetId) => void;
++  onRename: (id: ImportedPetId, name: string) => void;
++  onDelete: (id: ImportedPetId) => void;
++}) {
++  const mood = usePreviewMood();
++  const [draft, setDraft] = useState<string | null>(null);
++
++  const save = (event?: FormEvent) => {
++    event?.preventDefault();
++    if (draft === null) return;
++    onRename(pet.id, normalizeImportedPetName(draft, pet.name));
++    setDraft(null);
++  };
++  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
++    if (event.key === "Escape") {
++      event.preventDefault();
++      setDraft(null);
++    }
++  };
++
++  return (
++    <div
++      className={cn(
++        "neo-pet-preview neo-imported-pet-card flex min-w-0 flex-col rounded-xl border transition-colors",
++        selected ? "border-primary/60 bg-primary/8" : "border-border hover:border-primary/40",
++      )}
++      data-selected={selected}
++    >
++      <button
++        type="button"
++        aria-pressed={selected}
++        aria-label={`Use ${pet.name}`}
++        className="flex min-w-0 flex-col items-stretch gap-2 rounded-t-xl px-3 pt-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
++        onClick={() => onSelect(pet.id)}
++      >
++        <div className="flex h-32 items-end justify-center overflow-hidden">
++          <PetSprite pet={pet.id} mood={mood} size={previewPetSize(pet.id)} />
++        </div>
++        {draft === null ? (
++          <div className="min-w-0">
++            <div className="truncate text-sm font-medium">{pet.name}</div>
++            <div className="truncate text-xs text-muted-foreground">
++              {[
++                pet.source.author ? `${pet.source.name} by ${pet.source.author}` : pet.source.name,
++                pet.source.gallery,
++              ]
++                .filter(Boolean)
++                .join(" · ")}
++            </div>
++          </div>
++        ) : null}
++      </button>
++      <div className="flex items-center gap-1 px-3 pt-2 pb-2">
++        {draft === null ? (
++          <>
++            <Button
++              size="xs"
++              variant="ghost-muted"
++              aria-label={`Rename ${pet.name}`}
++              onClick={() => setDraft(pet.name)}
++            >
++              <PencilIcon />
++              Rename
++            </Button>
++            <Button
++              size="xs"
++              variant="ghost-muted"
++              className="ml-auto hover:text-destructive"
++              aria-label={`Delete ${pet.name}`}
++              onClick={() => onDelete(pet.id)}
++            >
++              <Trash2Icon />
++              Delete
++            </Button>
++          </>
++        ) : (
++          <form className="flex w-full min-w-0 items-center gap-1" onSubmit={save}>
++            <Input
++              nativeInput
++              size="compact"
++              className="min-w-0 flex-1"
++              aria-label="Pet name"
++              autoFocus
++              maxLength={MAX_IMPORTED_PET_NAME_LENGTH}
++              value={draft}
++              onChange={(event) => setDraft(event.currentTarget.value)}
++              onKeyDown={onKeyDown}
++            />
++            <Button size="icon-xs" variant="ghost" type="submit" aria-label="Save name">
++              <CheckIcon />
++            </Button>
++            <Button
++              size="icon-xs"
++              variant="ghost-muted"
++              type="button"
++              aria-label="Cancel renaming"
++              onClick={() => setDraft(null)}
++            >
++              <XIcon />
++            </Button>
++          </form>
++        )}
++      </div>
++    </div>
++  );
++});
 diff --git a/apps/web/src/neo/pets/LunarPet.tsx b/apps/web/src/neo/pets/LunarPet.tsx
 new file mode 100644
 index 000000000..f6aeb94ef
@@ -21005,6 +21256,467 @@ index 000000000..f6aeb94ef
 +    </div>
 +  );
 +});
+diff --git a/apps/web/src/neo/pets/PetGalleryBrowser.tsx b/apps/web/src/neo/pets/PetGalleryBrowser.tsx
+new file mode 100644
+index 000000000..ce17009a1
+--- /dev/null
++++ b/apps/web/src/neo/pets/PetGalleryBrowser.tsx
+@@ -0,0 +1,455 @@
++import { DownloadIcon, ExternalLinkIcon, LoaderCircleIcon, SearchIcon } from "lucide-react";
++import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
++
++import { Button } from "~/components/ui/button";
++import { Input } from "~/components/ui/input";
++import {
++  Select,
++  SelectItem,
++  SelectPopup,
++  SelectTrigger,
++  SelectValue,
++} from "~/components/ui/select";
++import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
++import { openExternalUrl } from "../openExternal";
++import { galleryFetchAvailable } from "./galleryFetch";
++import { importGalleryPet, type ImportedPet } from "./importedPets";
++import {
++  filterGalleryPets,
++  galleryCategories,
++  loadGalleryCatalog,
++  loadGalleryPage,
++  PET_GALLERIES,
++  petGallery,
++  type GalleryPet,
++  type PetGalleryId,
++} from "./petGalleries";
++import { SpritePet, spriteFrameHeight } from "./SpritePet";
++import { SPRITE_COLUMNS } from "./spriteSheet";
++
++/** Cards render in pages so a big gallery never puts hundreds of images on screen at once. */
++const PAGE_SIZE = 40;
++const THUMBNAIL_WIDTH = 96;
++/** Select value for "no category filter"; no gallery category is named this. */
++const ALL_CATEGORIES = "__all__";
++/** Sites that search for us get the query once typing pauses. */
++const SEARCH_DEBOUNCE_MS = 300;
++
++type ResultStatus = "loading" | "error" | "desktop-only" | "ready";
++
++function useDebounced<T>(value: T, delayMs: number): T {
++  const [debounced, setDebounced] = useState(value);
++  useEffect(() => {
++    const timer = setTimeout(() => setDebounced(value), delayMs);
++    return () => clearTimeout(timer);
++  }, [value, delayMs]);
++  return debounced;
++}
++
++/**
++ * Results for one gallery. "catalog" galleries are fetched whole and searched
++ * here, page by page of PAGE_SIZE; "api" galleries are searched and paged by
++ * the site. Late responses of an earlier request are dropped.
++ */
++function useGalleryResults(galleryId: PetGalleryId, query: string, category: string | null) {
++  const source = petGallery(galleryId);
++  const [status, setStatus] = useState<ResultStatus>("loading");
++  const [catalog, setCatalog] = useState<ReadonlyArray<GalleryPet>>([]);
++  const [visible, setVisible] = useState(PAGE_SIZE);
++  const [remote, setRemote] = useState<{
++    pets: ReadonlyArray<GalleryPet>;
++    total: number;
++    hasMore: boolean;
++    page: number;
++  }>({ pets: [], total: 0, hasMore: false, page: 0 });
++  const [loadingMore, setLoadingMore] = useState(false);
++  const [reloadToken, setReloadToken] = useState(0);
++  const debouncedQuery = useDebounced(query, SEARCH_DEBOUNCE_MS);
++  const effectiveQuery = source.mode === "api" ? debouncedQuery : query;
++  const requestRef = useRef(0);
++
++  useEffect(() => {
++    if (source.mode !== "catalog") return;
++    if (source.needsDesktop && !galleryFetchAvailable()) {
++      setStatus("desktop-only");
++      return;
++    }
++    const request = ++requestRef.current;
++    setStatus("loading");
++    setCatalog([]);
++    loadGalleryCatalog(source.id).then(
++      (pets) => {
++        if (requestRef.current !== request) return;
++        setCatalog(pets);
++        setStatus("ready");
++      },
++      () => {
++        if (requestRef.current === request) setStatus("error");
++      },
++    );
++  }, [source, reloadToken]);
++
++  useEffect(() => {
++    if (source.mode !== "api") return;
++    if (source.needsDesktop && !galleryFetchAvailable()) {
++      setStatus("desktop-only");
++      return;
++    }
++    const request = ++requestRef.current;
++    setStatus("loading");
++    loadGalleryPage(source.id, { query: effectiveQuery, category }, 1).then(
++      (page) => {
++        if (requestRef.current !== request) return;
++        setRemote({ pets: page.pets, total: page.total, hasMore: page.hasMore, page: 1 });
++        setStatus("ready");
++      },
++      () => {
++        if (requestRef.current === request) setStatus("error");
++      },
++    );
++  }, [source, effectiveQuery, category, reloadToken]);
++
++  useEffect(() => {
++    setVisible(PAGE_SIZE);
++  }, [source.id, query, category]);
++
++  const filtered = useMemo(
++    () => (source.mode === "catalog" ? filterGalleryPets(catalog, query, category) : []),
++    [source.mode, catalog, query, category],
++  );
++
++  const loadMore = useCallback(() => {
++    if (source.mode === "catalog") {
++      setVisible((count) => count + PAGE_SIZE);
++      return;
++    }
++    if (loadingMore || !remote.hasMore) return;
++    const request = requestRef.current;
++    const nextPage = remote.page + 1;
++    setLoadingMore(true);
++    loadGalleryPage(source.id, { query: effectiveQuery, category }, nextPage)
++      .then((page) => {
++        if (requestRef.current !== request) return;
++        setRemote((current) => ({
++          pets: [...current.pets, ...page.pets],
++          total: page.total,
++          hasMore: page.hasMore,
++          page: nextPage,
++        }));
++      })
++      .catch(() => {
++        // The page stays as it was; "Show more" can be tried again.
++      })
++      .finally(() => setLoadingMore(false));
++  }, [source, loadingMore, remote, effectiveQuery, category]);
++
++  const retry = useCallback(() => setReloadToken((value) => value + 1), []);
++
++  if (source.mode === "catalog") {
++    return {
++      status,
++      pets: filtered.slice(0, visible),
++      total: filtered.length,
++      hasMore: visible < filtered.length,
++      categories: galleryCategories(catalog),
++      loadMore,
++      loadingMore: false,
++      retry,
++    };
++  }
++  return {
++    status,
++    pets: remote.pets,
++    total: remote.total,
++    hasMore: remote.hasMore,
++    categories: source.categories,
++    loadMore,
++    loadingMore,
++    retry,
++  };
++}
++
++/** The first idle frame cut from the sheet: a lazily loaded image behind a frame-sized window. */
++const SheetThumbnail = memo(function SheetThumbnail({
++  spritesheetUrl,
++}: {
++  spritesheetUrl: string;
++}) {
++  return (
++    <span
++      className="neo-sheet-thumbnail"
++      style={{ width: `${THUMBNAIL_WIDTH}px`, height: `${spriteFrameHeight(THUMBNAIL_WIDTH)}px` }}
++    >
++      <img
++        alt=""
++        decoding="async"
++        loading="lazy"
++        src={spritesheetUrl}
++        style={{ width: `${THUMBNAIL_WIDTH * SPRITE_COLUMNS}px` }}
++      />
++    </span>
++  );
++});
++
++/**
++ * The card image: the gallery's thumbnail when it has one, else the first
++ * frame of the sheet. Hovering plays the gallery's animation when it has one,
++ * else the idle row of the sheet. A broken thumbnail falls back to the sheet.
++ */
++const GalleryPetThumbnail = memo(function GalleryPetThumbnail({ pet }: { pet: GalleryPet }) {
++  const [hovered, setHovered] = useState(false);
++  const [failed, setFailed] = useState(false);
++  const thumbnail = failed ? null : pet.thumbnailUrl;
++  const handlers = {
++    onPointerEnter: () => setHovered(true),
++    onPointerLeave: () => setHovered(false),
++  };
++  if (hovered && pet.spritesheetUrl && !(thumbnail && pet.animationUrl)) {
++    return (
++      <div {...handlers}>
++        <SpritePet
++          spritesheetUrl={pet.spritesheetUrl}
++          {...(pet.spriteVersion !== null ? { spriteVersion: pet.spriteVersion } : {})}
++          mood="idle"
++          width={THUMBNAIL_WIDTH}
++        />
++      </div>
++    );
++  }
++  if (thumbnail) {
++    return (
++      <img
++        alt=""
++        className="neo-codex-pet-thumbnail"
++        decoding="async"
++        height={spriteFrameHeight(THUMBNAIL_WIDTH)}
++        loading="lazy"
++        onError={() => setFailed(true)}
++        src={hovered && pet.animationUrl ? pet.animationUrl : thumbnail}
++        width={THUMBNAIL_WIDTH}
++        {...handlers}
++      />
++    );
++  }
++  if (pet.spritesheetUrl) {
++    return (
++      <div {...handlers}>
++        <SheetThumbnail spritesheetUrl={pet.spritesheetUrl} />
++      </div>
++    );
++  }
++  return (
++    <div
++      aria-hidden
++      className="flex items-center justify-center rounded-lg bg-muted text-2xl font-semibold text-muted-foreground"
++      style={{ width: `${THUMBNAIL_WIDTH}px`, height: `${spriteFrameHeight(THUMBNAIL_WIDTH)}px` }}
++    >
++      {pet.name.slice(0, 1).toUpperCase()}
++    </div>
++  );
++});
++
++const GalleryPetCard = memo(function GalleryPetCard({
++  pet,
++  importing,
++  onImport,
++}: {
++  pet: GalleryPet;
++  importing: boolean;
++  onImport: (pet: GalleryPet) => void;
++}) {
++  const subline = [pet.author, pet.category].filter(Boolean).join(" · ") || pet.description || "";
++  return (
++    <div className="neo-codex-pet-card flex min-w-0 flex-col gap-2 rounded-xl border border-border p-3">
++      <div className="flex h-28 items-end justify-center overflow-hidden">
++        <GalleryPetThumbnail pet={pet} />
++      </div>
++      <div className="min-w-0">
++        <div className="truncate text-sm font-medium">{pet.name}</div>
++        <div className="truncate text-xs text-muted-foreground">{subline || " "}</div>
++      </div>
++      <div className="flex items-center gap-1">
++        <Button
++          size="xs"
++          variant="outline"
++          disabled={importing}
++          aria-label={`Import ${pet.name}`}
++          onClick={() => onImport(pet)}
++        >
++          {importing ? <LoaderCircleIcon className="animate-spin" /> : <DownloadIcon />}
++          {importing ? "Importing" : "Import"}
++        </Button>
++        <Tooltip>
++          <TooltipTrigger
++            render={
++              <Button
++                size="icon-xs"
++                variant="ghost-muted"
++                className="ml-auto"
++                aria-label={`Open ${pet.name} at its source`}
++                onClick={() => openExternalUrl(pet.sourceUrl)}
++              >
++                <ExternalLinkIcon />
++              </Button>
++            }
++          />
++          <TooltipPopup side="top">Files and license</TooltipPopup>
++        </Tooltip>
++      </div>
++    </div>
++  );
++});
++
++/**
++ * Browse and search one of the Codex pet galleries and import pets from it.
++ * Lists are fetched fresh each time the panel opens, so new pets show up on
++ * their own. Importing copies the pet; nothing links back afterwards.
++ */
++export function PetGalleryBrowser({
++  gallery,
++  onGalleryChange,
++  onImported,
++  onImportFailed,
++}: {
++  gallery: PetGalleryId;
++  onGalleryChange: (gallery: PetGalleryId) => void;
++  onImported: (pet: ImportedPet) => void;
++  onImportFailed: (pet: GalleryPet, error: unknown) => void;
++}) {
++  const source = petGallery(gallery);
++  const [query, setQuery] = useState("");
++  const [category, setCategory] = useState<string | null>(null);
++  const [importing, setImporting] = useState<ReadonlySet<string>>(() => new Set());
++  const results = useGalleryResults(gallery, query, category);
++
++  // Categories differ per gallery, so a filter never carries over.
++  useEffect(() => {
++    setCategory(null);
++  }, [gallery]);
++
++  const importPet = useCallback(
++    (pet: GalleryPet) => {
++      const key = `${pet.gallery}:${pet.slug}`;
++      setImporting((current) => new Set(current).add(key));
++      importGalleryPet(pet)
++        .then(onImported, (error: unknown) => onImportFailed(pet, error))
++        .finally(() => {
++          setImporting((current) => {
++            const next = new Set(current);
++            next.delete(key);
++            return next;
++          });
++        });
++    },
++    [onImported, onImportFailed],
++  );
++
++  return (
++    <div className="space-y-3 px-3 sm:px-4">
++      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
++        <Select
++          value={gallery}
++          onValueChange={(value) => {
++            const next = PET_GALLERIES.find((entry) => entry.id === value);
++            if (next) onGalleryChange(next.id);
++          }}
++        >
++          <SelectTrigger className="w-full sm:w-40" aria-label="Gallery">
++            <SelectValue>{source.host}</SelectValue>
++          </SelectTrigger>
++          <SelectPopup align="start" alignItemWithTrigger={false}>
++            {PET_GALLERIES.map((entry) => (
++              <SelectItem hideIndicator key={entry.id} value={entry.id}>
++                {entry.host}
++              </SelectItem>
++            ))}
++          </SelectPopup>
++        </Select>
++        <div className="relative min-w-0 flex-1">
++          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
++          <Input
++            nativeInput
++            type="search"
++            size="compact"
++            className="[&_input]:pl-8"
++            aria-label="Search pets"
++            placeholder="Search pets"
++            value={query}
++            onChange={(event) => setQuery(event.currentTarget.value)}
++          />
++        </div>
++        {results.categories.length > 0 ? (
++          <Select
++            value={category ?? ALL_CATEGORIES}
++            onValueChange={(value) => {
++              setCategory(typeof value === "string" && value !== ALL_CATEGORIES ? value : null);
++            }}
++          >
++            <SelectTrigger className="w-full sm:w-44" aria-label="Category">
++              <SelectValue>{category ?? "All categories"}</SelectValue>
++            </SelectTrigger>
++            <SelectPopup align="end" alignItemWithTrigger={false}>
++              <SelectItem hideIndicator value={ALL_CATEGORIES}>
++                All categories
++              </SelectItem>
++              {results.categories.map((entry) => (
++                <SelectItem hideIndicator key={entry} value={entry}>
++                  {entry}
++                </SelectItem>
++              ))}
++            </SelectPopup>
++          </Select>
++        ) : null}
++      </div>
++
++      {results.status === "loading" ? (
++        <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
++          <LoaderCircleIcon className="size-4 animate-spin" />
++          Loading pets
++        </p>
++      ) : results.status === "desktop-only" ? (
++        <p className="py-6 text-sm text-muted-foreground">
++          {source.host} can only be browsed from the desktop app.
++        </p>
++      ) : results.status === "error" ? (
++        <div className="flex items-center gap-3 py-6 text-sm text-muted-foreground">
++          <span>Could not load the pet list.</span>
++          <Button size="xs" variant="outline" onClick={results.retry}>
++            Try again
++          </Button>
++        </div>
++      ) : results.pets.length === 0 ? (
++        <p className="py-6 text-sm text-muted-foreground">No pets match.</p>
++      ) : (
++        <>
++          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
++            {results.pets.map((pet) => (
++              <GalleryPetCard
++                key={`${pet.gallery}:${pet.slug}`}
++                pet={pet}
++                importing={importing.has(`${pet.gallery}:${pet.slug}`)}
++                onImport={importPet}
++              />
++            ))}
++          </div>
++          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
++            <span>
++              {results.pets.length} of {results.total} pets
++            </span>
++            {results.hasMore ? (
++              <Button
++                size="xs"
++                variant="outline"
++                disabled={results.loadingMore}
++                onClick={results.loadMore}
++              >
++                {results.loadingMore ? <LoaderCircleIcon className="animate-spin" /> : null}
++                Show more
++              </Button>
++            ) : null}
++          </div>
++        </>
++      )}
++    </div>
++  );
++}
 diff --git a/apps/web/src/neo/pets/PetPreview.tsx b/apps/web/src/neo/pets/PetPreview.tsx
 new file mode 100644
 index 000000000..ade4fd2ba
@@ -21399,6 +22111,166 @@ index 000000000..89bf0cace
 +    </div>
 +  );
 +});
+diff --git a/apps/web/src/neo/pets/SpritePet.tsx b/apps/web/src/neo/pets/SpritePet.tsx
+new file mode 100644
+index 000000000..1f62c8a24
+--- /dev/null
++++ b/apps/web/src/neo/pets/SpritePet.tsx
+@@ -0,0 +1,154 @@
++import { memo, useEffect, useRef, useState } from "react";
++
++import { cn } from "~/lib/utils";
++import { prefersReducedMotion } from "./AsciiAnimation";
++import { useImportedPet, useSpritesheetUrl, type ImportedPetId } from "./importedPets";
++import type { PetMood } from "./petRegistry";
++import {
++  SPRITE_CELL_HEIGHT,
++  SPRITE_CELL_WIDTH,
++  SPRITE_CLIPS,
++  SPRITE_COLUMNS,
++  SPRITE_WORKING_STATES,
++  spriteRows,
++  spriteStateForMood,
++  type SpriteState,
++  type SpriteVersion,
++} from "./spriteSheet";
++import { createClipShuffle, WORKING_CLIP_ROTATION_MS } from "./WukongPet";
++
++/** Height of one frame at `width` pixels, whole pixels so the sheet lines up. */
++export function spriteFrameHeight(width: number): number {
++  return Math.round((width * SPRITE_CELL_HEIGHT) / SPRITE_CELL_WIDTH);
++}
++
++/**
++ * Plays one row of a Codex pet spritesheet by sliding the background image
++ * under a frame-sized box: one style change per frame, no image decoding
++ * and nothing else repaints. Frame holds follow the clip's timing table,
++ * playback pauses while the document is hidden, and reduced motion holds
++ * the first frame. Idle, typing and done map to one clip each; working
++ * rotates through the working clips like Wukong does.
++ */
++export const SpritePet = memo(function SpritePet({
++  spritesheetUrl,
++  spriteVersion,
++  mood,
++  width,
++  playing = true,
++  rotationMs = WORKING_CLIP_ROTATION_MS,
++  state: forcedState,
++  className,
++}: {
++  spritesheetUrl: string;
++  /** Unknown (gallery previews) lets the image's own aspect place the rows. */
++  spriteVersion?: SpriteVersion;
++  mood: PetMood;
++  width: number;
++  playing?: boolean;
++  /** How often the working clip changes. */
++  rotationMs?: number;
++  /** Play this clip regardless of mood. */
++  state?: SpriteState;
++  className?: string;
++}) {
++  const shuffle = useRef<(() => SpriteState) | null>(null);
++  if (shuffle.current === null) shuffle.current = createClipShuffle(SPRITE_WORKING_STATES);
++  const [workingState, setWorkingState] = useState<SpriteState>(() => shuffle.current!());
++
++  useEffect(() => {
++    if (mood !== "working" || forcedState) return;
++    const timer = setInterval(() => setWorkingState(shuffle.current!()), rotationMs);
++    return () => clearInterval(timer);
++  }, [mood, rotationMs, forcedState]);
++
++  const state = forcedState ?? (mood === "working" ? workingState : spriteStateForMood(mood));
++  const clip = SPRITE_CLIPS[state];
++  const [frame, setFrame] = useState(0);
++
++  useEffect(() => {
++    setFrame(0);
++    if (!playing || clip.durationsMs.length <= 1 || prefersReducedMotion()) return;
++    let timer: ReturnType<typeof setTimeout> | null = null;
++    let index = 0;
++    const step = () => {
++      index = (index + 1) % clip.durationsMs.length;
++      setFrame(index);
++      timer = setTimeout(step, clip.durationsMs[index]);
++    };
++    const start = () => {
++      if (timer !== null) return;
++      timer = setTimeout(step, clip.durationsMs[index]);
++    };
++    const stop = () => {
++      if (timer === null) return;
++      clearTimeout(timer);
++      timer = null;
++    };
++    const onVisibility = () => {
++      if (document.hidden) stop();
++      else start();
++    };
++    if (!document.hidden) start();
++    document.addEventListener("visibilitychange", onVisibility);
++    return () => {
++      stop();
++      document.removeEventListener("visibilitychange", onVisibility);
++    };
++  }, [clip, playing]);
++
++  const height = spriteFrameHeight(width);
++  return (
++    <div
++      aria-hidden
++      className={cn("neo-sprite-pet", className)}
++      data-sprite-state={state}
++      style={{
++        width: `${width}px`,
++        height: `${height}px`,
++        backgroundImage: `url("${spritesheetUrl}")`,
++        backgroundSize: `${width * SPRITE_COLUMNS}px ${
++          spriteVersion === undefined ? "auto" : `${height * spriteRows(spriteVersion)}px`
++        }`,
++        backgroundPosition: `${-frame * width}px ${-clip.row * height}px`,
++        backgroundRepeat: "no-repeat",
++        // Pixel art stays crisp when blown up; when shrunk, smoothing reads better.
++        imageRendering: width > SPRITE_CELL_WIDTH ? "pixelated" : "auto",
++      }}
++    />
++  );
++});
++
++/** An imported pet by id: loads its sheet from storage, holds the space until it is there. */
++export const ImportedPetSprite = memo(function ImportedPetSprite({
++  id,
++  mood,
++  width,
++  playing,
++  rotationMs,
++  state,
++}: {
++  id: ImportedPetId;
++  mood: PetMood;
++  width: number;
++  playing?: boolean;
++  rotationMs?: number;
++  state?: SpriteState;
++}) {
++  const pet = useImportedPet(id);
++  const url = useSpritesheetUrl(id);
++  if (!pet || !url) {
++    return <div style={{ width: `${width}px`, height: `${spriteFrameHeight(width)}px` }} />;
++  }
++  return (
++    <SpritePet
++      spritesheetUrl={url}
++      spriteVersion={pet.spriteVersion}
++      mood={mood}
++      width={width}
++      {...(playing !== undefined ? { playing } : {})}
++      {...(rotationMs !== undefined ? { rotationMs } : {})}
++      {...(state !== undefined ? { state } : {})}
++    />
++  );
++});
 diff --git a/apps/web/src/neo/pets/WukongPet.test.ts b/apps/web/src/neo/pets/WukongPet.test.ts
 new file mode 100644
 index 000000000..8a26366e8
@@ -21749,6 +22621,448 @@ index 000000000..f4ca92392
 +    "                                       .;7.\n                                .PkJYvGBL:M5\n                       . .      B;    LJ   B7\n                    kBBBBBBBNL.Ur  .....::::B.  .:7vL7L.\n                   1BM8BBBBBBBBB, i2PBBBMBMMBBOBBBBBBBBB7\n                   MBZMJ...,irJBBBBOGkS1F25U0BBBOFu7r7MBB\n                  .B8GM.      .BBZPNP0NZGMMBF: ;S     FBu\n                  7BG8X      BL iUqXqXNFUr:.  :EB87   kBJ\n                  jBNML    YMB8i          .7NBBMEMBB  NBi\n      :Ji,        PBZMr  iMMMEOBBBBMO0PNBBBMM8MMBMMBBjMB:\n      :BBBP1Yr.   5B0Mi rBMGNE0MBB1JJSBBBBMBBB2LL58BMBBB\n   .,.   rqNkJkXY vB0G7.B8Gq00MMr      UNkXSNr     7BMBj\n   BBq2U:   7FLirSBBNZSGZEP0NMM:                    YMBi\n    :Fk1F2Ui. :2U iBMqE0EqNqGM;  2Our . . . ... :BMr EBB\n  ,7   :vUuUUUrU8. rBEq0PNPEOP  .Y,.,............: . 7BB,\n  YBB5L:,.irJ7;:...,B0NP0q0EB;        .........      .BBu\n   .2Z2LLuL7:kP.., :BZq0q0qGO:         . ... .    .:..XB0\n      UqSriiv7:.:rJuBN0P0PEE8 .LJ7rrr,.        .2BBO0.LBB\n        :UXXujUFS7 1BEq0q0qGE  7JZBBBBBr  ,:,. 2BBqk1.:BB\n            ....   MBN0PNq00Oi :0qji,..  BBuBBU       FMBr\n                   iM8q0q0P0ZMSY:  .     BBSBBS ....7BMBM\n                    BBBZZNEqZZOMM     . .  i,       XBBBB\n                    ,YEBBBMOZZEMM.   .  LZrYru1    ,BBEr\n                        :YGBBBBMM        Br:5M..vYjv.\n                              ,rSPkkYUUL5BiiBBNB7\n                             .rUNBBMBBBiOBBBk0,,rGBBBj\nF.                          BBBBBBOMMBi .:::.PBPvEBBBB\n2Bj                          7Y77iSBBi:FUJ2LYBBOi;BBBBBMY\n q                                Xk..:B5:..LBGU    7MBBBBBj.\n q,                               8r.::i0Su5v ;BN      rMBBBBB:\n8J   ,   :.  . . . . . .  .. 7i.:EG..::,.:;::NGBBN       .7MBB\nB  ,:rPvSZY:,...... ..... .:7UOFkOO:i:..:7;JBMGBB   . .\n.  .rqFYuSv:.. . ... . . . .LN7:::GBBBBPBv;BBGBB.  . . .       u\n    ;U;,:i,   . . . ... . . .:.. .BB8MBk:  NBBF   . ... . ..i:JM\n.        . . . . . . . . . .      0BBB:  . .ir  ...... ...  .r7r\n.                               .   :.  . .    ..."
 +  ]
 +}
+diff --git a/apps/web/src/neo/pets/galleryFetch.ts b/apps/web/src/neo/pets/galleryFetch.ts
+new file mode 100644
+index 000000000..aa6b629fb
+--- /dev/null
++++ b/apps/web/src/neo/pets/galleryFetch.ts
+@@ -0,0 +1,23 @@
++/**
++ * GET for pet gallery URLs. On desktop the request goes through the main
++ * process, which sends no Origin header: some galleries refuse cross-origin
++ * requests, and the app's own scheme is always cross-origin to them. In a
++ * browser it is a plain fetch, which works for the galleries that allow it.
++ */
++export type GalleryFetch = (url: string) => Promise<Response>;
++
++export function galleryFetchAvailable(): boolean {
++  return typeof window !== "undefined" && window.desktopBridge?.pet?.fetchGallery !== undefined;
++}
++
++export const galleryFetch: GalleryFetch = async (url) => {
++  const bridge =
++    typeof window !== "undefined" ? window.desktopBridge?.pet?.fetchGallery : undefined;
++  if (!bridge) return fetch(url, { cache: "no-cache" });
++  const result = await bridge(url);
++  // A copy onto a plain ArrayBuffer: the bridge's bytes may sit on a shared buffer.
++  return new Response(new Blob([Uint8Array.from(result.body)]), {
++    status: result.status,
++    headers: result.contentType ? { "content-type": result.contentType } : {},
++  });
++};
+diff --git a/apps/web/src/neo/pets/importedPets.test.ts b/apps/web/src/neo/pets/importedPets.test.ts
+new file mode 100644
+index 000000000..5b0ba9547
+--- /dev/null
++++ b/apps/web/src/neo/pets/importedPets.test.ts
+@@ -0,0 +1,99 @@
++import { beforeEach, describe, expect, it } from "vite-plus/test";
++
++import { isPetId, readStoredNeoSettings, resetNeoSettingsForTest } from "../neoSettings";
++import {
++  IMPORTED_PETS_STORAGE_KEY,
++  isImportedPetId,
++  normalizeImportedPetName,
++  readStoredImportedPets,
++  resetImportedPetsForTest,
++  useImportedPetsStore,
++  type ImportedPet,
++} from "./importedPets";
++
++function memoryStorage() {
++  const store = new Map<string, string>();
++  return {
++    getItem: (name: string) => store.get(name) ?? null,
++    setItem: (name: string, value: string) => {
++      store.set(name, value);
++    },
++  };
++}
++
++const pet: ImportedPet = {
++  id: "import:abc",
++  name: "Om Nom",
++  spriteVersion: 1,
++  source: { slug: "om-nom--kasyan1337", name: "Om Nom", author: "kasyan1337" },
++  importedAt: 1,
++};
++
++describe("imported pet ids", () => {
++  it("are their own kind of pet id next to the built-in ones", () => {
++    expect(isImportedPetId("import:abc")).toBe(true);
++    expect(isImportedPetId("import:")).toBe(false);
++    expect(isImportedPetId("wukong")).toBe(false);
++    expect(isPetId("import:abc")).toBe(true);
++    expect(isPetId("wukong")).toBe(true);
++    expect(isPetId("dragon")).toBe(false);
++  });
++
++  it("survive a settings round trip, while unknown pets fall back to none", () => {
++    const storage = memoryStorage();
++    storage.setItem("t3code:neo-settings:v1", JSON.stringify({ pet: "import:abc" }));
++    expect(readStoredNeoSettings(storage).pet).toBe("import:abc");
++    storage.setItem("t3code:neo-settings:v1", JSON.stringify({ pet: "dragon" }));
++    expect(readStoredNeoSettings(storage).pet).toBe("none");
++    resetNeoSettingsForTest();
++  });
++});
++
++describe("normalizeImportedPetName", () => {
++  it("trims, collapses spaces, caps the length and falls back when empty", () => {
++    expect(normalizeImportedPetName("  Om   Nom ", "x")).toBe("Om Nom");
++    expect(normalizeImportedPetName("   ", "Fallback")).toBe("Fallback");
++    expect(normalizeImportedPetName("a".repeat(80), "x")).toHaveLength(40);
++  });
++});
++
++describe("useImportedPetsStore", () => {
++  let storage: ReturnType<typeof memoryStorage>;
++  beforeEach(() => {
++    storage = memoryStorage();
++    resetImportedPetsForTest(storage);
++  });
++
++  it("adds, renames and removes pets and persists each step", () => {
++    const store = useImportedPetsStore.getState();
++    store.add(pet);
++    expect(readStoredImportedPets(storage)).toEqual([pet]);
++    useImportedPetsStore.getState().rename(pet.id, "  Nommy ");
++    expect(readStoredImportedPets(storage)[0]?.name).toBe("Nommy");
++    useImportedPetsStore.getState().rename(pet.id, "");
++    expect(readStoredImportedPets(storage)[0]?.name).toBe("Om Nom");
++    useImportedPetsStore.getState().remove(pet.id);
++    expect(readStoredImportedPets(storage)).toEqual([]);
++  });
++
++  it("keeps the same gallery pet imported twice as two pets", () => {
++    useImportedPetsStore.getState().add(pet);
++    useImportedPetsStore.getState().add({ ...pet, id: "import:def" });
++    expect(useImportedPetsStore.getState().pets.map((entry) => entry.id)).toEqual([
++      "import:abc",
++      "import:def",
++    ]);
++  });
++
++  it("drops entries it cannot read instead of losing the list", () => {
++    storage.setItem(
++      IMPORTED_PETS_STORAGE_KEY,
++      JSON.stringify([pet, { id: "broken", name: "x", spriteVersion: 1 }]),
++    );
++    expect(readStoredImportedPets(storage)).toEqual([]);
++    storage.setItem(IMPORTED_PETS_STORAGE_KEY, JSON.stringify([pet, { ...pet, id: "nope" }]));
++    expect(readStoredImportedPets(storage)).toEqual([pet]);
++    storage.setItem(IMPORTED_PETS_STORAGE_KEY, "{not json");
++    expect(readStoredImportedPets(storage)).toEqual([]);
++  });
++});
+diff --git a/apps/web/src/neo/pets/importedPets.ts b/apps/web/src/neo/pets/importedPets.ts
+new file mode 100644
+index 000000000..8412c79ae
+--- /dev/null
++++ b/apps/web/src/neo/pets/importedPets.ts
+@@ -0,0 +1,302 @@
++/**
++ * Pets imported from the Codex pet gallery. Each import is its own copy: the
++ * spritesheet lives in IndexedDB under a fresh id and the name and source
++ * notes in localStorage, so the same gallery pet can be imported twice and a
++ * change upstream never touches what is already here. Both windows of the
++ * app share the storage; the `storage` event keeps their lists in step.
++ */
++
++import * as Schema from "effect/Schema";
++import { useEffect, useState } from "react";
++import { create } from "zustand";
++
++import { randomUUID } from "~/lib/utils";
++import type { GalleryFetch } from "./galleryFetch";
++import { downloadGalleryPet, petGallery, type GalleryPet } from "./petGalleries";
++import type { SpriteVersion } from "./spriteSheet";
++
++export const IMPORTED_PETS_STORAGE_KEY = "t3code:neo-imported-pets:v1";
++const IMPORTED_PET_ID_PREFIX = "import:";
++
++export type ImportedPetId = `import:${string}`;
++
++export function isImportedPetId(value: unknown): value is ImportedPetId {
++  return (
++    typeof value === "string" &&
++    value.startsWith(IMPORTED_PET_ID_PREFIX) &&
++    value.length > IMPORTED_PET_ID_PREFIX.length
++  );
++}
++
++const ImportedPetSchema = Schema.Struct({
++  id: Schema.String,
++  name: Schema.String,
++  spriteVersion: Schema.Literals([1, 2]),
++  source: Schema.Struct({
++    slug: Schema.String,
++    name: Schema.String,
++    author: Schema.String,
++    gallery: Schema.optionalKey(Schema.String),
++  }),
++  importedAt: Schema.Number,
++});
++
++export interface ImportedPet {
++  readonly id: ImportedPetId;
++  readonly name: string;
++  readonly spriteVersion: SpriteVersion;
++  /** Where it came from, for the card; nothing is looked up there again. */
++  readonly source: {
++    readonly slug: string;
++    readonly name: string;
++    /** Empty when the gallery names no author. */
++    readonly author: string;
++    /** The gallery's host name, e.g. "codexpet.top". */
++    readonly gallery?: string;
++  };
++  readonly importedAt: number;
++}
++
++const decodeStored = Schema.decodeUnknownSync(Schema.Array(ImportedPetSchema));
++
++export const MAX_IMPORTED_PET_NAME_LENGTH = 40;
++
++export function normalizeImportedPetName(name: string, fallback: string): string {
++  const trimmed = name.trim().replace(/\s+/g, " ").slice(0, MAX_IMPORTED_PET_NAME_LENGTH);
++  return trimmed.length > 0 ? trimmed : fallback;
++}
++
++/** The synchronous slice of Storage this store needs. */
++interface ImportedPetsStorage {
++  getItem(name: string): string | null;
++  setItem(name: string, value: string): void;
++}
++
++function createMemoryStorage(): ImportedPetsStorage {
++  const store = new Map<string, string>();
++  return {
++    getItem: (name) => store.get(name) ?? null,
++    setItem: (name, value) => {
++      store.set(name, value);
++    },
++  };
++}
++
++function resolveBaseStorage(): ImportedPetsStorage {
++  try {
++    if (typeof localStorage !== "undefined") return localStorage;
++  } catch {
++    // Storage blocked; fall back to memory for the session.
++  }
++  return createMemoryStorage();
++}
++
++let baseStorage = resolveBaseStorage();
++
++export function readStoredImportedPets(
++  storage: Pick<ImportedPetsStorage, "getItem"> = baseStorage,
++): ImportedPet[] {
++  try {
++    const raw = storage.getItem(IMPORTED_PETS_STORAGE_KEY);
++    if (typeof raw !== "string" || raw.length === 0) return [];
++    return decodeStored(JSON.parse(raw)).flatMap((pet) =>
++      isImportedPetId(pet.id) ? [{ ...pet, id: pet.id }] : [],
++    );
++  } catch {
++    return [];
++  }
++}
++
++function persist(pets: ReadonlyArray<ImportedPet>): void {
++  try {
++    baseStorage.setItem(IMPORTED_PETS_STORAGE_KEY, JSON.stringify(pets));
++  } catch (error) {
++    console.error("[NEO] Could not persist imported pets.", error);
++  }
++}
++
++interface ImportedPetsStore {
++  pets: ReadonlyArray<ImportedPet>;
++  add: (pet: ImportedPet) => void;
++  rename: (id: ImportedPetId, name: string) => void;
++  remove: (id: ImportedPetId) => void;
++}
++
++export const useImportedPetsStore = create<ImportedPetsStore>()((set, get) => ({
++  pets: readStoredImportedPets(),
++  add: (pet) => {
++    const pets = [...get().pets.filter((entry) => entry.id !== pet.id), pet];
++    persist(pets);
++    set({ pets });
++  },
++  rename: (id, name) => {
++    const pets = get().pets.map((pet) =>
++      pet.id === id ? { ...pet, name: normalizeImportedPetName(name, pet.source.name) } : pet,
++    );
++    persist(pets);
++    set({ pets });
++  },
++  remove: (id) => {
++    const pets = get().pets.filter((pet) => pet.id !== id);
++    persist(pets);
++    set({ pets });
++  },
++}));
++
++export function reloadImportedPetsFromStorage(): void {
++  useImportedPetsStore.setState({ pets: readStoredImportedPets() });
++}
++
++if (typeof window !== "undefined") {
++  window.addEventListener("storage", (event) => {
++    if (event.key === null || event.key === IMPORTED_PETS_STORAGE_KEY) {
++      reloadImportedPetsFromStorage();
++    }
++  });
++}
++
++export function useImportedPets(): ReadonlyArray<ImportedPet> {
++  return useImportedPetsStore((state) => state.pets);
++}
++
++export function useImportedPet(id: string): ImportedPet | null {
++  return useImportedPetsStore((state) => state.pets.find((pet) => pet.id === id) ?? null);
++}
++
++/** Test-only: swap the backing storage and reload. */
++export function resetImportedPetsForTest(storage?: ImportedPetsStorage): void {
++  baseStorage = storage ?? createMemoryStorage();
++  useImportedPetsStore.setState({ pets: readStoredImportedPets() });
++}
++
++// ---- Spritesheets (IndexedDB) ----------------------------------------------
++
++const DATABASE_NAME = "t3code:neo-pets";
++const DATABASE_VERSION = 1;
++const SPRITESHEET_STORE = "spritesheets";
++
++function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
++  return new Promise((resolve, reject) => {
++    request.addEventListener("success", () => resolve(request.result), { once: true });
++    request.addEventListener(
++      "error",
++      () => reject(request.error ?? new Error("IndexedDB request failed")),
++      { once: true },
++    );
++  });
++}
++
++function openDatabase(): Promise<IDBDatabase> {
++  if (typeof indexedDB === "undefined") {
++    return Promise.reject(new Error("IndexedDB is not available"));
++  }
++  const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
++  request.addEventListener("upgradeneeded", () => {
++    const database = request.result;
++    if (!database.objectStoreNames.contains(SPRITESHEET_STORE)) {
++      database.createObjectStore(SPRITESHEET_STORE);
++    }
++  });
++  return requestToPromise(request);
++}
++
++async function withStore<T>(
++  mode: IDBTransactionMode,
++  run: (store: IDBObjectStore) => IDBRequest<T>,
++): Promise<T> {
++  const database = await openDatabase();
++  try {
++    const transaction = database.transaction(SPRITESHEET_STORE, mode);
++    return await requestToPromise(run(transaction.objectStore(SPRITESHEET_STORE)));
++  } finally {
++    database.close();
++  }
++}
++
++export function putSpritesheet(id: ImportedPetId, blob: Blob): Promise<unknown> {
++  return withStore("readwrite", (store) => store.put(blob, id));
++}
++
++export async function getSpritesheet(id: ImportedPetId): Promise<Blob | null> {
++  const value = await withStore<unknown>("readonly", (store) => store.get(id));
++  return value instanceof Blob ? value : null;
++}
++
++export function deleteSpritesheet(id: ImportedPetId): Promise<unknown> {
++  return withStore("readwrite", (store) => store.delete(id));
++}
++
++/** Object URLs live as long as the window; a handful of sheets is a few megabytes. */
++const urlCache = new Map<ImportedPetId, Promise<string | null>>();
++
++function spritesheetUrl(id: ImportedPetId): Promise<string | null> {
++  let pending = urlCache.get(id);
++  if (!pending) {
++    pending = getSpritesheet(id)
++      .then((blob) => (blob ? URL.createObjectURL(blob) : null))
++      .catch(() => null);
++    urlCache.set(id, pending);
++  }
++  return pending;
++}
++
++/** `undefined` while loading, `null` when the sheet is gone. */
++export function useSpritesheetUrl(id: ImportedPetId): string | null | undefined {
++  const [url, setUrl] = useState<string | null | undefined>(undefined);
++  useEffect(() => {
++    let cancelled = false;
++    setUrl(undefined);
++    void spritesheetUrl(id).then((resolved) => {
++      if (!cancelled) setUrl(resolved);
++    });
++    return () => {
++      cancelled = true;
++    };
++  }, [id]);
++  return url;
++}
++
++function newImportedPetId(): ImportedPetId {
++  return `${IMPORTED_PET_ID_PREFIX}${randomUUID()}`;
++}
++
++/** Downloads a gallery pet and adds it as a new, independent copy. */
++export async function importGalleryPet(
++  pet: GalleryPet,
++  fetchFn?: GalleryFetch,
++): Promise<ImportedPet> {
++  const { blob, spriteVersion } = await downloadGalleryPet(pet, fetchFn);
++  const id = newImportedPetId();
++  await putSpritesheet(id, blob);
++  urlCache.set(id, Promise.resolve(URL.createObjectURL(blob)));
++  const imported: ImportedPet = {
++    id,
++    name: normalizeImportedPetName(pet.name, pet.slug),
++    spriteVersion,
++    source: {
++      slug: pet.slug,
++      name: pet.name,
++      author: pet.author ?? "",
++      gallery: petGallery(pet.gallery).host,
++    },
++    importedAt: Date.now(),
++  };
++  useImportedPetsStore.getState().add(imported);
++  return imported;
++}
++
++/** Forgets the pet and its sheet; the caller switches the selection away first if needed. */
++export async function removeImportedPet(id: ImportedPetId): Promise<void> {
++  useImportedPetsStore.getState().remove(id);
++  const cached = urlCache.get(id);
++  urlCache.delete(id);
++  if (cached) {
++    const url = await cached;
++    if (url) URL.revokeObjectURL(url);
++  }
++  try {
++    await deleteSpritesheet(id);
++  } catch (error) {
++    console.error("[NEO] Could not delete the pet spritesheet.", error);
++  }
++}
 diff --git a/apps/web/src/neo/pets/petActivity.test.ts b/apps/web/src/neo/pets/petActivity.test.ts
 new file mode 100644
 index 000000000..902a93a3d
@@ -21976,6 +23290,767 @@ index 000000000..2116bfc45
 +    usePetActivityStore.getState().setTyping(false);
 +  }, TYPING_IDLE_MS);
 +}
+diff --git a/apps/web/src/neo/pets/petGalleries.test.ts b/apps/web/src/neo/pets/petGalleries.test.ts
+new file mode 100644
+index 000000000..3b0ff60c0
+--- /dev/null
++++ b/apps/web/src/neo/pets/petGalleries.test.ts
+@@ -0,0 +1,318 @@
++import JSZip from "jszip";
++import { describe, expect, it } from "vite-plus/test";
++
++import {
++  downloadGalleryPet,
++  filterGalleryPets,
++  galleryCategories,
++  loadGalleryCatalog,
++  loadGalleryPage,
++  openpetsPageUrl,
++  parseCodexPetComReadme,
++  parseCodexpetsOrgCatalog,
++  parseCodexpetTopCatalog,
++  parseOpenpetsPage,
++  PET_GALLERIES,
++  petGallery,
++} from "./petGalleries";
++
++const codexpetTopRaw = [
++  {
++    slug: "march-7th--legeling",
++    name: "三月七",
++    localized_names: { en: "March 7th", zh: "三月七" },
++    author: "legeling",
++    author_handle: "legeling",
++    primary_category: "Game Characters",
++    collections: [],
++    license: "Non-commercial",
++    description: "A pink-haired photographer.",
++    spriteVersionNumber: 2,
++  },
++  {
++    slug: "om-nom--kasyan1337",
++    name: "Om Nom",
++    author: "kasyan1337",
++    primary_category: "Mascots",
++    collections: [],
++    license: "MIT",
++  },
++];
++
++describe("petGallery", () => {
++  it("lists four galleries with a site and a repository each", () => {
++    expect(PET_GALLERIES.map((entry) => entry.host)).toEqual([
++      "codexpet.top",
++      "codex-pet.com",
++      "codexpets.org",
++      "openpets.sh",
++    ]);
++    for (const entry of PET_GALLERIES) {
++      expect(entry.siteUrl).toBe(`https://${entry.host}`);
++      expect(entry.repositoryUrl).toBe(`https://github.com/${entry.repository}`);
++    }
++    expect(petGallery("openpets-sh").mode).toBe("api");
++    expect(petGallery("openpets-sh").needsDesktop).toBe(true);
++  });
++});
++
++describe("parseCodexpetTopCatalog", () => {
++  it("prefers the English name, keeps every name for search, files from GitHub", () => {
++    const pets = parseCodexpetTopCatalog(codexpetTopRaw);
++    expect(pets.map((pet) => pet.name)).toEqual(["March 7th", "Om Nom"]);
++    expect(pets[0]!.names).toEqual(["三月七", "March 7th"]);
++    expect(pets[0]!.spriteVersion).toBe(2);
++    expect(pets[1]!.spriteVersion).toBe(1);
++    expect(pets[1]!.download).toEqual({
++      kind: "spritesheet",
++      url: "https://raw.githubusercontent.com/legeling/awesome-codex-pet/main/pets/om-nom--kasyan1337/spritesheet.webp",
++    });
++    expect(pets[1]!.thumbnailUrl).toBe(
++      "https://codexpet.top/assets/previews/om-nom--kasyan1337/thumbnail.webp",
++    );
++    expect(pets[1]!.sourceUrl).toBe(
++      "https://github.com/legeling/awesome-codex-pet/tree/main/pets/om-nom--kasyan1337",
++    );
++  });
++
++  it("rejects a catalog without the fields the cards need", () => {
++    expect(() => parseCodexpetTopCatalog([{ slug: "x" }])).toThrow();
++  });
++});
++
++describe("parseCodexPetComReadme", () => {
++  const readme = `
++## Gallery
++
++| a | b |
++| <a href="https://codex-pet.com/pets/ada-lovelace"><img src="pets/ada-lovelace/thumb.webp" width="120" alt="Ada Lovelace"><br><sub><b>Ada</b></sub></a> | <a href="https://codex-pet.com/pets/tom-jerry"><img src="pets/tom-jerry/thumb.webp" width="120" alt="Tom &amp; Jerry"></a> |
++| <a href="https://codex-pet.com/pets/ada-lovelace"><img src="pets/ada-lovelace/thumb.webp" width="120" alt="Ada Lovelace"></a> |
++`;
++
++  it("reads slug, thumbnail and name from the gallery table once per pet", () => {
++    const pets = parseCodexPetComReadme(readme);
++    expect(pets.map((pet) => pet.slug)).toEqual(["ada-lovelace", "tom-jerry"]);
++    expect(pets[1]!.name).toBe("Tom & Jerry");
++    expect(pets[0]!.thumbnailUrl).toBe(
++      "https://raw.githubusercontent.com/BeiXiao/awesome-codex-pets/main/pets/ada-lovelace/thumb.webp",
++    );
++    expect(pets[0]!.download).toEqual({
++      kind: "zip",
++      url: "https://codex-pet.com/api/download/ada-lovelace",
++    });
++    expect(pets[0]!.spritesheetUrl).toBeNull();
++    expect(pets[0]!.author).toBeNull();
++  });
++});
++
++describe("parseCodexpetsOrgCatalog", () => {
++  it("uses the site's spritesheet and the kind as category", () => {
++    const pets = parseCodexpetsOrgCatalog([
++      {
++        id: "tater",
++        displayName: "Tater",
++        description: "A potato.",
++        author: "Alex",
++        kind: "creature",
++        tags: ["starter", "pixel"],
++        pageUrl: "https://codexpets.org/pets/tater",
++        spritesheetUrl: "https://codexpets.org/pets/tater/spritesheet.webp",
++      },
++    ]);
++    expect(pets[0]).toMatchObject({
++      gallery: "codexpets-org",
++      name: "Tater",
++      names: ["Tater", "starter", "pixel"],
++      author: "Alex",
++      category: "creature",
++      thumbnailUrl: null,
++      spritesheetUrl: "https://codexpets.org/pets/tater/spritesheet.webp",
++      download: { kind: "spritesheet", url: "https://codexpets.org/pets/tater/spritesheet.webp" },
++      sourceUrl: "https://github.com/eyichan/awesome-codex-pets/tree/main/pets/tater",
++    });
++  });
++});
++
++describe("openpets", () => {
++  it("builds page URLs with the site's own search and kind filters", () => {
++    expect(openpetsPageUrl({ query: "", category: null }, 1)).toBe(
++      "https://openpets.sh/api/pets?page=1&pageSize=30",
++    );
++    expect(openpetsPageUrl({ query: " cat ", category: "animal" }, 3)).toBe(
++      "https://openpets.sh/api/pets?page=3&pageSize=30&q=cat&kind=animal",
++    );
++  });
++
++  it("parses a page, resolving relative URLs and the sheet version", () => {
++    const page = parseOpenpetsPage({
++      page: 2,
++      pageSize: 30,
++      total: 100,
++      totalPages: 4,
++      pets: [
++        {
++          id: "jordan",
++          displayName: "Jordan",
++          kind: "person",
++          ownerName: "videokid",
++          tags: ["mascot"],
++          previewUrl: "/api/pets/jordan/preview",
++          spritesheetUrl: "/api/pets/jordan/spritesheet",
++          validationReport: { spriteVersionNumber: 2 },
++        },
++      ],
++    });
++    expect(page.total).toBe(100);
++    expect(page.hasMore).toBe(true);
++    expect(page.pets[0]).toMatchObject({
++      gallery: "openpets-sh",
++      author: "videokid",
++      category: "person",
++      spriteVersion: 2,
++      thumbnailUrl: "https://openpets.sh/api/pets/jordan/preview",
++      spritesheetUrl: "https://openpets.sh/api/pets/jordan/spritesheet",
++      pageUrl: "https://openpets.sh/pets/jordan",
++    });
++    expect(parseOpenpetsPage({ page: 4, total: 100, totalPages: 4, pets: [] }).hasMore).toBe(false);
++  });
++});
++
++describe("filterGalleryPets", () => {
++  const pets = parseCodexpetTopCatalog(codexpetTopRaw);
++
++  it("matches any name, the author and the category, ignoring case", () => {
++    expect(filterGalleryPets(pets, "march", null).map((pet) => pet.slug)).toEqual([
++      "march-7th--legeling",
++    ]);
++    expect(filterGalleryPets(pets, "三月", null)).toHaveLength(1);
++    expect(filterGalleryPets(pets, "KASYAN", null).map((pet) => pet.slug)).toEqual([
++      "om-nom--kasyan1337",
++    ]);
++    expect(filterGalleryPets(pets, "mascots", null)).toHaveLength(1);
++  });
++
++  it("needs every word to match and combines with the category", () => {
++    expect(filterGalleryPets(pets, "march legeling", null)).toHaveLength(1);
++    expect(filterGalleryPets(pets, "march kasyan", null)).toHaveLength(0);
++    expect(filterGalleryPets(pets, "", "Mascots").map((pet) => pet.slug)).toEqual([
++      "om-nom--kasyan1337",
++    ]);
++    expect(filterGalleryPets(pets, "   ", null)).toHaveLength(2);
++    expect(galleryCategories([...pets, ...pets])).toEqual(["Game Characters", "Mascots"]);
++  });
++});
++
++describe("loadGalleryCatalog / loadGalleryPage", () => {
++  it("fetches each catalog gallery from its GitHub repository", async () => {
++    const urls: string[] = [];
++    const fetchFn = async (url: string) => {
++      urls.push(url);
++      if (url.endsWith("/README.md")) {
++        return new Response(
++          '<a href="https://codex-pet.com/pets/x"><img src="pets/x/thumb.webp" width="120" alt="X">',
++        );
++      }
++      if (url.includes("/eyichan/")) {
++        return new Response(
++          JSON.stringify([
++            { id: "t", displayName: "T", spritesheetUrl: "https://codexpets.org/t" },
++          ]),
++        );
++      }
++      return new Response(JSON.stringify(codexpetTopRaw));
++    };
++    expect(await loadGalleryCatalog("codexpet-top", fetchFn)).toHaveLength(2);
++    expect(await loadGalleryCatalog("codex-pet-com", fetchFn)).toHaveLength(1);
++    expect(await loadGalleryCatalog("codexpets-org", fetchFn)).toHaveLength(1);
++    expect(urls).toEqual([
++      "https://raw.githubusercontent.com/legeling/awesome-codex-pet/main/pets.json",
++      "https://raw.githubusercontent.com/BeiXiao/awesome-codex-pets/main/README.md",
++      "https://raw.githubusercontent.com/eyichan/awesome-codex-pets/main/pets.json",
++    ]);
++    await expect(loadGalleryCatalog("openpets-sh", fetchFn)).rejects.toThrow();
++  });
++
++  it("fails on a bad status and pages the api gallery", async () => {
++    await expect(
++      loadGalleryCatalog("codexpet-top", async () => new Response("nope", { status: 500 })),
++    ).rejects.toThrow(/500/);
++    const page = await loadGalleryPage(
++      "openpets-sh",
++      { query: "cat", category: null },
++      2,
++      async (url) => {
++        expect(url).toBe("https://openpets.sh/api/pets?page=2&pageSize=30&q=cat");
++        return new Response(JSON.stringify({ page: 2, total: 0, totalPages: 2, pets: [] }));
++      },
++    );
++    expect(page.hasMore).toBe(false);
++  });
++});
++
++describe("downloadGalleryPet", () => {
++  const sheet = {
++    download: { kind: "spritesheet" as const, url: "https://x/s.webp" },
++    spriteVersion: 1 as const,
++  };
++  const okFetch = async () => new Response(new Blob([new Uint8Array(16)]), { status: 200 });
++
++  it("takes the version from the decoded image, not the catalog", async () => {
++    const result = await downloadGalleryPet(sheet, okFetch, async () => ({
++      width: 1536,
++      height: 2288,
++    }));
++    expect(result.spriteVersion).toBe(2);
++    expect(result.blob.size).toBe(16);
++  });
++
++  it("falls back to the catalog version, then v1, when the image cannot be measured", async () => {
++    expect((await downloadGalleryPet(sheet, okFetch, async () => null)).spriteVersion).toBe(1);
++    expect(
++      (await downloadGalleryPet({ ...sheet, spriteVersion: null }, okFetch, async () => null))
++        .spriteVersion,
++    ).toBe(1);
++  });
++
++  it("unpacks the spritesheet from a zip download", async () => {
++    const zip = new JSZip();
++    zip.file("acidling/pet.json", "{}");
++    zip.file("acidling/spritesheet.webp", new Uint8Array([9, 8, 7]));
++    const bytes = await zip.generateAsync({ type: "uint8array" });
++    const result = await downloadGalleryPet(
++      {
++        download: { kind: "zip", url: "https://codex-pet.com/api/download/acidling" },
++        spriteVersion: null,
++      },
++      async () => new Response(new Blob([Uint8Array.from(bytes)]), { status: 200 }),
++      async () => null,
++    );
++    expect(result.blob.size).toBe(3);
++    const empty = await new JSZip().file("readme.txt", "x").generateAsync({ type: "uint8array" });
++    await expect(
++      downloadGalleryPet(
++        {
++          download: { kind: "zip", url: "https://codex-pet.com/api/download/x" },
++          spriteVersion: null,
++        },
++        async () => new Response(new Blob([Uint8Array.from(empty)]), { status: 200 }),
++        async () => null,
++      ),
++    ).rejects.toThrow(/no spritesheet/);
++  });
++
++  it("rejects images that are not pet sheets and failed downloads", async () => {
++    await expect(
++      downloadGalleryPet(sheet, okFetch, async () => ({ width: 100, height: 100 })),
++    ).rejects.toThrow(/not a Codex pet sheet/);
++    await expect(
++      downloadGalleryPet(sheet, async () => new Response(null, { status: 404 })),
++    ).rejects.toThrow(/404/);
++    await expect(
++      downloadGalleryPet(
++        sheet,
++        async () => new Response(new Blob([]), { status: 200 }),
++        async () => null,
++      ),
++    ).rejects.toThrow(/empty/);
++  });
++});
+diff --git a/apps/web/src/neo/pets/petGalleries.ts b/apps/web/src/neo/pets/petGalleries.ts
+new file mode 100644
+index 000000000..901a3a246
+--- /dev/null
++++ b/apps/web/src/neo/pets/petGalleries.ts
+@@ -0,0 +1,431 @@
++/**
++ * The community Codex pet galleries the pet browser can import from. Each
++ * gallery is a GitHub repository with a site in front of it. Catalogs and
++ * files come from GitHub wherever the repository holds them, so imports keep
++ * working even if a site goes away; sites only fill in what the repository
++ * does not track (previews, or the files themselves for sites that keep
++ * sprites out of git).
++ */
++
++import JSZip from "jszip";
++import * as Schema from "effect/Schema";
++
++import { galleryFetch, type GalleryFetch } from "./galleryFetch";
++import { spriteVersionForSize, type SpriteVersion } from "./spriteSheet";
++
++export type PetGalleryId = "codexpet-top" | "codex-pet-com" | "codexpets-org" | "openpets-sh";
++
++export interface PetGallery {
++  readonly id: PetGalleryId;
++  readonly host: string;
++  readonly siteUrl: string;
++  readonly repository: string;
++  readonly repositoryUrl: string;
++  /** "catalog": one list is fetched and searched here. "api": the site searches and pages. */
++  readonly mode: "catalog" | "api";
++  /** Fixed category names for "api" galleries; "catalog" galleries derive them from the list. */
++  readonly categories: ReadonlyArray<string>;
++  /** Only the desktop app can reach it: the site refuses cross-origin requests. */
++  readonly needsDesktop: boolean;
++}
++
++function gallery(
++  id: PetGalleryId,
++  host: string,
++  repository: string,
++  options: Partial<Pick<PetGallery, "mode" | "categories" | "needsDesktop">> = {},
++): PetGallery {
++  return {
++    id,
++    host,
++    siteUrl: `https://${host}`,
++    repository,
++    repositoryUrl: `https://github.com/${repository}`,
++    mode: options.mode ?? "catalog",
++    categories: options.categories ?? [],
++    needsDesktop: options.needsDesktop ?? false,
++  };
++}
++
++export const PET_GALLERIES: ReadonlyArray<PetGallery> = [
++  gallery("codexpet-top", "codexpet.top", "legeling/awesome-codex-pet"),
++  gallery("codex-pet-com", "codex-pet.com", "BeiXiao/awesome-codex-pets"),
++  gallery("codexpets-org", "codexpets.org", "eyichan/awesome-codex-pets"),
++  gallery("openpets-sh", "openpets.sh", "alterhq/openpets", {
++    mode: "api",
++    categories: ["animal", "creature", "person", "object"],
++    needsDesktop: true,
++  }),
++];
++
++export const DEFAULT_PET_GALLERY: PetGalleryId = "codexpet-top";
++
++export function petGallery(id: PetGalleryId): PetGallery {
++  return PET_GALLERIES.find((entry) => entry.id === id) ?? PET_GALLERIES[0]!;
++}
++
++export function isPetGalleryId(value: unknown): value is PetGalleryId {
++  return PET_GALLERIES.some((entry) => entry.id === value);
++}
++
++function rawBase(repository: string): string {
++  return `https://raw.githubusercontent.com/${repository}/main`;
++}
++
++export interface GalleryPet {
++  readonly gallery: PetGalleryId;
++  readonly slug: string;
++  readonly name: string;
++  /** Every name the gallery lists, for search. */
++  readonly names: ReadonlyArray<string>;
++  readonly author: string | null;
++  readonly category: string | null;
++  readonly description: string | null;
++  readonly spriteVersion: SpriteVersion | null;
++  /** A small still image for the card; null means cut the first frame from the sheet. */
++  readonly thumbnailUrl: string | null;
++  /** An animated image for hover; null means animate the sheet. */
++  readonly animationUrl: string | null;
++  /** The sheet as a plain image URL for previews; null when it only ships inside a zip. */
++  readonly spritesheetUrl: string | null;
++  readonly download:
++    | { readonly kind: "spritesheet"; readonly url: string }
++    | { readonly kind: "zip"; readonly url: string };
++  /** The pet on the gallery site. */
++  readonly pageUrl: string;
++  /** Files and license: the pet's folder in the repository, else its page. */
++  readonly sourceUrl: string;
++}
++
++// ---- codexpet.top (legeling/awesome-codex-pet) -----------------------------
++
++const CodexpetTopPet = Schema.Struct({
++  slug: Schema.String,
++  name: Schema.String,
++  localized_names: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
++  author: Schema.String,
++  author_handle: Schema.optionalKey(Schema.String),
++  primary_category: Schema.String,
++  description: Schema.optionalKey(Schema.String),
++  spriteVersionNumber: Schema.optionalKey(Schema.Number),
++});
++const decodeCodexpetTop = Schema.decodeUnknownSync(Schema.Array(CodexpetTopPet));
++
++export function parseCodexpetTopCatalog(input: unknown): GalleryPet[] {
++  const source = petGallery("codexpet-top");
++  const raw = rawBase(source.repository);
++  return decodeCodexpetTop(input).map((pet) => {
++    const localized = pet.localized_names ?? {};
++    const slug = encodeURIComponent(pet.slug);
++    return {
++      gallery: source.id,
++      slug: pet.slug,
++      name: localized.en ?? pet.name,
++      names: [...new Set([pet.name, ...Object.values(localized)].filter(Boolean))],
++      author: pet.author,
++      category: pet.primary_category,
++      description: pet.description ?? null,
++      spriteVersion: pet.spriteVersionNumber === 2 ? 2 : 1,
++      thumbnailUrl: `${source.siteUrl}/assets/previews/${slug}/thumbnail.webp`,
++      animationUrl: `${source.siteUrl}/assets/previews/${slug}/webp/idle.webp`,
++      spritesheetUrl: `${raw}/pets/${slug}/spritesheet.webp`,
++      download: { kind: "spritesheet", url: `${raw}/pets/${slug}/spritesheet.webp` },
++      pageUrl: `${source.siteUrl}/pets/${slug}`,
++      sourceUrl: `${source.repositoryUrl}/tree/main/pets/${slug}`,
++    };
++  });
++}
++
++// ---- codex-pet.com (BeiXiao/awesome-codex-pets) ----------------------------
++
++const HTML_ENTITIES: Record<string, string> = {
++  "&amp;": "&",
++  "&lt;": "<",
++  "&gt;": ">",
++  "&quot;": '"',
++  "&#39;": "'",
++  "&#x27;": "'",
++};
++
++function decodeEntities(text: string): string {
++  return text.replace(
++    /&(?:amp|lt|gt|quot|#39|#x27);/g,
++    (entity) => HTML_ENTITIES[entity] ?? entity,
++  );
++}
++
++/**
++ * The repository keeps a thumbnail per pet and lists them all in the README
++ * as `<a href="https://codex-pet.com/pets/<slug>"><img src="pets/<slug>/thumb.webp" … alt="<name>">`.
++ * The sprites themselves only exist as zips on the site.
++ */
++export function parseCodexPetComReadme(markdown: string): GalleryPet[] {
++  const source = petGallery("codex-pet-com");
++  const raw = rawBase(source.repository);
++  const pattern =
++    /<a href="https:\/\/codex-pet\.com\/pets\/([^"]+)"><img src="pets\/([^"]+)\/thumb\.webp"[^>]*?alt="([^"]*)"/g;
++  const seen = new Set<string>();
++  const pets: GalleryPet[] = [];
++  for (const match of markdown.matchAll(pattern)) {
++    const slug = decodeEntities(match[1]!);
++    if (seen.has(slug)) continue;
++    seen.add(slug);
++    const folder = encodeURIComponent(decodeEntities(match[2]!));
++    const name = decodeEntities(match[3]!) || slug;
++    pets.push({
++      gallery: source.id,
++      slug,
++      name,
++      names: [name],
++      author: null,
++      category: null,
++      description: null,
++      spriteVersion: null,
++      thumbnailUrl: `${raw}/pets/${folder}/thumb.webp`,
++      animationUrl: null,
++      spritesheetUrl: null,
++      download: { kind: "zip", url: `${source.siteUrl}/api/download/${encodeURIComponent(slug)}` },
++      pageUrl: `${source.siteUrl}/pets/${encodeURIComponent(slug)}`,
++      sourceUrl: `${source.repositoryUrl}/tree/main/pets/${folder}`,
++    });
++  }
++  return pets;
++}
++
++// ---- codexpets.org (eyichan/awesome-codex-pets) ----------------------------
++
++const CodexpetsOrgPet = Schema.Struct({
++  id: Schema.String,
++  displayName: Schema.String,
++  description: Schema.optionalKey(Schema.String),
++  author: Schema.optionalKey(Schema.String),
++  kind: Schema.optionalKey(Schema.String),
++  tags: Schema.optionalKey(Schema.Array(Schema.String)),
++  pageUrl: Schema.optionalKey(Schema.String),
++  spritesheetUrl: Schema.String,
++});
++const decodeCodexpetsOrg = Schema.decodeUnknownSync(Schema.Array(CodexpetsOrgPet));
++
++export function parseCodexpetsOrgCatalog(input: unknown): GalleryPet[] {
++  const source = petGallery("codexpets-org");
++  return decodeCodexpetsOrg(input).map((pet) => {
++    const slug = encodeURIComponent(pet.id);
++    return {
++      gallery: source.id,
++      slug: pet.id,
++      name: pet.displayName,
++      names: [pet.displayName, ...(pet.tags ?? [])],
++      author: pet.author ?? null,
++      category: pet.kind ?? null,
++      description: pet.description ?? null,
++      spriteVersion: null,
++      thumbnailUrl: null,
++      animationUrl: null,
++      spritesheetUrl: pet.spritesheetUrl,
++      download: { kind: "spritesheet", url: pet.spritesheetUrl },
++      pageUrl: pet.pageUrl ?? `${source.siteUrl}/pets/${slug}`,
++      sourceUrl: `${source.repositoryUrl}/tree/main/pets/${slug}`,
++    };
++  });
++}
++
++// ---- openpets.sh (alterhq/openpets) ----------------------------------------
++
++export const OPENPETS_PAGE_SIZE = 30;
++
++const OpenpetsPet = Schema.Struct({
++  id: Schema.String,
++  displayName: Schema.String,
++  description: Schema.optionalKey(Schema.String),
++  kind: Schema.optionalKey(Schema.String),
++  ownerName: Schema.optionalKey(Schema.String),
++  tags: Schema.optionalKey(Schema.Array(Schema.String)),
++  previewUrl: Schema.optionalKey(Schema.String),
++  spritesheetUrl: Schema.String,
++  validationReport: Schema.optionalKey(
++    Schema.Struct({ spriteVersionNumber: Schema.optionalKey(Schema.Number) }),
++  ),
++});
++const OpenpetsPage = Schema.Struct({
++  page: Schema.Number,
++  total: Schema.Number,
++  totalPages: Schema.Number,
++  pets: Schema.Array(OpenpetsPet),
++});
++const decodeOpenpetsPage = Schema.decodeUnknownSync(OpenpetsPage);
++
++export interface GalleryPage {
++  readonly pets: ReadonlyArray<GalleryPet>;
++  readonly total: number;
++  readonly hasMore: boolean;
++}
++
++export function parseOpenpetsPage(input: unknown): GalleryPage {
++  const source = petGallery("openpets-sh");
++  const page = decodeOpenpetsPage(input);
++  const absolute = (path: string) => new URL(path, source.siteUrl).toString();
++  return {
++    total: page.total,
++    hasMore: page.page < page.totalPages,
++    pets: page.pets.map((pet) => {
++      const version = pet.validationReport?.spriteVersionNumber;
++      const spritesheetUrl = absolute(pet.spritesheetUrl);
++      return {
++        gallery: source.id,
++        slug: pet.id,
++        name: pet.displayName,
++        names: [pet.displayName, ...(pet.tags ?? [])],
++        author: pet.ownerName ?? null,
++        category: pet.kind ?? null,
++        description: pet.description ?? null,
++        spriteVersion: version === 2 ? 2 : version === 1 ? 1 : null,
++        thumbnailUrl: pet.previewUrl ? absolute(pet.previewUrl) : null,
++        animationUrl: null,
++        spritesheetUrl,
++        download: { kind: "spritesheet", url: spritesheetUrl },
++        pageUrl: `${source.siteUrl}/pets/${encodeURIComponent(pet.id)}`,
++        sourceUrl: `${source.siteUrl}/pets/${encodeURIComponent(pet.id)}`,
++      };
++    }),
++  };
++}
++
++export function openpetsPageUrl(
++  search: { readonly query: string; readonly category: string | null },
++  page: number,
++): string {
++  const url = new URL("/api/pets", petGallery("openpets-sh").siteUrl);
++  url.searchParams.set("page", String(page));
++  url.searchParams.set("pageSize", String(OPENPETS_PAGE_SIZE));
++  const query = search.query.trim();
++  if (query.length > 0) url.searchParams.set("q", query);
++  if (search.category !== null) url.searchParams.set("kind", search.category);
++  return url.toString();
++}
++
++// ---- Loading ---------------------------------------------------------------
++
++async function fetchOk(url: string, fetchFn: GalleryFetch): Promise<Response> {
++  const response = await fetchFn(url);
++  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
++  return response;
++}
++
++/** The whole list of a "catalog" gallery, fresh from GitHub. */
++export async function loadGalleryCatalog(
++  id: PetGalleryId,
++  fetchFn: GalleryFetch = galleryFetch,
++): Promise<GalleryPet[]> {
++  const source = petGallery(id);
++  const raw = rawBase(source.repository);
++  switch (id) {
++    case "codexpet-top":
++      return parseCodexpetTopCatalog(await (await fetchOk(`${raw}/pets.json`, fetchFn)).json());
++    case "codex-pet-com":
++      return parseCodexPetComReadme(await (await fetchOk(`${raw}/README.md`, fetchFn)).text());
++    case "codexpets-org":
++      return parseCodexpetsOrgCatalog(await (await fetchOk(`${raw}/pets.json`, fetchFn)).json());
++    case "openpets-sh":
++      throw new Error("openpets.sh is searched through its API, not as a catalog");
++  }
++}
++
++/** One page of an "api" gallery, searched and filtered by the site. */
++export async function loadGalleryPage(
++  id: PetGalleryId,
++  search: { readonly query: string; readonly category: string | null },
++  page: number,
++  fetchFn: GalleryFetch = galleryFetch,
++): Promise<GalleryPage> {
++  if (id !== "openpets-sh") throw new Error(`${id} is a catalog gallery`);
++  return parseOpenpetsPage(await (await fetchOk(openpetsPageUrl(search, page), fetchFn)).json());
++}
++
++function normalize(text: string): string {
++  return text.trim().toLowerCase();
++}
++
++/** Category order as the gallery lists them, first seen first. */
++export function galleryCategories(pets: ReadonlyArray<GalleryPet>): string[] {
++  return [...new Set(pets.flatMap((pet) => (pet.category === null ? [] : [pet.category])))];
++}
++
++/**
++ * Case-insensitive match on any name, author, slug, category or description;
++ * every whitespace-separated word of the query has to match somewhere.
++ */
++export function filterGalleryPets(
++  pets: ReadonlyArray<GalleryPet>,
++  query: string,
++  category: string | null,
++): GalleryPet[] {
++  const words = normalize(query).split(/\s+/).filter(Boolean);
++  return pets.filter((pet) => {
++    if (category !== null && pet.category !== category) return false;
++    if (words.length === 0) return true;
++    const haystack = normalize(
++      [...pet.names, pet.author ?? "", pet.slug, pet.category ?? "", pet.description ?? ""].join(
++        "\n",
++      ),
++    );
++    return words.every((word) => haystack.includes(word));
++  });
++}
++
++// ---- Download --------------------------------------------------------------
++
++export class GalleryDownloadError extends Error {
++  override readonly name = "GalleryDownloadError";
++}
++
++async function spritesheetFromZip(bytes: ArrayBuffer): Promise<Blob> {
++  const zip = await JSZip.loadAsync(bytes);
++  const entry = Object.values(zip.files).find(
++    (file) => !file.dir && /(^|\/)spritesheet\.webp$/i.test(file.name),
++  );
++  if (!entry) throw new GalleryDownloadError("The download has no spritesheet.webp");
++  return entry.async("blob");
++}
++
++/**
++ * Downloads a pet's spritesheet (unpacking it when the gallery ships zips)
++ * and checks it really is one: the decoded image has to be a v1 or v2 sheet.
++ * The gallery's own version claim only fills in when the image cannot be
++ * decoded here.
++ */
++export async function downloadGalleryPet(
++  pet: Pick<GalleryPet, "download" | "spriteVersion">,
++  fetchFn: GalleryFetch = galleryFetch,
++  decodeSize: (blob: Blob) => Promise<{ width: number; height: number } | null> = imageSize,
++): Promise<{ blob: Blob; spriteVersion: SpriteVersion }> {
++  const response = await fetchFn(pet.download.url);
++  if (!response.ok) {
++    throw new GalleryDownloadError(`Download failed with ${response.status}`);
++  }
++  const blob =
++    pet.download.kind === "zip"
++      ? await spritesheetFromZip(await response.arrayBuffer())
++      : await response.blob();
++  if (blob.size === 0) throw new GalleryDownloadError("The download was empty");
++  const size = await decodeSize(blob);
++  if (size === null) return { blob, spriteVersion: pet.spriteVersion ?? 1 };
++  const spriteVersion = spriteVersionForSize(size.width, size.height);
++  if (spriteVersion === null) {
++    throw new GalleryDownloadError(
++      `The spritesheet is ${size.width}×${size.height}, not a Codex pet sheet`,
++    );
++  }
++  return { blob, spriteVersion };
++}
++
++async function imageSize(blob: Blob): Promise<{ width: number; height: number } | null> {
++  if (typeof createImageBitmap !== "function") return null;
++  try {
++    const bitmap = await createImageBitmap(blob);
++    const size = { width: bitmap.width, height: bitmap.height };
++    bitmap.close();
++    return size;
++  } catch {
++    throw new GalleryDownloadError("The spritesheet could not be decoded as an image");
++  }
++}
 diff --git a/apps/web/src/neo/pets/petRegistry.ts b/apps/web/src/neo/pets/petRegistry.ts
 new file mode 100644
 index 000000000..a3c23f723
@@ -22129,6 +24204,144 @@ index 000000000..a3c23f723
 +}
 +
 +export const NOTHING_FRAMES: AsciiFrames = spinningXFrames();
+diff --git a/apps/web/src/neo/pets/spriteSheet.test.ts b/apps/web/src/neo/pets/spriteSheet.test.ts
+new file mode 100644
+index 000000000..ef4dcf4b2
+--- /dev/null
++++ b/apps/web/src/neo/pets/spriteSheet.test.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from "vite-plus/test";
++
++import {
++  SPRITE_CELL_HEIGHT,
++  SPRITE_CLIPS,
++  SPRITE_COLUMNS,
++  SPRITE_WORKING_STATES,
++  spriteRows,
++  spriteStateForMood,
++  spriteVersionForSize,
++} from "./spriteSheet";
++
++describe("spriteVersionForSize", () => {
++  it("recognises v1 and v2 sheets by their exact size", () => {
++    expect(spriteVersionForSize(1536, 1872)).toBe(1);
++    expect(spriteVersionForSize(1536, 2288)).toBe(2);
++  });
++
++  it("rejects anything that is not a pet sheet", () => {
++    expect(spriteVersionForSize(1536, 1000)).toBeNull();
++    expect(spriteVersionForSize(768, 1872)).toBeNull();
++    expect(spriteVersionForSize(0, 0)).toBeNull();
++  });
++
++  it("matches the row counts the sizes imply", () => {
++    expect(spriteRows(1) * SPRITE_CELL_HEIGHT).toBe(1872);
++    expect(spriteRows(2) * SPRITE_CELL_HEIGHT).toBe(2288);
++  });
++});
++
++describe("SPRITE_CLIPS", () => {
++  it("stays inside a v1 sheet and the eight columns", () => {
++    for (const clip of Object.values(SPRITE_CLIPS)) {
++      expect(clip.row).toBeLessThan(spriteRows(1));
++      expect(clip.durationsMs.length).toBeGreaterThan(0);
++      expect(clip.durationsMs.length).toBeLessThanOrEqual(SPRITE_COLUMNS);
++    }
++  });
++
++  it("maps every non-working mood to one clip and keeps the working set distinct", () => {
++    expect(spriteStateForMood("idle")).toBe("idle");
++    expect(spriteStateForMood("typing")).toBe("waiting");
++    expect(spriteStateForMood("done")).toBe("waving");
++    expect(new Set(SPRITE_WORKING_STATES).size).toBe(SPRITE_WORKING_STATES.length);
++    for (const state of SPRITE_WORKING_STATES) expect(SPRITE_CLIPS[state]).toBeDefined();
++  });
++});
+diff --git a/apps/web/src/neo/pets/spriteSheet.ts b/apps/web/src/neo/pets/spriteSheet.ts
+new file mode 100644
+index 000000000..8b5f8a88a
+--- /dev/null
++++ b/apps/web/src/neo/pets/spriteSheet.ts
+@@ -0,0 +1,79 @@
++/**
++ * The Codex pet spritesheet layout: eight columns of 192×208 cells, one row
++ * per animation. v1 sheets have nine rows (1536×1872), v2 sheets add two
++ * look-around rows (1536×2288) that the pet does not use. Frame timings
++ * follow the Codex app's own playback tables.
++ */
++
++import type { PetMood } from "./petRegistry";
++
++export const SPRITE_COLUMNS = 8;
++export const SPRITE_SHEET_WIDTH = 1536;
++export const SPRITE_CELL_WIDTH = 192;
++export const SPRITE_CELL_HEIGHT = 208;
++
++export type SpriteVersion = 1 | 2;
++
++const SPRITE_ROWS: Record<SpriteVersion, number> = { 1: 9, 2: 11 };
++
++export function spriteRows(version: SpriteVersion): number {
++  return SPRITE_ROWS[version];
++}
++
++/** Which sheet version a decoded image is, by its exact size; anything else is not a pet sheet. */
++export function spriteVersionForSize(width: number, height: number): SpriteVersion | null {
++  if (width !== SPRITE_SHEET_WIDTH) return null;
++  if (height === SPRITE_ROWS[1] * SPRITE_CELL_HEIGHT) return 1;
++  if (height === SPRITE_ROWS[2] * SPRITE_CELL_HEIGHT) return 2;
++  return null;
++}
++
++export type SpriteState =
++  | "idle"
++  | "running-right"
++  | "running-left"
++  | "waving"
++  | "jumping"
++  | "failed"
++  | "waiting"
++  | "running"
++  | "review";
++
++export interface SpriteClip {
++  readonly row: number;
++  /** Per-frame hold times in milliseconds; the frame count is the length. */
++  readonly durationsMs: ReadonlyArray<number>;
++}
++
++export const SPRITE_CLIPS: Record<SpriteState, SpriteClip> = {
++  idle: { row: 0, durationsMs: [280, 110, 110, 140, 140, 320] },
++  "running-right": { row: 1, durationsMs: [120, 120, 120, 120, 120, 120, 120, 220] },
++  "running-left": { row: 2, durationsMs: [120, 120, 120, 120, 120, 120, 120, 220] },
++  waving: { row: 3, durationsMs: [140, 140, 140, 280] },
++  jumping: { row: 4, durationsMs: [140, 140, 140, 140, 280] },
++  failed: { row: 5, durationsMs: [140, 140, 140, 140, 140, 140, 140, 240] },
++  waiting: { row: 6, durationsMs: [150, 150, 150, 150, 150, 260] },
++  running: { row: 7, durationsMs: [120, 120, 120, 120, 120, 220] },
++  review: { row: 8, durationsMs: [150, 150, 150, 150, 150, 280] },
++};
++
++/** While agents work the pet cycles through these, one at a time, in shuffle-bag order. */
++export const SPRITE_WORKING_STATES: ReadonlyArray<SpriteState> = [
++  "running",
++  "review",
++  "jumping",
++  "running-right",
++  "running-left",
++];
++
++/** Working is resolved by the caller, which owns the rotation between working clips. */
++export function spriteStateForMood(mood: Exclude<PetMood, "working">): SpriteState {
++  switch (mood) {
++    case "idle":
++      return "idle";
++    case "typing":
++      return "waiting";
++    case "done":
++      return "waving";
++  }
++}
 diff --git a/apps/web/src/neo/pets/usePetActivitySync.ts b/apps/web/src/neo/pets/usePetActivitySync.ts
 new file mode 100644
 index 000000000..a21dd67cf

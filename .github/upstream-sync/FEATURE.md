@@ -561,7 +561,9 @@ contracts or server settings.
    `pet.focusMain(target)` (reveals the main window and sends the menu action
    `open-thread:<environmentId>:<threadId>`, handled in `AppSidebarLayout`). Exposed on
    `desktopBridge.pet` (optional in `packages/contracts/src/ipc.ts`). The pet window closes with the
-   main window.
+   main window. `setVisibleOnAllWorkspaces` is called with `skipTransformProcessType: true`:
+   without it Electron turns the app into a macOS accessory process (no Dock icon) to float the
+   window over fullscreen apps. The Dock icon wins; the pet does not float over fullscreen apps.
 8. **Codex pets.** A second section on the Pets tab, **Codex pets** (`id="codex-pets"`, store
    icon, search id `neo-codex-pets`), browses four community galleries and imports from them.
    - `petGalleries.ts` lists the galleries (`PET_GALLERIES`, ids `codexpet-top`,
