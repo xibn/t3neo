@@ -122,6 +122,10 @@ require_grep '"productName": "T3 Neo' apps/desktop/package.json \
   "desktop productName is not T3 Neo"
 require_grep 'T3-Neo-' scripts/build-desktop-artifact.ts \
   "desktop artifacts are not named T3-Neo-*"
+require_grep 'DESKTOP_APP_ID = "com.xibn.t3neo"' scripts/build-desktop-artifact.ts \
+  "desktop bundle id is not com.xibn.t3neo"
+require_grep '"com.xibn.t3neo"' apps/desktop/src/app/DesktopEnvironment.ts \
+  "desktop app user model id is not com.xibn.t3neo"
 require_grep 'nightly\\.(?:neo\\.)?' scripts/build-desktop-artifact.ts \
   "desktop packaging does not treat X.Y.Z-nightly.neo.* as the nightly channel"
 require_grep 'nightly\\.(?:neo\\.)?' apps/desktop/src/updates/updateChannels.ts \

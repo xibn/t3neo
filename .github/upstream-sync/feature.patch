@@ -62,8 +62,21 @@ index 5c39ff304..ca222d251 100644
          assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
          assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
          // Packaged: the bundle's own icon stands, so a custom one the user
+diff --git a/apps/desktop/src/app/DesktopEnvironment.test.ts b/apps/desktop/src/app/DesktopEnvironment.test.ts
+index 218e2c3e4..88d3fe5b5 100644
+--- a/apps/desktop/src/app/DesktopEnvironment.test.ts
++++ b/apps/desktop/src/app/DesktopEnvironment.test.ts
+@@ -68,7 +68,7 @@ describe("DesktopEnvironment", () => {
+       assert.equal(environment.serverRoot, "/repo");
+       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
+       assert.equal(environment.backendCwd, "/repo");
+-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
++      assert.equal(environment.appUserModelId, "com.xibn.t3neo.dev");
+       assert.equal(environment.linuxWmClass, "t3code-dev");
+       assert.deepEqual(
+         Option.map(environment.devServerUrl, (url) => url.href),
 diff --git a/apps/desktop/src/app/DesktopEnvironment.ts b/apps/desktop/src/app/DesktopEnvironment.ts
-index 4583e5124..b6f1fd121 100644
+index 4583e5124..dbbd00d6c 100644
 --- a/apps/desktop/src/app/DesktopEnvironment.ts
 +++ b/apps/desktop/src/app/DesktopEnvironment.ts
 @@ -85,7 +85,7 @@ export class DesktopEnvironment extends Context.Service<
@@ -75,6 +88,15 @@ index 4583e5124..b6f1fd121 100644
  
  function resolveDesktopAppStageLabel(input: {
    readonly isDevelopment: boolean;
+@@ -224,7 +224,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
+     branding,
+     displayName,
+     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
+-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
++      isDevelopment ? "com.xibn.t3neo.dev" : "com.xibn.t3neo",
+     ),
+     linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
+     linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
 diff --git a/apps/desktop/src/ipc/DesktopIpcHandlers.ts b/apps/desktop/src/ipc/DesktopIpcHandlers.ts
 index 8e8317db7..b5d54398b 100644
 --- a/apps/desktop/src/ipc/DesktopIpcHandlers.ts
@@ -74071,7 +74093,7 @@ index 262203a10..5b949fca6 100644
  
    '@hono/node-server@1.19.14(hono@4.12.27)':
 diff --git a/scripts/build-desktop-artifact.test.ts b/scripts/build-desktop-artifact.test.ts
-index c12c73bfc..462faba40 100644
+index c12c73bfc..92917ffb0 100644
 --- a/scripts/build-desktop-artifact.test.ts
 +++ b/scripts/build-desktop-artifact.test.ts
 @@ -246,12 +246,15 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
@@ -74149,7 +74171,25 @@ index c12c73bfc..462faba40 100644
          background: "dmg/dmg-background-latest.png",
          window: { width: 540, height: 412 },
          contents: [
-@@ -1386,10 +1395,19 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+@@ -1277,7 +1286,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+     });
+ 
+     assert.deepStrictEqual(configuration, {
+-      appId: "com.t3tools.t3code",
++      appId: "com.xibn.t3neo",
+       teamId: "ABC1234567",
+       rpDomains: ["example.clerk.accounts.dev"],
+       provisioningProfilePath: "/tmp/t3code.provisionprofile",
+@@ -1297,7 +1306,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+       "clerk.example.com",
+       "example.clerk.accounts.dev",
+     ]);
+-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
++    assert.include(entitlements, "<string>ABC1234567.com.xibn.t3neo</string>");
+     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
+     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
+     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
+@@ -1386,13 +1395,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
  
    it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
      Effect.gen(function* () {
@@ -74172,7 +74212,11 @@ index c12c73bfc..462faba40 100644
 +      );
  
        const mac = config.mac as Record<string, unknown>;
-       assert.equal(config.appId, "com.t3tools.t3code");
+-      assert.equal(config.appId, "com.t3tools.t3code");
++      assert.equal(config.appId, "com.xibn.t3neo");
+       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
+       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
+       assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
 @@ -1402,6 +1420,44 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
    );
@@ -74259,10 +74303,21 @@ index c12c73bfc..462faba40 100644
          mockUpdates: Option.some(false),
          mockUpdateServerPort: Option.none(),
 diff --git a/scripts/build-desktop-artifact.ts b/scripts/build-desktop-artifact.ts
-index 8709be2a2..9281484ec 100644
+index 8709be2a2..3e84114bd 100644
 --- a/scripts/build-desktop-artifact.ts
 +++ b/scripts/build-desktop-artifact.ts
-@@ -159,6 +159,7 @@ interface BuildCliInput {
+@@ -52,7 +52,9 @@ import { Command, Flag } from "effect/unstable/cli";
+ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+ 
+ const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
+-const DESKTOP_APP_ID = "com.t3tools.t3code";
++// T3 Neo's own id: with upstream's, macOS treats a Neo launched next to a
++// running T3 Code as a second instance of that app and gives it no Dock tile.
++const DESKTOP_APP_ID = "com.xibn.t3neo";
+ const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
+ 
+ const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
+@@ -159,6 +161,7 @@ interface BuildCliInput {
    readonly skipBuild: Option.Option<boolean>;
    readonly keepStage: Option.Option<boolean>;
    readonly signed: Option.Option<boolean>;
@@ -74270,7 +74325,7 @@ index 8709be2a2..9281484ec 100644
    readonly verbose: Option.Option<boolean>;
    readonly mockUpdates: Option.Option<boolean>;
    readonly mockUpdateServerPort: Option.Option<number>;
-@@ -769,6 +770,13 @@ interface ResolvedBuildOptions {
+@@ -769,6 +772,13 @@ interface ResolvedBuildOptions {
    readonly skipBuild: boolean;
    readonly keepStage: boolean;
    readonly signed: boolean;
@@ -74284,7 +74339,7 @@ index 8709be2a2..9281484ec 100644
    readonly verbose: boolean;
    readonly mockUpdates: boolean;
    readonly mockUpdateServerPort: number | undefined;
-@@ -1322,6 +1330,7 @@ const BuildEnvConfig = Config.all({
+@@ -1322,6 +1332,7 @@ const BuildEnvConfig = Config.all({
    skipBuild: Config.boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
    keepStage: Config.boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
    signed: Config.boolean("T3CODE_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
@@ -74292,7 +74347,7 @@ index 8709be2a2..9281484ec 100644
    verbose: Config.boolean("T3CODE_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
    mockUpdates: Config.boolean("T3CODE_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
    mockUpdateServerPort: Config.string("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.option),
-@@ -1407,6 +1416,8 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
+@@ -1407,6 +1418,8 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
    const skipBuild = resolveBooleanFlag(input.skipBuild, env.skipBuild);
    const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
    const signed = resolveBooleanFlag(input.signed, env.signed);
@@ -74301,7 +74356,7 @@ index 8709be2a2..9281484ec 100644
    const verbose = resolveBooleanFlag(input.verbose, env.verbose);
  
    const mockUpdates = resolveBooleanFlag(input.mockUpdates, env.mockUpdates);
-@@ -1433,6 +1444,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
+@@ -1433,6 +1446,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
      skipBuild,
      keepStage,
      signed,
@@ -74309,7 +74364,7 @@ index 8709be2a2..9281484ec 100644
      verbose,
      mockUpdates,
      mockUpdateServerPort,
-@@ -2071,8 +2083,13 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
+@@ -2071,8 +2085,13 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
    };
  });
  
@@ -74324,7 +74379,7 @@ index 8709be2a2..9281484ec 100644
  }
  
  function isDesktopPreviewVersion(version: string): boolean {
-@@ -2118,8 +2135,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
+@@ -2118,8 +2137,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
  
  export function resolveDesktopProductName(version: string): string {
    return resolveDesktopUpdateChannel(version) === "nightly"
@@ -74335,7 +74390,7 @@ index 8709be2a2..9281484ec 100644
  }
  
  export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
-@@ -2127,6 +2144,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
+@@ -2127,6 +2146,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
    target: string,
    version: string,
    signed: boolean,
@@ -74343,7 +74398,7 @@ index 8709be2a2..9281484ec 100644
    mockUpdates: boolean,
    mockUpdateServerPort: number | undefined,
    macPasskeySigning:
-@@ -2143,7 +2161,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
+@@ -2143,7 +2163,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
    const buildConfig: Record<string, unknown> = {
      appId: DESKTOP_APP_ID,
      productName: resolveDesktopProductName(version),
@@ -74352,7 +74407,7 @@ index 8709be2a2..9281484ec 100644
      electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
      files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
      directories: {
-@@ -2187,7 +2205,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
+@@ -2187,7 +2207,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
            schemes: ["t3code", "t3code-dev"],
          },
        ],
@@ -74364,7 +74419,7 @@ index 8709be2a2..9281484ec 100644
        ...(macPasskeySigning
          ? {
              entitlements: macPasskeySigning.entitlementsPath,
-@@ -3189,6 +3210,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
+@@ -3189,6 +3212,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
        options.target,
        appVersion,
        options.signed,
@@ -74372,7 +74427,7 @@ index 8709be2a2..9281484ec 100644
        options.mockUpdates,
        options.mockUpdateServerPort,
        macPasskeySigning && macEntitlementsPath
-@@ -3275,9 +3297,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
+@@ -3275,9 +3299,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
      }
    }
    if (!options.signed) {
@@ -74388,7 +74443,7 @@ index 8709be2a2..9281484ec 100644
      delete buildEnv.APPLE_API_KEY;
      delete buildEnv.APPLE_API_KEY_ID;
      delete buildEnv.APPLE_API_ISSUER;
-@@ -3430,6 +3455,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
+@@ -3430,6 +3457,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
      ),
      Flag.optional,
    ),

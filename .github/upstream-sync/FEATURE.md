@@ -235,6 +235,9 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
 1. **Name.** The product is called **T3 Neo** everywhere a user can see it: window title, sidebar
    brand, About/Settings, release names, desktop artifact names (`T3-Neo-<version>-<arch>.<ext>`),
    `productName` in `apps/desktop/package.json`, the web title, and docs written for this fork.
+   The desktop app has its own bundle id, `com.xibn.t3neo` (`.dev` in development), in
+   `scripts/build-desktop-artifact.ts` and `DesktopEnvironment.ts`: with upstream's id, macOS
+   treats a T3 Neo launched next to a running T3 Code as a second instance and shows no Dock tile.
    Provider names, upstream credits, and CLI package names stay as upstream ships them.
 2. **Repository links.** The fork repository is `xibn/t3neo` by default and overridden at build
    time by `VITE_T3NEO_REPOSITORY` (the workflow passes `github.repository`). A slim pill card
