@@ -56,6 +56,12 @@ CPU, memory, and running time per process. **Stop** asks a process to end (SIGIN
 it at once after a confirmation. The list refreshes every two seconds while the dialog is open. It
 needs the desktop app, which ships the process monitor; the plain web server has no process list.
 
+Dev servers an agent left running in the background, such as a `deno task dev` on port 3000, no
+longer hang off the agent's process once its shell exits. The dialog still finds them by the port
+they listen on and lists them under **Dev servers**, grouped by the thread worktree or project
+their working directory falls into, with the port next to the name. Stop and Kill work for them
+too. This needs `ps` and `lsof`, so it is macOS and Linux only.
+
 ## Chevron animations
 
 Under **Settings → Appearance**, **Chevron animations** (on by default) makes the small arrows on

@@ -661,7 +661,17 @@ Server side, the attribution is new: `packages/contracts/src/server.ts` adds
 `registerCommandTokenOrigin(token, origin)` (a session id that appears on a command line), and
 `resolveProcessOrigins(processes)`, which labels each process by its own registration, a
 command token, or the nearest labelled ancestor. `ProcessDiagnostics.read` resolves origins over
-the full telemetry tree and attaches them. Registrations: `CodexSessionRuntime` (the app-server
+the full telemetry tree and attaches them. Dev servers that detach from the tree (their shell
+exits and launchd adopts them) are found instead by the ports they listen on:
+`apps/server/src/diagnostics/ListenerProcesses.ts` takes the `PortDiscovery` scan (the preview's
+port scanner, now shared with the diagnostics), runs `ps -o pid=,ppid=,etime=,rss=,%cpu=,stat=,
+command=` and `lsof -a -d cwd -F pn` for the pids the tree lacks (Unix only), and
+`ProcessDiagnostics.read` appends them with `origin.kind: "listener"`, the lowest `port`, and
+`cwd` (both new optional fields on `ServerProcessDiagnosticsEntry`); `signal` accepts such a pid
+when a fresh scan still lists it with a start stamp within 2 s. The client's `groupProcesses`
+takes a `workspaceFor(cwd)` resolver (the dialog builds it from thread worktrees, longest match
+first, then project roots) and buckets listeners as "Dev servers · <workspace>" after the thread
+groups; rows show `localhost:<port>` and the tooltip the directory. Registrations: `CodexSessionRuntime` (the app-server
 child, provider `codex`, thread + instance), `AcpSessionRuntime` (new optional `origin` option;
 `CursorAdapter` passes `cursor`, `GrokAdapter` passes `grok`, probes pass none), `ClaudeAdapter`
 (the Claude session id as a command token, since the SDK spawns `claude` itself), and
@@ -676,7 +686,10 @@ looks.
 - `apps/server/src/diagnostics/ProcessOrigins.test.ts`: direct, descendant, command-token, and
   unregistered/cyclic resolution.
 - `apps/server/src/diagnostics/ProcessDiagnostics.test.ts` (upstream's file, extended): `origin`
-  is absent by default and a registered provider pid labels its descendants.
+  is absent by default, a registered provider pid labels its descendants, and a listener the
+  port scan reports outside the tree is listed with its port and directory.
+- `apps/server/src/diagnostics/ListenerProcesses.test.ts`: `ps` elapsed-time shapes, `ps` rows,
+  and `lsof` cwd records.
 
 # Feature 6: carried fixes
 

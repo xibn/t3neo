@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ensureLocalApi } from "~/localApi";
 import { usePrimaryEnvironment } from "~/state/environments";
-import { useThreadShells } from "~/state/entities";
+import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironmentQuery } from "~/state/query";
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -22,6 +22,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   formatBytes,
   groupProcesses,
+  type ProcessWorkspace,
   processDisplayName,
   type ProcessGroup,
 } from "./processGroups";
@@ -73,12 +74,29 @@ function ProcessesDialog({ onOpenChange }: { onOpenChange: (open: boolean) => vo
   }, [refresh]);
 
   const shells = useThreadShells();
+  const projects = useProjects();
   const threadTitleFor = useCallback(
     (threadId: string) => shells.find((shell) => shell.id === threadId)?.title ?? null,
     [shells],
   );
+  // A listener's directory names its workspace: a thread's worktree beats the
+  // project root it lives under, and the longest matching path wins.
+  const workspaceFor = useCallback(
+    (cwd: string): ProcessWorkspace | null => {
+      const contains = (root: string) => cwd === root || cwd.startsWith(`${root}/`);
+      const worktree = shells
+        .filter((shell) => shell.worktreePath !== null && contains(shell.worktreePath))
+        .toSorted((left, right) => right.worktreePath!.length - left.worktreePath!.length)[0];
+      if (worktree) return { label: worktree.title ?? "Untitled thread", threadId: worktree.id };
+      const project = projects
+        .filter((candidate) => contains(candidate.workspaceRoot))
+        .toSorted((left, right) => right.workspaceRoot.length - left.workspaceRoot.length)[0];
+      return project ? { label: project.title, threadId: null } : null;
+    },
+    [projects, shells],
+  );
   const groups = useMemo(
-    () => groupProcesses(data?.processes ?? [], threadTitleFor),
+    () => groupProcesses(data?.processes ?? [], threadTitleFor, workspaceFor),
     [data, threadTitleFor],
   );
 
@@ -227,6 +245,11 @@ function ProcessRow({
               <span className="ml-2 font-mono text-[11px] text-muted-foreground">
                 PID {process.pid}
               </span>
+              {process.port !== undefined ? (
+                <span className="ml-2 font-mono text-[11px] text-primary">
+                  localhost:{process.port}
+                </span>
+              ) : null}
             </span>
           }
         />
@@ -235,6 +258,7 @@ function ProcessRow({
           className="max-w-[min(520px,calc(100vw-2rem))] whitespace-normal break-words text-left font-mono text-[11px] leading-relaxed"
         >
           {process.command}
+          {process.cwd ? <div className="mt-1 text-muted-foreground">in {process.cwd}</div> : null}
         </TooltipPopup>
       </Tooltip>
       <span className="text-right tabular-nums text-muted-foreground">

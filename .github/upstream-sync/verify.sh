@@ -171,6 +171,8 @@ require_files \
   apps/desktop/src/ipc/methods/pet.ts \
   apps/server/src/orchestration/turnUsage.ts \
   apps/server/src/orchestration/turnUsage.test.ts \
+  apps/server/src/diagnostics/ListenerProcesses.ts \
+  apps/server/src/diagnostics/ListenerProcesses.test.ts \
   docs/user/neo.md
 require_grep 'PetWidget' apps/web/src/routes/__root.tsx "PetWidget is not mounted in routes/__root.tsx"
 require_grep 'turnUsageByTurnId' apps/web/src/components/chat/MessagesTimeline.tsx \

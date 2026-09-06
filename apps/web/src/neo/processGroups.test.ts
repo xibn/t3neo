@@ -27,6 +27,39 @@ function entry(
 }
 
 describe("groupProcesses", () => {
+  it("groups dev servers found by their ports under the workspace their directory names", () => {
+    const listener = (pid: number, cwd: string, port: number): ServerProcessDiagnosticsEntry => ({
+      ...entry(pid, "deno run dev", { kind: "listener" }),
+      port,
+      cwd,
+    });
+    const groups = groupProcesses(
+      [
+        entry(1, "codex app-server", { kind: "provider", provider: "codex", threadId: "t-1" }),
+        listener(2, "/repo/finance", 3000),
+        listener(3, "/repo/finance/.worktrees/fix", 3001),
+        listener(4, "/elsewhere", 4000),
+      ],
+      (threadId) =>
+        threadId === "t-1" ? "Fix the login bug" : threadId === "t-2" ? "Try it" : null,
+      (cwd) =>
+        cwd.startsWith("/repo/finance/.worktrees/fix")
+          ? { label: "Try it", threadId: "t-2" }
+          : cwd.startsWith("/repo/finance")
+            ? { label: "finance", threadId: null }
+            : null,
+    );
+    expect(
+      groups.map((group) => [group.kind, group.label, group.processes.map((p) => p.pid)]),
+    ).toEqual([
+      ["provider", "Codex · Fix the login bug", [1]],
+      ["listener", "Dev servers · finance", [2]],
+      ["listener", "Dev servers · Try it", [3]],
+      ["listener", "Dev servers · Unknown workspace", [4]],
+    ]);
+    expect(groups[2]?.threadId).toBe("t-2");
+  });
+
   it("groups by origin, names groups after provider and thread, and orders threads first", () => {
     const titles: Record<string, string> = { "t-1": "Fix login", "t-2": "Write docs" };
     const groups = groupProcesses(

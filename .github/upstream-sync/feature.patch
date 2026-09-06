@@ -335,10 +335,19 @@ index 731910e44..7cc7010d6 100644
  export function isNightlyDesktopVersion(version: string): boolean {
    return NIGHTLY_VERSION_PATTERN.test(version);
 diff --git a/apps/server/src/diagnostics/ProcessDiagnostics.test.ts b/apps/server/src/diagnostics/ProcessDiagnostics.test.ts
-index 2efa3375d..7f0aa0f2f 100644
+index 2efa3375d..3831a28a2 100644
 --- a/apps/server/src/diagnostics/ProcessDiagnostics.test.ts
 +++ b/apps/server/src/diagnostics/ProcessDiagnostics.test.ts
-@@ -14,6 +14,7 @@ import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClie
+@@ -9,11 +9,16 @@ import * as Layer from "effect/Layer";
+ import * as Option from "effect/Option";
+ import * as Stream from "effect/Stream";
+ 
++import type { DiscoveredLocalServer } from "@t3tools/contracts";
++
++import * as PortScanner from "../preview/PortScanner.ts";
++import * as ProcessRunner from "../processRunner.ts";
+ import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
+ import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClient.ts";
  import * as ResourceAttribution from "../resourceTelemetry/ResourceAttribution.ts";
  import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
  import * as ProcessDiagnostics from "./ProcessDiagnostics.ts";
@@ -346,11 +355,112 @@ index 2efa3375d..7f0aa0f2f 100644
  
  function makeNativeSnapshot(
    processes: ResourceMonitorSnapshotEvent["processes"],
-@@ -110,6 +111,70 @@ describe("ProcessDiagnostics", () => {
+@@ -61,6 +66,30 @@ function makeTelemetryLayer(
+   );
+ }
+ 
++/** The port scanner and process runner the diagnostics consult for off-tree listeners. */
++function makeSupportLayers(input?: {
++  readonly servers?: ReadonlyArray<DiscoveredLocalServer>;
++  readonly outputs?: Readonly<Record<string, string>>;
++}) {
++  const portDiscovery = Layer.succeed(PortScanner.PortDiscovery, {
++    scan: () => Effect.succeed(input?.servers ?? []),
++  } as unknown as PortScanner.PortDiscovery["Service"]);
++  const processRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
++    run: (request: ProcessRunner.ProcessRunInput) =>
++      Effect.succeed({
++        stdout: input?.outputs?.[request.command] ?? "",
++        stderr: "",
++        code: 0,
++        timedOut: false,
++        stdoutTruncated: false,
++        stderrTruncated: false,
++        stdoutInvalidUtf8: false,
++        stderrInvalidUtf8: false,
++      }),
++  } as unknown as ProcessRunner.ProcessRunner["Service"]);
++  return Layer.mergeAll(portDiscovery, processRunner);
++}
++
+ describe("ProcessDiagnostics", () => {
+   it.effect("projects live process data from resource telemetry", () =>
+     Effect.gen(function* () {
+@@ -99,7 +128,9 @@ describe("ProcessDiagnostics", () => {
+         },
+       ]);
+       const telemetryLayer = makeTelemetryLayer(snapshot);
+-      const layer = ProcessDiagnostics.layer.pipe(Layer.provideMerge(telemetryLayer));
++      const layer = ProcessDiagnostics.layer.pipe(
++        Layer.provideMerge(Layer.mergeAll(telemetryLayer, makeSupportLayers())),
++      );
+ 
+       const diagnostics = yield* Effect.gen(function* () {
+         const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
+@@ -110,6 +141,131 @@ describe("ProcessDiagnostics", () => {
        expect(diagnostics.processes[0]?.startTimeMs).toBe(2_000);
        expect(diagnostics.processes[0]?.cpuPercent).toBe(1.5);
        expect(diagnostics.processes[0]?.rssBytes).toBe(2_048);
 +      expect(diagnostics.processes[0]?.origin).toBeUndefined();
++    }),
++  );
++
++  it.effect("lists a dev server that left the tree by its listening port", () =>
++    Effect.gen(function* () {
++      resetProcessOriginsForTest();
++      const snapshot = makeNativeSnapshot([
++        {
++          pid: process.pid,
++          ppid: 1,
++          startTimeMs: 1_000,
++          runTimeMs: 60_000,
++          name: "node",
++          command: "t3 server",
++          status: "Running",
++          cpuPercent: 0,
++          cpuTimeMs: 100,
++          residentBytes: 1_024,
++          virtualBytes: 2_048,
++          ioReadBytes: 100,
++          ioWriteBytes: 200,
++          ioSemantics: "storage",
++        },
++      ]);
++      const support = makeSupportLayers({
++        servers: [
++          {
++            host: "localhost",
++            port: 3000,
++            url: "http://localhost:3000",
++            processName: "deno",
++            pid: 61013,
++            terminal: null,
++          } as DiscoveredLocalServer,
++        ],
++        outputs: {
++          ps: "61013 61008 15:07 51200 0.5 S+ deno run --ext=js -A dev.ts\n",
++          lsof: "p61013\nfcwd\nn/Users/maxi/GitHub/finance\n",
++        },
++      });
++      const layer = ProcessDiagnostics.layer.pipe(
++        Layer.provide(Layer.mergeAll(makeTelemetryLayer(snapshot), support)),
++      );
++
++      const diagnostics = yield* Effect.gen(function* () {
++        const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
++        return yield* processDiagnostics.read;
++      }).pipe(Effect.provide(layer));
++
++      const listener = diagnostics.processes.find((entry) => entry.pid === 61013);
++      expect(listener).toMatchObject({
++        origin: { kind: "listener" },
++        port: 3000,
++        cwd: "/Users/maxi/GitHub/finance",
++        command: "deno run --ext=js -A dev.ts",
++        rssBytes: 51200 * 1024,
++        elapsed: "15:07",
++      });
++      expect(diagnostics.processCount).toBe(1);
 +    }),
 +  );
 +
@@ -401,7 +511,9 @@ index 2efa3375d..7f0aa0f2f 100644
 +          residentBytes: 512,
 +        },
 +      ]);
-+      const layer = ProcessDiagnostics.layer.pipe(Layer.provideMerge(makeTelemetryLayer(snapshot)));
++      const layer = ProcessDiagnostics.layer.pipe(
++        Layer.provideMerge(Layer.mergeAll(makeTelemetryLayer(snapshot), makeSupportLayers())),
++      );
 +      const diagnostics = yield* Effect.gen(function* () {
 +        const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
 +        return yield* processDiagnostics.read;
@@ -417,22 +529,109 @@ index 2efa3375d..7f0aa0f2f 100644
      }),
    );
  
+@@ -117,7 +273,9 @@ describe("ProcessDiagnostics", () => {
+     Effect.gen(function* () {
+       const snapshot = makeNativeSnapshot([]);
+       const telemetryLayer = makeTelemetryLayer(snapshot);
+-      const layer = ProcessDiagnostics.layer.pipe(Layer.provide(telemetryLayer));
++      const layer = ProcessDiagnostics.layer.pipe(
++        Layer.provide(Layer.mergeAll(telemetryLayer, makeSupportLayers())),
++      );
+ 
+       const result = yield* Effect.service(ProcessDiagnostics.ProcessDiagnostics).pipe(
+         Effect.flatMap((processDiagnostics) =>
+@@ -180,7 +338,9 @@ describe("ProcessDiagnostics", () => {
+           retry: Effect.die("unused"),
+         }),
+       );
+-      const layer = ProcessDiagnostics.layer.pipe(Layer.provide(telemetryLayer));
++      const layer = ProcessDiagnostics.layer.pipe(
++        Layer.provide(Layer.mergeAll(telemetryLayer, makeSupportLayers())),
++      );
+ 
+       const result = yield* Effect.service(ProcessDiagnostics.ProcessDiagnostics).pipe(
+         Effect.flatMap((processDiagnostics) =>
+@@ -260,7 +420,9 @@ describe("ProcessDiagnostics", () => {
+           },
+         ],
+       });
+-      const layer = ProcessDiagnostics.layer.pipe(Layer.provide(telemetryLayer));
++      const layer = ProcessDiagnostics.layer.pipe(
++        Layer.provide(Layer.mergeAll(telemetryLayer, makeSupportLayers())),
++      );
+ 
+       const result = yield* Effect.service(ProcessDiagnostics.ProcessDiagnostics).pipe(
+         Effect.flatMap((processDiagnostics) =>
 diff --git a/apps/server/src/diagnostics/ProcessDiagnostics.ts b/apps/server/src/diagnostics/ProcessDiagnostics.ts
-index 8aeb7ba24..3f336a8de 100644
+index 8aeb7ba24..16ec2d19f 100644
 --- a/apps/server/src/diagnostics/ProcessDiagnostics.ts
 +++ b/apps/server/src/diagnostics/ProcessDiagnostics.ts
-@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
+@@ -5,13 +5,22 @@ import type {
+   ServerProcessSignal,
+   ServerSignalProcessResult,
+ } from "@t3tools/contracts";
++import * as Clock from "effect/Clock";
+ import * as Context from "effect/Context";
+ import * as Effect from "effect/Effect";
+ import * as Layer from "effect/Layer";
+ import * as Option from "effect/Option";
  import * as Schema from "effect/Schema";
  
++import * as PortScanner from "../preview/PortScanner.ts";
++import * as ProcessRunner from "../processRunner.ts";
  import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
++import {
++  LISTENER_START_TOLERANCE_MS,
++  readListenerProcesses,
++  type ListenerProcess,
++} from "./ListenerProcesses.ts";
 +import { resolveProcessOrigins } from "./ProcessOrigins.ts";
  
  export class ProcessSignalFailed extends Schema.TaggedErrorClass<ProcessSignalFailed>()(
    "ProcessSignalFailed",
-@@ -59,6 +60,15 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
+@@ -56,10 +65,52 @@ function canSignalCategory(category: ResourceTelemetryProcessCategory): boolean
+ 
+ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
+   const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
++  const portDiscovery = yield* PortScanner.PortDiscovery;
++  const processRunner = yield* ProcessRunner.ProcessRunner;
    const refreshedTelemetry = telemetry.refresh.pipe(Effect.catch(() => telemetry.latest));
-   const read: ProcessDiagnostics["Service"]["read"] = refreshedTelemetry.pipe(
-     Effect.map((snapshot) => {
+-  const read: ProcessDiagnostics["Service"]["read"] = refreshedTelemetry.pipe(
+-    Effect.map((snapshot) => {
+-      const processes = snapshot.processes
++
++  // Dev servers outside the tree, found by their ports (see ListenerProcesses).
++  const readListeners = (knownPids: ReadonlySet<number>) =>
++    Effect.gen(function* () {
++      const servers = yield* portDiscovery.scan();
++      const nowMs = yield* Clock.currentTimeMillis;
++      return yield* readListenerProcesses(processRunner, servers, knownPids, nowMs);
++    });
++  const listenerEntry = (listener: ListenerProcess): ServerProcessDiagnosticsEntry => ({
++    pid: listener.pid,
++    startTimeMs: listener.startTimeMs,
++    ppid: listener.ppid,
++    pgid: Option.none(),
++    status: listener.status || "Unknown",
++    cpuPercent: listener.cpuPercent,
++    rssBytes: listener.rssBytes,
++    elapsed: formatElapsed(listener.runTimeMs),
++    command: listener.command || "unknown",
++    depth: 0,
++    childPids: [],
++    origin: { kind: "listener" },
++    ...(listener.ports[0] !== undefined ? { port: listener.ports[0] } : {}),
++    ...(listener.cwd ? { cwd: listener.cwd } : {}),
++  });
++
++  const read: ProcessDiagnostics["Service"]["read"] = Effect.gen(function* () {
++    const snapshot = yield* refreshedTelemetry;
++    const listeners = yield* readListeners(
++      new Set(snapshot.processes.map((entry) => entry.identity.pid)),
++    );
++    return { snapshot, listeners };
++  }).pipe(
++    Effect.map(({ snapshot, listeners }) => {
 +      // Origins resolve over the whole tree, so a tool spawned three levels
 +      // under a provider still lands on that provider's thread.
 +      const origins = resolveProcessOrigins(
@@ -442,17 +641,110 @@ index 8aeb7ba24..3f336a8de 100644
 +          command: entry.command,
 +        })),
 +      );
-       const processes = snapshot.processes
++      const treeProcesses = snapshot.processes
          .filter((entry) => canSignalCategory(entry.category))
          .map(
-@@ -74,6 +84,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
+           (entry): ServerProcessDiagnosticsEntry => ({
+@@ -74,8 +125,10 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
              command: entry.command || entry.name || "unknown",
              depth: Math.max(0, entry.depth - 1),
              childPids: entry.childPids,
 +            ...(origins.has(entry.identity.pid) ? { origin: origins.get(entry.identity.pid) } : {}),
            }),
          );
++      const processes = [...treeProcesses, ...listeners.map(listenerEntry)];
        return {
+         serverPid: process.pid,
+         readAt: snapshot.readAt,
+@@ -114,6 +167,15 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
+           entry.identity.pid === input.pid && entry.identity.startTimeMs === input.startTimeMs,
+       );
+       if (!selected) {
++        // Not in the tree: a listener the port scan still sees is fair game,
++        // matched on pid and a start stamp within the rounding tolerance.
++        const listeners = yield* readListeners(new Set());
++        const listener = listeners.find(
++          (entry) =>
++            entry.pid === input.pid &&
++            Math.abs(entry.startTimeMs - input.startTimeMs) <= LISTENER_START_TOLERANCE_MS,
++        );
++        if (listener) return yield* kill(input);
+         return {
+           pid: input.pid,
+           signal: input.signal,
+@@ -131,37 +193,44 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
+           message: Option.some(`Process ${input.pid} is not a signalable T3 backend descendant.`),
+         };
+       }
+-      return yield* Effect.try({
+-        try: () => {
+-          process.kill(input.pid, input.signal);
+-          return {
+-            pid: input.pid,
+-            signal: input.signal,
+-            signaled: true,
+-            message: Option.none(),
+-          };
+-        },
+-        catch: (cause) =>
+-          new ProcessSignalFailed({
+-            pid: input.pid,
+-            signal: input.signal,
+-            cause,
+-          }),
+-      }).pipe(
+-        Effect.catch((error) =>
+-          Effect.succeed({
+-            pid: input.pid,
+-            signal: input.signal,
+-            signaled: false,
+-            message: Option.some(
+-              error instanceof Error ? error.message : "Failed to signal process.",
+-            ),
+-          }),
+-        ),
+-      );
++      return yield* kill(input);
+     },
+   );
+ 
++  function kill(input: {
++    readonly pid: number;
++    readonly signal: ServerProcessSignal;
++  }): Effect.Effect<ServerSignalProcessResult> {
++    return Effect.try({
++      try: () => {
++        process.kill(input.pid, input.signal);
++        return {
++          pid: input.pid,
++          signal: input.signal,
++          signaled: true,
++          message: Option.none(),
++        };
++      },
++      catch: (cause) =>
++        new ProcessSignalFailed({
++          pid: input.pid,
++          signal: input.signal,
++          cause,
++        }),
++    }).pipe(
++      Effect.catch((error) =>
++        Effect.succeed({
++          pid: input.pid,
++          signal: input.signal,
++          signaled: false,
++          message: Option.some(
++            error instanceof Error ? error.message : "Failed to signal process.",
++          ),
++        }),
++      ),
++    );
++  }
++
+   return ProcessDiagnostics.of({ read, signal });
+ });
+ 
 diff --git a/apps/server/src/diagnostics/ProcessOrigins.test.ts b/apps/server/src/diagnostics/ProcessOrigins.test.ts
 new file mode 100644
 index 000000000..5ea3eb597
@@ -1957,6 +2249,38 @@ index 30203ad77..a7ad6d552 100644
 +  windows: [{ label: "Plan Limit", usedPercent: 100 }],
 +  status: "rejected",
 +} as const;
+diff --git a/apps/server/src/server.ts b/apps/server/src/server.ts
+index 631902ac0..822d29e62 100644
+--- a/apps/server/src/server.ts
++++ b/apps/server/src/server.ts
+@@ -180,9 +180,17 @@ const BackgroundLayerLive = BackgroundPolicy.layer.pipe(
+ 
+ const UsageLayerLive = UsageService.layer.pipe(Layer.provide(ServerSettingsLayerLive));
+ 
++const PortScannerLayerLive = PortScanner.layer.pipe(Layer.provide(ProcessRunner.layer));
++
+ const ResourceDiagnosticsLayerLive = Layer.mergeAll(
+   ResourceTelemetryLayerLive,
+-  ProcessDiagnostics.layer.pipe(Layer.provide(ResourceTelemetryLayerLive)),
++  // The Processes dialog also lists dev servers by their ports, so it shares
++  // the preview's port scanner and runs `ps`/`lsof` for the ones off the tree.
++  ProcessDiagnostics.layer.pipe(
++    Layer.provide(
++      Layer.mergeAll(ResourceTelemetryLayerLive, PortScannerLayerLive, ProcessRunner.layer),
++    ),
++  ),
+   ProcessResourceMonitor.layer.pipe(Layer.provide(ResourceTelemetryLayerLive)),
+ );
+ 
+@@ -341,8 +349,6 @@ const CheckpointingLayerLive = Layer.empty.pipe(
+   Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistryLayerLive))),
+ );
+ 
+-const PortScannerLayerLive = PortScanner.layer.pipe(Layer.provide(ProcessRunner.layer));
+-
+ const TerminalLayerLive = TerminalManager.layer.pipe(
+   Layer.provide(PtyAdapterLive),
+   Layer.provide(PortScannerLayerLive),
 diff --git a/apps/server/src/terminal/Manager.ts b/apps/server/src/terminal/Manager.ts
 index 64c2dbb91..5769e2830 100644
 --- a/apps/server/src/terminal/Manager.ts
@@ -17877,17 +18201,17 @@ index 000000000..741057b75
 +});
 diff --git a/apps/web/src/neo/ProcessesDialog.tsx b/apps/web/src/neo/ProcessesDialog.tsx
 new file mode 100644
-index 000000000..45ed2b25b
+index 000000000..a1ea4a3f5
 --- /dev/null
 +++ b/apps/web/src/neo/ProcessesDialog.tsx
-@@ -0,0 +1,268 @@
+@@ -0,0 +1,292 @@
 +import type { ServerProcessDiagnosticsEntry, ServerProcessSignal } from "@t3tools/contracts";
 +import { RouterIcon } from "lucide-react";
 +import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 +
 +import { ensureLocalApi } from "~/localApi";
 +import { usePrimaryEnvironment } from "~/state/environments";
-+import { useThreadShells } from "~/state/entities";
++import { useProjects, useThreadShells } from "~/state/entities";
 +import { useEnvironmentQuery } from "~/state/query";
 +import { serverEnvironment } from "~/state/server";
 +import { useAtomCommand } from "~/state/use-atom-command";
@@ -17905,6 +18229,7 @@ index 000000000..45ed2b25b
 +import {
 +  formatBytes,
 +  groupProcesses,
++  type ProcessWorkspace,
 +  processDisplayName,
 +  type ProcessGroup,
 +} from "./processGroups";
@@ -17956,12 +18281,29 @@ index 000000000..45ed2b25b
 +  }, [refresh]);
 +
 +  const shells = useThreadShells();
++  const projects = useProjects();
 +  const threadTitleFor = useCallback(
 +    (threadId: string) => shells.find((shell) => shell.id === threadId)?.title ?? null,
 +    [shells],
 +  );
++  // A listener's directory names its workspace: a thread's worktree beats the
++  // project root it lives under, and the longest matching path wins.
++  const workspaceFor = useCallback(
++    (cwd: string): ProcessWorkspace | null => {
++      const contains = (root: string) => cwd === root || cwd.startsWith(`${root}/`);
++      const worktree = shells
++        .filter((shell) => shell.worktreePath !== null && contains(shell.worktreePath))
++        .toSorted((left, right) => right.worktreePath!.length - left.worktreePath!.length)[0];
++      if (worktree) return { label: worktree.title ?? "Untitled thread", threadId: worktree.id };
++      const project = projects
++        .filter((candidate) => contains(candidate.workspaceRoot))
++        .toSorted((left, right) => right.workspaceRoot.length - left.workspaceRoot.length)[0];
++      return project ? { label: project.title, threadId: null } : null;
++    },
++    [projects, shells],
++  );
 +  const groups = useMemo(
-+    () => groupProcesses(data?.processes ?? [], threadTitleFor),
++    () => groupProcesses(data?.processes ?? [], threadTitleFor, workspaceFor),
 +    [data, threadTitleFor],
 +  );
 +
@@ -18110,6 +18452,11 @@ index 000000000..45ed2b25b
 +              <span className="ml-2 font-mono text-[11px] text-muted-foreground">
 +                PID {process.pid}
 +              </span>
++              {process.port !== undefined ? (
++                <span className="ml-2 font-mono text-[11px] text-primary">
++                  localhost:{process.port}
++                </span>
++              ) : null}
 +            </span>
 +          }
 +        />
@@ -18118,6 +18465,7 @@ index 000000000..45ed2b25b
 +          className="max-w-[min(520px,calc(100vw-2rem))] whitespace-normal break-words text-left font-mono text-[11px] leading-relaxed"
 +        >
 +          {process.command}
++          {process.cwd ? <div className="mt-1 text-muted-foreground">in {process.cwd}</div> : null}
 +        </TooltipPopup>
 +      </Tooltip>
 +      <span className="text-right tabular-nums text-muted-foreground">
@@ -21402,10 +21750,10 @@ index 000000000..95b855941
 +}
 diff --git a/apps/web/src/neo/processGroups.test.ts b/apps/web/src/neo/processGroups.test.ts
 new file mode 100644
-index 000000000..ac8292578
+index 000000000..4528ec05c
 --- /dev/null
 +++ b/apps/web/src/neo/processGroups.test.ts
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,106 @@
 +import type { ServerProcessDiagnosticsEntry } from "@t3tools/contracts";
 +import * as Option from "effect/Option";
 +import { describe, expect, it } from "vite-plus/test";
@@ -21435,6 +21783,39 @@ index 000000000..ac8292578
 +}
 +
 +describe("groupProcesses", () => {
++  it("groups dev servers found by their ports under the workspace their directory names", () => {
++    const listener = (pid: number, cwd: string, port: number): ServerProcessDiagnosticsEntry => ({
++      ...entry(pid, "deno run dev", { kind: "listener" }),
++      port,
++      cwd,
++    });
++    const groups = groupProcesses(
++      [
++        entry(1, "codex app-server", { kind: "provider", provider: "codex", threadId: "t-1" }),
++        listener(2, "/repo/finance", 3000),
++        listener(3, "/repo/finance/.worktrees/fix", 3001),
++        listener(4, "/elsewhere", 4000),
++      ],
++      (threadId) =>
++        threadId === "t-1" ? "Fix the login bug" : threadId === "t-2" ? "Try it" : null,
++      (cwd) =>
++        cwd.startsWith("/repo/finance/.worktrees/fix")
++          ? { label: "Try it", threadId: "t-2" }
++          : cwd.startsWith("/repo/finance")
++            ? { label: "finance", threadId: null }
++            : null,
++    );
++    expect(
++      groups.map((group) => [group.kind, group.label, group.processes.map((p) => p.pid)]),
++    ).toEqual([
++      ["provider", "Codex · Fix the login bug", [1]],
++      ["listener", "Dev servers · finance", [2]],
++      ["listener", "Dev servers · Try it", [3]],
++      ["listener", "Dev servers · Unknown workspace", [4]],
++    ]);
++    expect(groups[2]?.threadId).toBe("t-2");
++  });
++
 +  it("groups by origin, names groups after provider and thread, and orders threads first", () => {
 +    const titles: Record<string, string> = { "t-1": "Fix login", "t-2": "Write docs" };
 +    const groups = groupProcesses(
@@ -21481,15 +21862,21 @@ index 000000000..ac8292578
 +});
 diff --git a/apps/web/src/neo/processGroups.ts b/apps/web/src/neo/processGroups.ts
 new file mode 100644
-index 000000000..80fc4c326
+index 000000000..087f0271f
 --- /dev/null
 +++ b/apps/web/src/neo/processGroups.ts
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,107 @@
 +import type { ServerProcessDiagnosticsEntry } from "@t3tools/contracts";
 +
 +import { providerDisplayName } from "./turnUsage";
 +
-+export type ProcessGroupKind = "provider" | "terminal" | "server";
++export type ProcessGroupKind = "provider" | "terminal" | "listener" | "server";
++
++/** Which workspace a process's working directory falls into: a thread's worktree or a project. */
++export interface ProcessWorkspace {
++  readonly label: string;
++  readonly threadId: string | null;
++}
 +
 +export interface ProcessGroup {
 +  readonly key: string;
@@ -21505,35 +21892,46 @@ index 000000000..80fc4c326
 +/**
 + * Bucket the server's process list by where each process came from, keeping
 + * the server's tree order inside a bucket so indentation still reads. Thread
-+ * groups come first (agents, then that thread's terminal), the server's own
-+ * helpers last.
++ * groups come first (agents, then that thread's terminal), then dev servers
++ * found by their ports (grouped by the workspace their directory falls into),
++ * the server's own helpers last.
 + */
 +export function groupProcesses(
 +  processes: ReadonlyArray<ServerProcessDiagnosticsEntry>,
 +  threadTitleFor: (threadId: string) => string | null,
++  workspaceFor: (cwd: string) => ProcessWorkspace | null = () => null,
 +): ReadonlyArray<ProcessGroup> {
 +  const groups = new Map<string, ProcessGroup & { processes: ServerProcessDiagnosticsEntry[] }>();
 +  for (const process of processes) {
 +    const origin = process.origin;
-+    const key = origin
-+      ? `${origin.kind}:${origin.provider ?? ""}:${origin.threadId ?? origin.providerInstanceId ?? ""}`
-+      : SERVER_GROUP_KEY;
++    const workspace =
++      origin?.kind === "listener" && process.cwd !== undefined ? workspaceFor(process.cwd) : null;
++    const key =
++      origin?.kind === "listener"
++        ? `listener:${workspace?.threadId ?? workspace?.label ?? ""}`
++        : origin
++          ? `${origin.kind}:${origin.provider ?? ""}:${origin.threadId ?? origin.providerInstanceId ?? ""}`
++          : SERVER_GROUP_KEY;
 +    let group = groups.get(key);
 +    if (!group) {
-+      const threadId = origin?.threadId ?? null;
++      const threadId = origin?.threadId ?? workspace?.threadId ?? null;
 +      const threadTitle = threadId ? threadTitleFor(threadId) : null;
 +      const who =
-+        origin?.kind === "terminal"
-+          ? "Terminal"
-+          : origin
-+            ? (providerDisplayName(origin.provider ?? null) ?? "Agent")
-+            : null;
++        origin?.kind === "listener"
++          ? "Dev servers"
++          : origin?.kind === "terminal"
++            ? "Terminal"
++            : origin
++              ? (providerDisplayName(origin.provider ?? null) ?? "Agent")
++              : null;
++      const where =
++        origin?.kind === "listener"
++          ? (workspace?.label ?? "Unknown workspace")
++          : (threadTitle ?? (threadId ? "Untitled thread" : "No thread"));
 +      group = {
 +        key,
 +        kind: origin?.kind ?? "server",
-+        label: who
-+          ? `${who} · ${threadTitle ?? (threadId ? "Untitled thread" : "No thread")}`
-+          : "T3 server helpers",
++        label: who ? `${who} · ${where}` : "T3 server helpers",
 +        threadId,
 +        processes: [],
 +      };
@@ -21542,7 +21940,13 @@ index 000000000..80fc4c326
 +    group.processes.push(process);
 +  }
 +  const rank = (group: ProcessGroup) =>
-+    group.kind === "provider" ? 0 : group.kind === "terminal" ? 1 : 2;
++    group.kind === "provider"
++      ? 0
++      : group.kind === "terminal"
++        ? 1
++        : group.kind === "listener"
++          ? 2
++          : 3;
 +  return [...groups.values()].toSorted((left, right) => {
 +    const byKind = rank(left) - rank(right);
 +    return byKind !== 0 ? byKind : left.label.localeCompare(right.label);
@@ -73928,10 +74332,10 @@ index 97f1f5cb1..aaf138d6c 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..b51a6df76
+index 000000000..530de3497
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,146 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -73989,6 +74393,12 @@ index 000000000..b51a6df76
 +CPU, memory, and running time per process. **Stop** asks a process to end (SIGINT); **Kill** ends
 +it at once after a confirmation. The list refreshes every two seconds while the dialog is open. It
 +needs the desktop app, which ships the process monitor; the plain web server has no process list.
++
++Dev servers an agent left running in the background, such as a `deno task dev` on port 3000, no
++longer hang off the agent's process once its shell exits. The dialog still finds them by the port
++they listen on and lists them under **Dev servers**, grouped by the thread worktree or project
++their working directory falls into, with the port next to the name. Stop and Kill work for them
++too. This needs `ps` and `lsof`, so it is macOS and Linux only.
 +
 +## Chevron animations
 +
@@ -74109,19 +74519,22 @@ index 2d2cf29ec..5c9f4059f 100644
     * Probe this desktop machine for installed remote-capable editor CLIs
     * (used for remote open-in-editor deep links). Optional: older desktop
 diff --git a/packages/contracts/src/server.ts b/packages/contracts/src/server.ts
-index af47255a3..6c6573fce 100644
+index af47255a3..4fb10b003 100644
 --- a/packages/contracts/src/server.ts
 +++ b/packages/contracts/src/server.ts
-@@ -311,6 +311,18 @@ export type ServerTraceDiagnosticsResult = typeof ServerTraceDiagnosticsResult.T
+@@ -311,6 +311,21 @@ export type ServerTraceDiagnosticsResult = typeof ServerTraceDiagnosticsResult.T
  export const ServerProcessSignal = Schema.Literals(["SIGINT", "SIGKILL"]);
  export type ServerProcessSignal = typeof ServerProcessSignal.Type;
  
 +/**
 + * Who started a process: a provider session (with the thread it works for
-+ * when known) or a thread's terminal. Absent for the server's own helpers.
++ * when known), a thread's terminal, or nobody the server still knows: a
++ * `listener` is a dev server found by the port it listens on after its
++ * parent shell exited, attributed by its working directory. Absent for the
++ * server's own helpers.
 + */
 +export const ServerProcessOrigin = Schema.Struct({
-+  kind: Schema.Literals(["provider", "terminal"]),
++  kind: Schema.Literals(["provider", "terminal", "listener"]),
 +  provider: Schema.optional(TrimmedNonEmptyString),
 +  providerInstanceId: Schema.optional(TrimmedNonEmptyString),
 +  threadId: Schema.optional(TrimmedNonEmptyString),
@@ -74131,11 +74544,14 @@ index af47255a3..6c6573fce 100644
  export const ServerProcessDiagnosticsEntry = Schema.Struct({
    pid: PositiveInt,
    startTimeMs: NonNegativeInt,
-@@ -323,6 +335,7 @@ export const ServerProcessDiagnosticsEntry = Schema.Struct({
+@@ -323,6 +338,10 @@ export const ServerProcessDiagnosticsEntry = Schema.Struct({
    command: TrimmedNonEmptyString,
    depth: NonNegativeInt,
    childPids: Schema.Array(PositiveInt),
 +  origin: Schema.optional(ServerProcessOrigin),
++  /** Listeners only: the lowest port they serve and where they run. */
++  port: Schema.optional(PositiveInt),
++  cwd: Schema.optional(TrimmedNonEmptyString),
  });
  export type ServerProcessDiagnosticsEntry = typeof ServerProcessDiagnosticsEntry.Type;
  
