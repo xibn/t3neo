@@ -48,9 +48,6 @@ function starLayout(): ReadonlyArray<Star> {
   return stars;
 }
 
-/** The rings and glow sit at the horizontal center, behind the centered brand's moon. */
-const GLOW_X = WIDTH / 2 - 44;
-
 export const NeoStarfield = memo(function NeoStarfield() {
   const stars = useMemo(starLayout, []);
   return (
@@ -61,18 +58,9 @@ export const NeoStarfield = memo(function NeoStarfield() {
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <defs>
-        <radialGradient id="neo-starfield-glow" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#f2a26e" stopOpacity="0.28" />
-          <stop offset="1" stopColor="#f2a26e" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <circle cx={GLOW_X} cy="48" r="52" fill="url(#neo-starfield-glow)" />
-      <g fill="none" stroke="#f2a26e" strokeOpacity="0.14">
-        <circle cx={GLOW_X} cy="48" r="24" />
-        <circle cx={GLOW_X} cy="48" r="36" />
-        <circle cx={GLOW_X} cy="48" r="48" />
-      </g>
+      {/* The ring glow behind the brand's moon is `.neo-brand-glow` on the brand
+          itself: the brand is pinned to the right and the art scales with the
+          sidebar, so a glow drawn here could not stay under the moon. */}
       {stars.map((star) => (
         <circle
           key={`${star.x}-${star.y}`}

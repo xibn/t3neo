@@ -104,9 +104,9 @@ function SidebarControl() {
   return (
     // The right-side layout controls carry mr-px (border compensation inside
     // the panel), so the trigger mirrors it: both clusters sit one extra pixel
-    // off their edge and the titlebar reads symmetric. data-sidebar-visible lets
-    // the Neo look's folded header draw its left notch around this cluster only
-    // while the sidebar is hidden and the cluster sits over the workspace card.
+    // off their edge and the titlebar reads symmetric. data-sidebar-visible tells
+    // styles whether the cluster sits over the sidebar or over the workspace; the
+    // cluster itself never moves, whichever it is.
     <div
       className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center"
       data-sidebar-control=""

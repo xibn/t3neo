@@ -104,16 +104,18 @@ function SidebarBrand({ pinnedEnd, onBackdrop }: { pinnedEnd: boolean; onBackdro
     <Link
       aria-label="Go to threads"
       className={cn(
-        "z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden rounded-md pl-1 outline-hidden ring-ring focus-visible:ring-2 md:flex",
+        "z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 rounded-md pl-1 outline-hidden ring-ring focus-visible:ring-2 md:flex",
         // The Neo look pins the brand to the right edge of its starfield, clear of the
-        // sidebar toggle on the left; the standard look keeps it left.
+        // sidebar toggle on the left; the standard look keeps it left. Pinned, the
+        // brand stays open so its ring glow can reach past the wordmark's box.
         pinnedEnd
-          ? "absolute right-3 top-1/2 -translate-y-1/2"
-          : "relative ml-[calc(var(--workspace-titlebar-content-left)+0.5rem)]",
+          ? "absolute right-3 top-1/2 -translate-y-1/2 overflow-visible"
+          : "relative ml-[calc(var(--workspace-titlebar-content-left)+0.5rem)] overflow-hidden",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"
     >
+      {pinnedEnd ? <span aria-hidden className="neo-brand-glow" /> : null}
       <MoonStarIcon className="neo-ember-glow size-3.5 shrink-0 text-primary" />
       <T3Wordmark />
       <span

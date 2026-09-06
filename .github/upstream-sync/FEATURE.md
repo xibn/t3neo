@@ -275,12 +275,14 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
    Squirrel accepts updates signed with the running app's certificate; their first launch needs
    Gatekeeper's "Open Anyway" once.
 4. **Sidebar header.** Under the Neo look, the sidebar's top-left branding sits on a static amber
-   starfield (an inline SVG with small stars, thin rings, and five larger embers that breathe in
-   stepped keyframes; `preserveAspectRatio="xMidYMin slice"` with the rings and glow just left of
-   the horizontal center, behind the moon). The art is twice the header height: the top half is
-   the header, where the three rings (r 24/36/48 on a 480×192 viewBox) complete inside the
-   header without being cut, and the bottom half is a tail of stars whose density drops quickly
-   below the header. The backdrop (`.neo-sidebar-backdrop`) is
+   starfield (an inline SVG with small stars and five larger embers that breathe in stepped
+   keyframes; `preserveAspectRatio="xMidYMin slice"`). The ring glow behind the brand's moon is
+   not part of the SVG: the brand is pinned right and the art scales with the sidebar, so
+   `.neo-brand-glow` (a span inside the brand link, `z-index: -1` in the link's stacking
+   context, centred 11px in from the link's left edge = the moon's centre) draws the soft amber
+   disc (r 28px) and three 1px rings (r 13/19/26 at 12 %) with radial gradients, faded at the
+   bottom. The art is twice the header height: the top half is the header, the bottom half is a
+   tail of stars whose density drops quickly below the header. The backdrop (`.neo-sidebar-backdrop`) is
    `calc(var(--workspace-topbar-height) * 2)` tall with a `mask-image` that stays solid over
    the header and fades to transparent by 90 %, so the field relaxes into the sidebar over a
    short distance instead of stopping at the header's edge. The brand itself is a moon-star icon in `#f1a629`
@@ -383,11 +385,11 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
   actions cluster (`[data-chat-header-actions]`, which holds the show/hide toggle) floats
   absolutely at `top: 0.375rem; right: 0.5rem` in the strip colour (`var(--sidebar)`) with a
   `border-bottom-left-radius: 0.75rem`, over the card's top-right corner; the titlebar panel
-  controls (`[data-workspace-titlebar-controls]`) float at the same top. With the sidebar hidden,
-  the fixed sidebar-toggle cluster (`[data-sidebar-control]`, which carries
-  `data-sidebar-visible`) drops to the same top and draws the mirror image of that notch around
-  the window controls and the toggle, and the card's top-left corner goes square and bordered
-  underneath it. The workspace below becomes the card: `border-top-left-radius` and `border-top-right-radius` both `0.75rem`, and
+  controls (`[data-workspace-titlebar-controls]`) float at the same top. There is no left
+  notch: with the sidebar hidden, the fixed sidebar-toggle cluster (`[data-sidebar-control]`,
+  which carries `data-sidebar-visible`) keeps its normal place next to the window controls
+  (moving it down with the panel toggles was rejected as bad UX) and the card's top-left corner
+  stays rounded under it. The workspace below becomes the card: `border-top-left-radius` and `border-top-right-radius` both `0.75rem`, and
   the outline (`border-top`/`border-left` from the normal state plus `border-right`) wraps all
   three visible edges. The Default look keeps the generic `max(2rem, env(titlebar-area-height,
 0px))` strip from `neo/neo.css`.

@@ -531,6 +531,43 @@ html[data-chevron-animations="off"]
   mask-image: linear-gradient(to bottom, black 50%, rgb(0 0 0 / 40%) 64%, transparent 90%);
 }
 
+/* The ring glow behind the brand's moon: a soft amber disc and three thin
+   rings, centred on the moon (4px padding plus half the 14px glyph). It sits
+   in the brand's own stacking context, so it stays under the moon wherever
+   the brand is pinned. Slightly taller than the header; the bottom fades so
+   the rings trail into the sidebar like the starfield does. */
+.neo-brand-glow {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  z-index: -1;
+  width: 3.5rem;
+  height: 3.25rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at center,
+      transparent 25px,
+      rgb(242 162 110 / 12%) 25px 26px,
+      transparent 26px
+    ),
+    radial-gradient(
+      circle at center,
+      transparent 18px,
+      rgb(242 162 110 / 12%) 18px 19px,
+      transparent 19px
+    ),
+    radial-gradient(
+      circle at center,
+      transparent 12px,
+      rgb(242 162 110 / 12%) 12px 13px,
+      transparent 13px
+    ),
+    radial-gradient(circle 28px at center, rgb(242 162 110 / 28%), transparent);
+  mask-image: linear-gradient(to bottom, black 80%, transparent);
+}
+
 /* Star skies: small star shapes scattered over the sidebar, the chat top bar
    and the workspace (NeoStarSky). They sit at z-index -1 inside an isolated
    host, so they paint above the host's background and below its content.
