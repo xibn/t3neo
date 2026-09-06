@@ -173,6 +173,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     moveWindow: (delta) => ipcRenderer.invoke(IpcChannels.PET_MOVE_WINDOW_CHANNEL, delta),
     focusMain: (target) => ipcRenderer.invoke(IpcChannels.PET_FOCUS_MAIN_CHANNEL, target),
     fetchGallery: (url) => ipcRenderer.invoke(IpcChannels.PET_FETCH_GALLERY_CHANNEL, url),
+    resizeWindow: (size) => ipcRenderer.invoke(IpcChannels.PET_RESIZE_WINDOW_CHANNEL, size),
   },
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {

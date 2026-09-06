@@ -88,3 +88,4 @@ export const PET_CLOSE_WINDOW_CHANNEL = "desktop:pet-close-window";
 export const PET_MOVE_WINDOW_CHANNEL = "desktop:pet-move-window";
 export const PET_FOCUS_MAIN_CHANNEL = "desktop:pet-focus-main";
 export const PET_FETCH_GALLERY_CHANNEL = "desktop:pet-fetch-gallery";
+export const PET_RESIZE_WINDOW_CHANNEL = "desktop:pet-resize-window";

@@ -7,7 +7,14 @@ import { PetSprite } from "./PetSprite";
 import { createClipShuffle, WukongPet } from "./WukongPet";
 
 /** The preview tours every mood so the card shows what the pet can do. */
-const PREVIEW_MOODS: ReadonlyArray<PetMood> = ["idle", "typing", "working", "done"];
+const PREVIEW_MOODS: ReadonlyArray<PetMood> = [
+  "idle",
+  "typing",
+  "working",
+  "waiting",
+  "done",
+  "failed",
+];
 /** Long enough to see what a clip is before the next one starts. */
 const PREVIEW_STEP_MS = 4_000;
 

@@ -234,7 +234,7 @@ function syncWindowAppearance(
   platform: NodeJS.Platform,
 ): Effect.Effect<void> {
   return Effect.sync(() => {
-    if (window.isDestroyed()) {
+    if (window.isDestroyed() || ElectronWindow.isTransparentWindow(window)) {
       return;
     }
 

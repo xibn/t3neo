@@ -191,12 +191,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "neo-pet-working-interval",
-    title: "Working animation interval",
-    to: "/settings/pets",
-    searchTerms: ["pet wukong animation change duration seconds rotation exercise"],
-  },
-  {
     id: "neo-ascii-pet-color",
     title: "ASCII pet color",
     to: "/settings/pets",

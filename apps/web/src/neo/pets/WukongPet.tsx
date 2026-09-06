@@ -9,9 +9,6 @@ import {
   type WukongClip,
 } from "./petRegistry";
 
-/** How often a pet with several working clips changes between them; Settings → Pets tunes this. */
-export const WORKING_CLIP_ROTATION_MS = 6_000;
-
 const clipCache = new Map<WukongClip, AsciiFrames>();
 
 function useWukongClip(clip: WukongClip): AsciiFrames | null {

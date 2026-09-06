@@ -8,9 +8,7 @@ import {
   type AsciiPetColor,
   DEFAULT_NEO_SETTINGS,
   MAX_PET_SIZE,
-  MAX_PET_WORKING_INTERVAL_SEC,
   MIN_PET_SIZE,
-  MIN_PET_WORKING_INTERVAL_SEC,
   useNeoSettings,
   useNeoSettingsStore,
   useUpdateNeoSettings,
@@ -78,13 +76,6 @@ export function PetSettingsPanel() {
   const petSizeSliderStyle = {
     "--settings-slider-progress": `${petSizeRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - petSizeRatio}rem`,
-  } as CSSProperties;
-  const workingIntervalRatio =
-    (settings.petWorkingIntervalSec - MIN_PET_WORKING_INTERVAL_SEC) /
-    (MAX_PET_WORKING_INTERVAL_SEC - MIN_PET_WORKING_INTERVAL_SEC);
-  const workingIntervalSliderStyle = {
-    "--settings-slider-progress": `${workingIntervalRatio * 100}%`,
-    "--settings-slider-fill-offset": `${0.5 - workingIntervalRatio}rem`,
   } as CSSProperties;
   return (
     <SettingsPageContainer>
@@ -156,47 +147,6 @@ export function PetSettingsPanel() {
                 style={petSizeSliderStyle}
                 type="range"
                 value={settings.petSize}
-              />
-            </div>
-          }
-        />
-
-        <SettingsRow
-          {...searchableSetting("neo-pet-working-interval")}
-          description="How long an imported pet keeps one working animation before switching to the next. Wukong hammers away throughout."
-          resetAction={
-            settings.petWorkingIntervalSec !== DEFAULT_NEO_SETTINGS.petWorkingIntervalSec ? (
-              <SettingResetButton
-                label="working animation interval"
-                onClick={() =>
-                  updateSettings({
-                    petWorkingIntervalSec: DEFAULT_NEO_SETTINGS.petWorkingIntervalSec,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="flex w-full items-center gap-3 sm:w-52">
-              <output
-                className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
-                htmlFor="neo-pet-working-interval"
-              >
-                {settings.petWorkingIntervalSec}s
-              </output>
-              <input
-                aria-label="Working animation interval"
-                className="settings-slider min-w-0 flex-1"
-                id="neo-pet-working-interval"
-                max={MAX_PET_WORKING_INTERVAL_SEC}
-                min={MIN_PET_WORKING_INTERVAL_SEC}
-                onChange={(event) =>
-                  updateSettings({ petWorkingIntervalSec: Number(event.currentTarget.value) })
-                }
-                step={1}
-                style={workingIntervalSliderStyle}
-                type="range"
-                value={settings.petWorkingIntervalSec}
               />
             </div>
           }

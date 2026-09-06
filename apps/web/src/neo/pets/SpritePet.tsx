@@ -1,108 +1,143 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { prefersReducedMotion } from "./AsciiAnimation";
 import { useImportedPet, useSpritesheetUrl, type ImportedPetId } from "./importedPets";
 import type { PetMood } from "./petRegistry";
 import {
+  advanceSpritePlayback,
+  endSpriteGesture,
   SPRITE_CELL_HEIGHT,
   SPRITE_CELL_WIDTH,
   SPRITE_CLIPS,
   SPRITE_COLUMNS,
-  SPRITE_WORKING_STATES,
+  spriteFrameDurationMs,
   spriteRows,
   spriteStateForMood,
+  startSpriteGesture,
+  startSpriteState,
+  type SpritePlayback,
   type SpriteState,
   type SpriteVersion,
 } from "./spriteSheet";
-import { createClipShuffle, WORKING_CLIP_ROTATION_MS } from "./WukongPet";
 
 /** Height of one frame at `width` pixels, whole pixels so the sheet lines up. */
 export function spriteFrameHeight(width: number): number {
   return Math.round((width * SPRITE_CELL_HEIGHT) / SPRITE_CELL_WIDTH);
 }
 
+export type SpriteDragDirection = "left" | "right";
+
+/** What the user does to the pet: a drag runs it along, a click makes it wave. */
+export interface SpriteGesture {
+  readonly dragDirection: SpriteDragDirection | null;
+  /** Bumped on every click; each bump plays one wave. */
+  readonly waveToken: number;
+}
+
 /**
- * Plays one row of a Codex pet spritesheet by sliding the background image
- * under a frame-sized box: one style change per frame, no image decoding
- * and nothing else repaints. Frame holds follow the clip's timing table,
+ * Plays a Codex pet spritesheet the way the Codex app does. A change of
+ * state plays that state's row three times and then settles into the slow
+ * idle loop; the same state arriving again (`stateKey`) restarts it, as a
+ * new notification does in Codex. A drag runs the pet left or right for as
+ * long as it lasts, a click waves once, and both hand back to the sequence
+ * they interrupted. One style change per frame, nothing else repaints;
  * playback pauses while the document is hidden, and reduced motion holds
- * the first frame. Idle, typing and done map to one clip each; working
- * rotates through the working clips like Wukong does.
+ * the first frame.
  */
 export const SpritePet = memo(function SpritePet({
   spritesheetUrl,
   spriteVersion,
   mood,
+  stateKey = "",
   width,
   playing = true,
-  rotationMs = WORKING_CLIP_ROTATION_MS,
   state: forcedState,
+  gesture,
   className,
 }: {
   spritesheetUrl: string;
   /** Unknown (gallery previews) lets the image's own aspect place the rows. */
   spriteVersion?: SpriteVersion;
   mood: PetMood;
+  /** Changes when the mood's cause changes (another thread), which replays the state. */
+  stateKey?: string;
   width: number;
   playing?: boolean;
-  /** How often the working clip changes. */
-  rotationMs?: number;
-  /** Play this clip regardless of mood. */
+  /** Play this row regardless of mood, looping. */
   state?: SpriteState;
+  gesture?: SpriteGesture;
   className?: string;
 }) {
-  const shuffle = useRef<(() => SpriteState) | null>(null);
-  if (shuffle.current === null) shuffle.current = createClipShuffle(SPRITE_WORKING_STATES);
-  const [workingState, setWorkingState] = useState<SpriteState>(() => shuffle.current!());
+  const targetState = forcedState ?? spriteStateForMood(mood);
+  const [playback, setPlayback] = useState<SpritePlayback>(() =>
+    forcedState
+      ? { ...startSpriteState(forcedState), cyclesLeft: null }
+      : startSpriteState(targetState),
+  );
 
   useEffect(() => {
-    if (mood !== "working" || forcedState) return;
-    const timer = setInterval(() => setWorkingState(shuffle.current!()), rotationMs);
-    return () => clearInterval(timer);
-  }, [mood, rotationMs, forcedState]);
+    setPlayback(
+      forcedState
+        ? { ...startSpriteState(forcedState), cyclesLeft: null }
+        : startSpriteState(targetState),
+    );
+  }, [targetState, stateKey, forcedState]);
 
-  const state = forcedState ?? (mood === "working" ? workingState : spriteStateForMood(mood));
-  const clip = SPRITE_CLIPS[state];
-  const [frame, setFrame] = useState(0);
+  const dragDirection = gesture?.dragDirection ?? null;
+  useEffect(() => {
+    if (dragDirection === null) {
+      setPlayback((current) =>
+        current.state === "running-left" || current.state === "running-right"
+          ? endSpriteGesture(current)
+          : current,
+      );
+      return;
+    }
+    setPlayback((current) =>
+      startSpriteGesture(current, dragDirection === "left" ? "running-left" : "running-right"),
+    );
+  }, [dragDirection]);
+
+  const waveToken = gesture?.waveToken ?? 0;
+  useEffect(() => {
+    if (waveToken === 0) return;
+    setPlayback((current) => startSpriteGesture(current, "waving"));
+  }, [waveToken]);
 
   useEffect(() => {
-    setFrame(0);
-    if (!playing || clip.durationsMs.length <= 1 || prefersReducedMotion()) return;
+    if (!playing || prefersReducedMotion()) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let index = 0;
-    const step = () => {
-      index = (index + 1) % clip.durationsMs.length;
-      setFrame(index);
-      timer = setTimeout(step, clip.durationsMs[index]);
-    };
-    const start = () => {
-      if (timer !== null) return;
-      timer = setTimeout(step, clip.durationsMs[index]);
-    };
-    const stop = () => {
-      if (timer === null) return;
-      clearTimeout(timer);
-      timer = null;
+    const schedule = () => {
+      if (timer !== null || document.hidden) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setPlayback((current) => advanceSpritePlayback(current));
+      }, spriteFrameDurationMs(playback));
     };
     const onVisibility = () => {
-      if (document.hidden) stop();
-      else start();
+      if (document.hidden) {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+      } else {
+        schedule();
+      }
     };
-    if (!document.hidden) start();
+    schedule();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      stop();
+      if (timer !== null) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [clip, playing]);
+  }, [playback, playing]);
 
   const height = spriteFrameHeight(width);
+  const row = SPRITE_CLIPS[playback.state].row;
   return (
     <div
       aria-hidden
       className={cn("neo-sprite-pet", className)}
-      data-sprite-state={state}
+      data-sprite-state={playback.state}
       style={{
         width: `${width}px`,
         height: `${height}px`,
@@ -110,7 +145,7 @@ export const SpritePet = memo(function SpritePet({
         backgroundSize: `${width * SPRITE_COLUMNS}px ${
           spriteVersion === undefined ? "auto" : `${height * spriteRows(spriteVersion)}px`
         }`,
-        backgroundPosition: `${-frame * width}px ${-clip.row * height}px`,
+        backgroundPosition: `${-playback.frame * width}px ${-row * height}px`,
         backgroundRepeat: "no-repeat",
         // Pixel art stays crisp when blown up; when shrunk, smoothing reads better.
         imageRendering: width > SPRITE_CELL_WIDTH ? "pixelated" : "auto",
@@ -123,17 +158,19 @@ export const SpritePet = memo(function SpritePet({
 export const ImportedPetSprite = memo(function ImportedPetSprite({
   id,
   mood,
+  stateKey,
   width,
   playing,
-  rotationMs,
   state,
+  gesture,
 }: {
   id: ImportedPetId;
   mood: PetMood;
+  stateKey?: string;
   width: number;
   playing?: boolean;
-  rotationMs?: number;
   state?: SpriteState;
+  gesture?: SpriteGesture;
 }) {
   const pet = useImportedPet(id);
   const url = useSpritesheetUrl(id);
@@ -146,9 +183,10 @@ export const ImportedPetSprite = memo(function ImportedPetSprite({
       spriteVersion={pet.spriteVersion}
       mood={mood}
       width={width}
+      {...(stateKey !== undefined ? { stateKey } : {})}
       {...(playing !== undefined ? { playing } : {})}
-      {...(rotationMs !== undefined ? { rotationMs } : {})}
       {...(state !== undefined ? { state } : {})}
+      {...(gesture !== undefined ? { gesture } : {})}
     />
   );
 });

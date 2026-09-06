@@ -97,6 +97,17 @@ export class ElectronWindow extends Context.Service<
   }
 >()("@t3tools/desktop/electron/ElectronWindow") {}
 
+/**
+ * Windows created transparent (the T3 Neo pet window). Appearance syncs must
+ * leave their background alone: painting the chrome colour onto one turns it
+ * into an opaque box.
+ */
+const transparentWindows = new WeakSet<Electron.BrowserWindow>();
+
+export function isTransparentWindow(window: Electron.BrowserWindow): boolean {
+  return transparentWindows.has(window);
+}
+
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
@@ -191,7 +202,11 @@ export const make = Effect.gen(function* () {
       } satisfies typeof ElectronWindowCreateOptions.Type;
 
       return Effect.try({
-        try: () => new Electron.BrowserWindow(options),
+        try: () => {
+          const window = new Electron.BrowserWindow(options);
+          if (options.transparent) transparentWindows.add(window);
+          return window;
+        },
         catch: (cause) => new ElectronWindowCreateError({ options: diagnosticOptions, cause }),
       });
     },

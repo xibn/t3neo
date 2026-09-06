@@ -200,6 +200,36 @@ export const fetchPetGallery = DesktopIpc.makeIpcMethod({
   }),
 });
 
+/** The pet window can never be smaller than its two pills. */
+const PET_WINDOW_MIN_SIZE = 64;
+
+/**
+ * The renderer measures the pet, its bubble and its pills and asks for a
+ * window that just fits. The window keeps its bottom edge and horizontal
+ * centre, so the pet stays where it stands and the bubble grows upward.
+ */
+export const resizePetWindow = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PET_RESIZE_WINDOW_CHANNEL,
+  payload: Schema.Struct({ width: Schema.Number, height: Schema.Number }),
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.pet.resizeWindow")(function* (size) {
+    const existing = livePetWindow();
+    if (existing === null) return;
+    yield* Effect.sync(() => {
+      const width = Math.max(PET_WINDOW_MIN_SIZE, Math.ceil(size.width));
+      const height = Math.max(PET_WINDOW_MIN_SIZE, Math.ceil(size.height));
+      const bounds = existing.getBounds();
+      if (bounds.width === width && bounds.height === height) return;
+      existing.setBounds({
+        x: Math.round(bounds.x + (bounds.width - width) / 2),
+        y: bounds.y + bounds.height - height,
+        width,
+        height,
+      });
+    });
+  }),
+});
+
 export const focusMainFromPet = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PET_FOCUS_MAIN_CHANNEL,
   payload: Schema.NullOr(Schema.Struct({ environmentId: Schema.String, threadId: Schema.String })),

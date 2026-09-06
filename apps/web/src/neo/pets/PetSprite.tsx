@@ -5,23 +5,26 @@ import { AsciiAnimation } from "./AsciiAnimation";
 import { NOTHING_FRAMES, type PetMood } from "./petRegistry";
 import { LunarPet } from "./LunarPet";
 import { RabbitPet } from "./RabbitPet";
-import { ImportedPetSprite } from "./SpritePet";
+import { ImportedPetSprite, type SpriteGesture } from "./SpritePet";
 import { WukongPet } from "./WukongPet";
 
 /** Renders the chosen pet at `size` pixels wide for the given mood. */
 export const PetSprite = memo(function PetSprite({
   pet,
   mood,
+  stateKey,
   size,
   playing = true,
-  rotationMs,
+  gesture,
 }: {
   pet: PetId;
   mood: PetMood;
+  /** Changes when the mood's cause changes; imported pets replay their state on it. */
+  stateKey?: string;
   size: number;
   playing?: boolean;
-  /** How often an imported pet changes between its working clips. */
-  rotationMs?: number;
+  /** Drags and clicks; only the imported pets act them out. */
+  gesture?: SpriteGesture;
 }) {
   switch (pet) {
     case "none":
@@ -46,7 +49,8 @@ export const PetSprite = memo(function PetSprite({
           mood={mood}
           width={size}
           playing={playing}
-          {...(rotationMs !== undefined ? { rotationMs } : {})}
+          {...(stateKey !== undefined ? { stateKey } : {})}
+          {...(gesture !== undefined ? { gesture } : {})}
         />
       );
   }

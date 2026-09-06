@@ -333,13 +333,14 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
    `docs/_config.yml` serves it at the site root (`/download/` redirects there) and renders the
    manuals under `/docs/`. The README starts with a T3 Neo section that embeds the button
    linking to that page.
-7. **README screenshots.** `assets/neo/screenshots/header-collapsed.jpg` (a chat in the Neo
-   look with the header actions folded away) and `pets.jpg` (the pet settings, "No pet"
-   selected), embedded under a "Screenshots" heading in the T3 Neo README section. The README
-   section itself is a short technical bullet list of the fork's features (Neo look, message
-   queue, usage badges, collapsible header, pets, Neo settings "and more") with no release or
-   automation prose. Retake the captures when the UI changes: 1440×900 CSS px at 2× (2880 px
-   wide) JPEGs, dark appearance, no toast, no pet overlay.
+7. **README screenshot.** `assets/neo/screenshots/header-collapsed.jpg` (a chat in the Neo
+   look with the header actions folded away), embedded under a "Screenshots" heading in the T3
+   Neo README section (the former `pets.jpg` was dropped on 2026-09-06). The README section
+   itself is a short technical bullet list of the fork's features, ordered by how much people
+   are likely to want them: message queue, usage badges, pets (with the Codex galleries), Neo
+   look, processes, collapsible header, Neo settings "and more"; no release or automation
+   prose. Retake the capture when the UI changes: 1440×900 CSS px at 2× (2880 px wide) JPEG,
+   dark appearance, no toast, no pet overlay.
 8. **Nightly builds.** Upstream nightlies (`vX.Y.Z-nightly.<date>.<run>`) can be rebuilt as T3 Neo
    nightlies on demand. Their version is `X.Y.Z-nightly.neo.<date>.<run>`: `nightly` stays the
    first pre-release word because the desktop updater reads the update channel from it, and `neo`
@@ -484,9 +485,10 @@ The **Pets** tab has:
    renders 32 frames of 25×11 cells with three-cell-wide bars and `@`/`#`/`+` glyphs by depth,
    70 ms per frame, so the X reads as a solid block), **Hoppy (Loop)** (the rabbit),
    **Wukong (Reactive)**, and **Lunar (No Animation)**. Previews tour every mood on a timer
-   (idle → typing → working, ~4 s each) and rotate working clips faster than the live pet.
-2. **Pet size** slider (32 to 360 px, default 160, step 4) and **Working animation
-   interval** (seconds between Wukong's working clips, `neo-pet-working-interval`).
+   (idle → typing → working → waiting → done → failed, ~4 s each).
+2. **Pet size** slider (32 to 360 px, default 160, step 4). The former **Working animation
+   interval** row is gone (2026-09-06): nothing rotates working clips any more; the
+   `petWorkingIntervalSec` setting stays in the schema, ignored.
 3. **ASCII pet color** select (System / Light / Dark, default **System**) in the Pets panel below
    Pet size, registered in `settingsSearch.ts` as `neo-ascii-pet-color`. The ASCII pets (the X
    and Wukong) draw their glyphs in `--neo-ascii-pet-dark` (`#f1a629`, the ember amber) on a
@@ -578,13 +580,21 @@ contracts or server settings.
    `[data-chat-composer-form]`. `petActivity.ts` holds the store and the pure helpers `petMoodFor`
    and `petBadgeFor`.
 7. **Desktop pet window.** `apps/desktop/src/ipc/methods/pet.ts` opens a transparent, frameless,
-   non-focusable, always-on-top window (280×380) that loads `#/pet` (`apps/web/src/routes/pet.tsx`
+   non-focusable, always-on-top window (opened at 280×380, then fitted to its content) that loads `#/pet` (`apps/web/src/routes/pet.tsx`
    renders `PetWidget` with a transparent document). IPC channels `pet.openWindow`,
    `pet.closeWindow`, `pet.moveWindow({dx,dy})` (dragging the pet moves the window), and
    `pet.focusMain(target)` (reveals the main window and sends the menu action
    `open-thread:<environmentId>:<threadId>`, handled in `AppSidebarLayout`). Exposed on
    `desktopBridge.pet` (optional in `packages/contracts/src/ipc.ts`). The pet window closes with the
-   main window. `setVisibleOnAllWorkspaces` is called with `skipTransformProcessType: true`:
+   main window. `pet.resizeWindow({width,height})`: the widget wraps bubble, pet and pills in
+   `.neo-pet-stack` (`width: max-content`), watches it with a `ResizeObserver` and asks for a
+   window of that size plus 8px padding; the main process keeps the window's bottom edge and
+   horizontal centre (`setBounds`), min 64×64, so no dead space sits above the pet and a bubble
+   grows upward. The bubble is at most twice the pet's width (`--neo-pet-width` on the widget,
+   `max-width: min(18rem, 2 × pet)`). Appearance syncs skip transparent windows:
+   `ElectronWindow.create` records them (`isTransparentWindow`) and `DesktopWindow`'s
+   `syncWindowAppearance` leaves their background alone, otherwise a theme switch painted the
+   chrome colour onto the pet window. `setVisibleOnAllWorkspaces` is called with `skipTransformProcessType: true`:
    without it Electron turns the app into a macOS accessory process (no Dock icon) to float the
    window over fullscreen apps. The Dock icon wins; the pet does not float over fullscreen apps.
 8. **Codex pets.** A second section on the Pets tab, **Codex pets** (`id="codex-pets"`, store
@@ -642,18 +652,36 @@ contracts or server settings.
      idle → typing → working → done), name and "<source> by <author> · <gallery>", plus
      **Rename** (in-place input, Enter/check saves, Escape/X cancels, 40 characters max, empty
      falls back to the source name) and **Delete**.
-   - `spriteSheet.ts` + `SpritePet.tsx` render Codex sheets: 8 columns of 192×208 cells, one
-     row per clip with the Codex timing tables (`idle`, `running-right`, `running-left`,
-     `waving`, `jumping`, `failed`, `waiting`, `running`, `review`; v2 look rows unused). The
-     sprite is a frame-sized box whose `background-position` moves per frame (`setTimeout` chain
-     with per-frame holds, paused while hidden, first frame under reduced motion;
-     `image-rendering: pixelated` only when drawn larger than a cell; an unknown sheet version
-     sizes the background by the image's own aspect). Moods: idle → `idle`, typing → `waiting`,
-     done → `waving`, working → shuffle-bag rotation over `running`, `review`, `jumping`,
-     `running-right`, `running-left` at the **Working animation interval**.
-   - `PetMood` gained **done** (idle with unseen finished work; `petMoodFor` takes
-     `unseenCompleted`); Wukong sleeps for it, the sprite pets wave. `createClipShuffle` is
-     generic over the clip type.
+   - `spriteSheet.ts` + `SpritePet.tsx` render Codex sheets the way the Codex app does
+     (researched 2026-09-06 in `openai/codex` `codex-rs/tui/src/pets/{model,ambient}.rs` and
+     `alterhq/OpenPetsKit`): 8 columns of 192×208 cells, one row per clip, Codex's own timing
+     tables (idle is the slow breathing loop 1680/660/660/840/840/1920 ms, not the preview
+     GIF tempo; `running-right`/`running-left` 120…220, `waving` 140…280, `jumping` 140…280,
+     `failed` 140…240, `waiting` 150…260, `running` 120…220, `review` 150…280; v2 look rows
+     unused). Playback (`SpritePlayback`, pure functions `startSpriteState`,
+     `advanceSpritePlayback`, `startSpriteGesture`, `endSpriteGesture`,
+     `spriteFrameDurationMs`): a state row plays `SPRITE_STATE_CYCLES` = 3 times, then the
+     idle loop takes over until the state or its cause changes (`stateKey`: the thread keys
+     behind the mood, so a second running thread replays `running` like a new Codex
+     notification). Gestures ride on top and hand back to the interrupted sequence: a drag of
+     the window plays `running-right`/`running-left` (direction from the pointer's horizontal
+     motion, stride kept when it flips), a click plays one `waving`. The sprite is a
+     frame-sized box whose `background-position` moves per frame (`setTimeout` per frame hold,
+     paused while hidden, first frame under reduced motion; `image-rendering: pixelated` only
+     when drawn larger than a cell; an unknown sheet version sizes the background by the
+     image's own aspect). Mood → state: idle/typing → `idle` (Codex pets ignore the composer),
+     working → `running`, waiting → `waiting`, failed → `failed`, done → `review`.
+   - `PetMood` is `idle | typing | working | waiting | failed | done`. `petActivity.ts` derives
+     it from the shells the way Codex reads its session (`petThreadActivity`): **waiting** =
+     `hasPendingApprovals || hasPendingUserInput` (Codex "Needs input"), **working** = live or
+     queued turn (Codex "Running"), **failed** = a thread that left the running set with
+     `latestTurn.state === "error"` or `session.status === "error"` and has not been viewed
+     (Codex "Blocked"), **done** = finished unseen (Codex "Ready"). Order: typing, waiting,
+     working, failed, done. The bubble list uses those Codex labels ("Needs input", "Running",
+     "Blocked", "Ready") with help, spinner, alert and check icons. Wukong: waiting → his
+     typing/watching clip, failed/done → sleeping. Hoppy and Lunar do not animate states; they
+     show them through the bubble and badge only. `createClipShuffle` is generic over the clip
+     type and now only serves the settings preview.
    - Pets in the web app stay unavailable (no window); the galleries that allow cross-origin
      requests still browse and import there.
 

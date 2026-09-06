@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 import { useMessageQueueStore } from "../../messageQueueStore";
 import { useThreadShells } from "../../state/entities";
-import { notePetTyping, petRunningThreads, usePetActivityStore } from "./petActivity";
+import { notePetTyping, petThreadActivity, usePetActivityStore } from "./petActivity";
 
 /** The thread the user is looking at, from the `/$environmentId/$threadId` route. */
 export function activeThreadKeyFromPathname(pathname: string): string | null {
@@ -16,9 +16,9 @@ export function activeThreadKeyFromPathname(pathname: string): string | null {
 }
 
 /**
- * Feeds the pet from live app state: running threads from the shells, the
- * viewed thread from the route, and typing from composer input events. Mount
- * once per window.
+ * Feeds the pet from live app state: running, waiting and failed threads
+ * from the shells, the viewed thread from the route, and typing from
+ * composer input events. Mount once per window.
  */
 export function usePetActivitySync(): void {
   const shells = useThreadShells();
@@ -29,7 +29,7 @@ export function usePetActivitySync(): void {
   });
 
   useEffect(() => {
-    const running = petRunningThreads({
+    const activity = petThreadActivity({
       threads: shells.map((shell) => {
         const key = scopedThreadKey(scopeThreadRef(shell.environmentId, shell.id));
         return {
@@ -38,12 +38,15 @@ export function usePetActivitySync(): void {
           threadId: shell.id,
           title: shell.title,
           status: shell.session?.status,
+          latestTurnState: shell.latestTurn?.state,
+          hasPendingApprovals: shell.hasPendingApprovals,
+          hasPendingUserInput: shell.hasPendingUserInput,
           queuedCount: queuedByThread[key]?.length ?? 0,
         };
       }),
       pausedThreads,
     });
-    usePetActivityStore.getState().setRunning(running, activeThreadKey);
+    usePetActivityStore.getState().setActivity(activity, activeThreadKey);
   }, [shells, queuedByThread, pausedThreads, activeThreadKey]);
 
   useEffect(() => {

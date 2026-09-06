@@ -1,7 +1,12 @@
 import type { BuiltinPetId } from "../neoSettings";
 
-/** "done" is idle with finished work nobody has looked at yet. */
-export type PetMood = "idle" | "typing" | "working" | "done";
+/**
+ * What the pet reacts to, in Codex's vocabulary: "working" while an agent
+ * runs, "waiting" while one needs approval or an answer, "failed" and "done"
+ * while a turn that errored or finished has not been looked at yet. "typing"
+ * is ours: the user is writing in the composer.
+ */
+export type PetMood = "idle" | "typing" | "working" | "waiting" | "failed" | "done";
 
 export interface PetDefinition {
   readonly id: BuiltinPetId;
@@ -24,7 +29,7 @@ export const PET_DEFINITIONS: ReadonlyArray<PetDefinition> = [
     id: "wukong",
     label: "Wukong (Reactive)",
     description:
-      "An ASCII monkey. He sleeps while you are away, watches while you type, and hammers away while your agents work.",
+      "An ASCII monkey. He sleeps while you are away, watches while you type or an agent needs you, and hammers away while your agents work.",
   },
   {
     id: "lunar",
@@ -66,12 +71,15 @@ export function loadWukongClip(clip: WukongClip): Promise<AsciiFrames> {
   }
 }
 
+/** Wukong watches you while you type and while an agent waits on you; otherwise he sleeps or hammers. */
 export function wukongClipForMood(mood: PetMood): WukongClip {
   switch (mood) {
     case "idle":
     case "done":
+    case "failed":
       return "sleeping";
     case "typing":
+    case "waiting":
       return "typing";
     case "working":
       return "working";

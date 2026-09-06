@@ -87,9 +87,9 @@ The pet floats above the app. Drag it anywhere; the position is remembered. The 
 slider changes how big it is, down to a 32 px corner companion, and the preview cards tour every
 mood so you can see what each pet does. Wukong's preview shows each of his animations for a few
 seconds, and none comes back until all the others have played. Wukong keeps working between queued
-messages instead of dozing off, unless the queue is paused. **Working animation interval** sets
-how long an imported pet keeps one working animation before switching, from 2 to 12 seconds; the
-default is 6. Typing counts in every window: the pet window sees you type in the main window.
+messages instead of dozing off, unless the queue is paused, and watches you while an agent waits
+for an approval or an answer. Typing counts in every window: the pet window sees you type in the
+main window.
 
 **ASCII pet color** sets the glyph color of the X and of Wukong. **System** follows the appearance:
 warm amber on a dark canvas, the accent orange on a light one. **Light** and **Dark** pin one of
@@ -97,9 +97,10 @@ those colors regardless of appearance. The circle next to the select previews th
 System it shows both colors split on a diagonal. With the Neo look off, the pet and the **Neo**
 badges take the theme's action color instead, the dark and light one for each appearance.
 
-The pet doubles as a status light. A bubble above it names one run: the first running thread
-(spinning icon, "Working") or, when nothing runs, a thread that finished while you were looking
-somewhere else (check icon, "Done"). Click the bubble to open that thread. Two round pills always
+The pet doubles as a status light, with the words the Codex pet uses. A bubble above it names one
+thread: one that needs an approval or an answer first ("Needs input"), else a running one
+("Running"), else one that failed ("Blocked") or finished ("Ready") while you were looking
+somewhere else. Click the bubble to open that thread. Two round pills always
 sit below the pet: the first shows the number of running threads, a check once finished work is
 waiting for you, and 0 when nothing runs and you have seen everything; the second switches the
 bubble between showing one run and showing all of them. It always works, and the choice stays put
@@ -114,7 +115,9 @@ accent color while a pet is on.
 ### Pet window
 
 Picking a pet opens its window; picking another pet swaps it in place, and **No pet** closes the
-window. It stays above other apps and never steals keyboard focus. Drag the pet to move the window.
+window. It stays above other apps and never steals keyboard focus, and it is only ever as big as
+the pet with its bubble and pills, growing upward when the bubble needs room; the bubble itself is
+at most twice as wide as the pet. Drag the pet to move the window.
 Clicking it brings T3 Neo forward. The pet window closes with the main window. Pets need the
 desktop app; the web app has no window to put them in.
 
@@ -132,10 +135,11 @@ pet's files and license. openpets.sh only answers the desktop app.
 **Import** downloads the pet and picks it right away. Every import is a copy of its own: it gets a
 card in the pet picker with the gallery name, author and site, you can **Rename** or **Delete**
 it there, you can import the same pet again, and changes in the gallery never reach the pets you
-already have. Imported pets react like Wukong: they idle while you read, wait while you type, run,
-jump and review while agents work (switching at the **Working animation interval**), and wave
-when work finished while you were looking elsewhere. Deleting the pet you are using switches to
-**No pet**.
+already have. Imported pets behave exactly like they do in the Codex app: when an agent starts
+working, needs your input, fails, or finishes while you look elsewhere, the pet plays that state's
+animation three times and then settles into its slow idle breathing until something changes. Drag
+the pet and it runs along in that direction; click it and it waves. They ignore typing, as Codex
+pets do. Deleting the pet you are using switches to **No pet**.
 
 ## Usage badges
 

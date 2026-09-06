@@ -24,6 +24,17 @@
   padding: 8px;
 }
 
+/* The measured part of the pet window: bubble, pet and pills at their natural
+   size. The window is asked to fit this box, so it never leaves dead space
+   above the pet. */
+.neo-pet-stack {
+  display: flex;
+  width: max-content;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
 .neo-pet-sprite {
   position: relative;
   cursor: grab;
@@ -176,7 +187,8 @@ html[data-neo-ascii-color="dark"] .neo-ascii-pet {
 .neo-pet-bubble {
   display: flex;
   width: max-content;
-  max-width: min(18rem, calc(100vw - 1rem));
+  /* At most twice the pet's width, so a small pet does not tow a wide sign. */
+  max-width: min(18rem, calc(var(--neo-pet-width, 9rem) * 2));
   flex-direction: column;
   gap: 2px;
   padding: 4px;

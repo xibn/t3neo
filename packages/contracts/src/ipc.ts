@@ -1145,6 +1145,8 @@ export interface DesktopBridge {
     closeWindow: () => Promise<void>;
     /** Nudge the pet window by a screen-pixel delta while the user drags the pet. */
     moveWindow: (delta: { dx: number; dy: number }) => Promise<void>;
+    /** Fit the pet window to its content; it keeps its bottom edge and centre. */
+    resizeWindow: (size: { width: number; height: number }) => Promise<void>;
     /** Bring the main window forward, optionally on a thread. */
     focusMain: (target: { environmentId: string; threadId: string } | null) => Promise<void>;
     /**
