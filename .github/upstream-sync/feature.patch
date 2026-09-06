@@ -334,6 +334,213 @@ index 731910e44..7cc7010d6 100644
  
  export function isNightlyDesktopVersion(version: string): boolean {
    return NIGHTLY_VERSION_PATTERN.test(version);
+diff --git a/apps/server/src/diagnostics/ListenerProcesses.test.ts b/apps/server/src/diagnostics/ListenerProcesses.test.ts
+new file mode 100644
+index 000000000..a96a9e314
+--- /dev/null
++++ b/apps/server/src/diagnostics/ListenerProcesses.test.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from "vite-plus/test";
++
++import { parseCwdOutput, parseElapsed, parsePsOutput } from "./ListenerProcesses.ts";
++
++describe("ListenerProcesses parsing", () => {
++  it("reads ps elapsed times in every shape ps prints", () => {
++    expect(parseElapsed("00:07")).toBe(7_000);
++    expect(parseElapsed("15:07")).toBe(907_000);
++    expect(parseElapsed("01:15:07")).toBe(4_507_000);
++    expect(parseElapsed("2-01:15:07")).toBe(177_307_000);
++    expect(parseElapsed("soon")).toBeNull();
++  });
++
++  it("reads ps rows with the command line kept whole", () => {
++    const rows = parsePsOutput(
++      [
++        "61013 61008    15:07  51200  0.5 S+   /usr/bin/deno run --ext=js -A dev.ts",
++        "  455     1 01:15:07 204800 12.3 Ss   node server.mjs --port 3001",
++        "garbage line",
++      ].join("\n"),
++    );
++    expect(rows.get(61013)).toEqual({
++      pid: 61013,
++      ppid: 61008,
++      runTimeMs: 907_000,
++      rssBytes: 51200 * 1024,
++      cpuPercent: 0.5,
++      status: "S+",
++      command: "/usr/bin/deno run --ext=js -A dev.ts",
++    });
++    expect(rows.get(455)?.command).toBe("node server.mjs --port 3001");
++    expect(rows.size).toBe(2);
++  });
++
++  it("pairs lsof cwd records with their pid", () => {
++    expect(
++      parseCwdOutput(
++        ["p61013", "fcwd", "n/Users/maxi/GitHub/finance", "p455", "n/tmp/app", ""].join("\n"),
++      ),
++    ).toEqual(
++      new Map([
++        [61013, "/Users/maxi/GitHub/finance"],
++        [455, "/tmp/app"],
++      ]),
++    );
++  });
++});
+diff --git a/apps/server/src/diagnostics/ListenerProcesses.ts b/apps/server/src/diagnostics/ListenerProcesses.ts
+new file mode 100644
+index 000000000..8e152cd99
+--- /dev/null
++++ b/apps/server/src/diagnostics/ListenerProcesses.ts
+@@ -0,0 +1,148 @@
++import type { DiscoveredLocalServer } from "@t3tools/contracts";
++import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
++import * as Duration from "effect/Duration";
++import * as Effect from "effect/Effect";
++
++import type * as ProcessRunner from "../processRunner.ts";
++
++/**
++ * Dev servers the agents leave running in the background detach from the
++ * server's process tree: their shell exits and launchd adopts them, so the
++ * resource monitor never sees them. They are still on the machine's listening
++ * ports. This reads the listeners PortDiscovery finds that the tree lacks,
++ * with the working directory that tells the client which workspace they
++ * belong to. Unix only; Windows has neither `ps` nor `lsof`.
++ */
++
++const PROBE_TIMEOUT_MS = 2_000;
++const MAX_OUTPUT_BYTES = 256 * 1024;
++
++export interface ListenerProcess {
++  readonly pid: number;
++  readonly ppid: number;
++  /** Rounded to whole seconds: `ps` reports elapsed time, not a start stamp. */
++  readonly startTimeMs: number;
++  readonly runTimeMs: number;
++  readonly command: string;
++  readonly status: string;
++  readonly cpuPercent: number;
++  readonly rssBytes: number;
++  readonly cwd: string | null;
++  readonly ports: ReadonlyArray<number>;
++}
++
++/** Two listener identities agree when their rounded start stamps sit within this. */
++export const LISTENER_START_TOLERANCE_MS = 2_000;
++
++/** "[[dd-]hh:]mm:ss" from `ps -o etime` to milliseconds. */
++export function parseElapsed(raw: string): number | null {
++  const match = /^(?:(\d+)-)?(?:(\d+):)?(\d{1,2}):(\d{2})$/.exec(raw.trim());
++  if (!match) return null;
++  const [, days, hours, minutes, seconds] = match;
++  return (
++    ((Number(days ?? 0) * 24 + Number(hours ?? 0)) * 3_600 +
++      Number(minutes) * 60 +
++      Number(seconds)) *
++    1_000
++  );
++}
++
++export interface PsRow {
++  readonly pid: number;
++  readonly ppid: number;
++  readonly runTimeMs: number;
++  readonly rssBytes: number;
++  readonly cpuPercent: number;
++  readonly status: string;
++  readonly command: string;
++}
++
++/** Rows of `ps -o pid=,ppid=,etime=,rss=,%cpu=,stat=,command=`. */
++export function parsePsOutput(raw: string): ReadonlyMap<number, PsRow> {
++  const rows = new Map<number, PsRow>();
++  for (const line of raw.split("\n")) {
++    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+([\d.]+)\s+(\S+)\s+(.*)$/.exec(line);
++    if (!match) continue;
++    const runTimeMs = parseElapsed(match[3]!);
++    if (runTimeMs === null) continue;
++    const pid = Number(match[1]);
++    rows.set(pid, {
++      pid,
++      ppid: Number(match[2]),
++      runTimeMs,
++      rssBytes: Number(match[4]) * 1024,
++      cpuPercent: Number(match[5]),
++      status: match[6]!,
++      command: match[7]!.trim(),
++    });
++  }
++  return rows;
++}
++
++/** `lsof -a -d cwd -F pn -p …`: a `p<pid>` line, then `n<path>` for its cwd. */
++export function parseCwdOutput(raw: string): ReadonlyMap<number, string> {
++  const cwds = new Map<number, string>();
++  let pid: number | null = null;
++  for (const line of raw.split("\n")) {
++    if (line.startsWith("p")) {
++      const parsed = Number.parseInt(line.slice(1), 10);
++      pid = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
++    } else if (line.startsWith("n") && pid !== null && !cwds.has(pid)) {
++      cwds.set(pid, line.slice(1));
++    }
++  }
++  return cwds;
++}
++
++/** The listeners whose pid the sampled tree does not contain, with their details. */
++export const readListenerProcesses = Effect.fn("readListenerProcesses")(function* (
++  runner: ProcessRunner.ProcessRunner["Service"],
++  servers: ReadonlyArray<DiscoveredLocalServer>,
++  knownPids: ReadonlySet<number>,
++  nowMs: number,
++) {
++  const platform = yield* HostProcessPlatform;
++  if (platform === "win32") return [] as ReadonlyArray<ListenerProcess>;
++  const portsByPid = new Map<number, number[]>();
++  for (const server of servers) {
++    if (server.pid === null || knownPids.has(server.pid)) continue;
++    const ports = portsByPid.get(server.pid) ?? [];
++    ports.push(server.port);
++    portsByPid.set(server.pid, ports);
++  }
++  if (portsByPid.size === 0) return [] as ReadonlyArray<ListenerProcess>;
++
++  const pids = [...portsByPid.keys()].join(",");
++  const probe = (command: string, args: ReadonlyArray<string>) =>
++    runner
++      .run({
++        command,
++        args,
++        timeout: Duration.millis(PROBE_TIMEOUT_MS),
++        maxOutputBytes: MAX_OUTPUT_BYTES,
++        outputMode: "truncate",
++      })
++      .pipe(
++        Effect.map((result) => result.stdout),
++        Effect.catch((cause) =>
++          Effect.logDebug("listener process probe failed", { command, cause }).pipe(Effect.as("")),
++        ),
++      );
++  const rows = parsePsOutput(
++    yield* probe("ps", ["-o", "pid=,ppid=,etime=,rss=,%cpu=,stat=,command=", "-p", pids]),
++  );
++  const cwds = parseCwdOutput(yield* probe("lsof", ["-a", "-d", "cwd", "-F", "pn", "-p", pids]));
++
++  const listeners: ListenerProcess[] = [];
++  for (const [pid, ports] of portsByPid) {
++    const row = rows.get(pid);
++    if (!row) continue;
++    listeners.push({
++      ...row,
++      startTimeMs: Math.round((nowMs - row.runTimeMs) / 1_000) * 1_000,
++      cwd: cwds.get(pid) ?? null,
++      ports: ports.toSorted((left, right) => left - right),
++    });
++  }
++  return listeners as ReadonlyArray<ListenerProcess>;
++});
 diff --git a/apps/server/src/diagnostics/ProcessDiagnostics.test.ts b/apps/server/src/diagnostics/ProcessDiagnostics.test.ts
 index 2efa3375d..3831a28a2 100644
 --- a/apps/server/src/diagnostics/ProcessDiagnostics.test.ts
@@ -16224,7 +16431,7 @@ index b2556bb4c..d59396dba 100644
 +}
 diff --git a/apps/web/src/looks/neo.css b/apps/web/src/looks/neo.css
 new file mode 100644
-index 000000000..e5573b5bb
+index 000000000..cecc53745
 --- /dev/null
 +++ b/apps/web/src/looks/neo.css
 @@ -0,0 +1,732 @@
@@ -16277,6 +16484,12 @@ index 000000000..e5573b5bb
 +  --color-emerald-700: var(--neo-green-deeper);
 +  --color-teal-300: var(--neo-green-bright);
 +  --color-teal-600: var(--neo-green-deeper);
++  /* Upstream's "working" blue (thread dots, status text) is the accent here. */
++  --color-sky-300: var(--neo-accent);
++  --color-sky-400: var(--neo-accent);
++  --color-sky-500: var(--neo-accent);
++  --color-sky-600: var(--neo-accent);
++  --color-sky-700: var(--neo-accent);
 +
 +  /* Light Neo: warm parchment rather than white, with firmer borders and ink. */
 +  --background: #e3d9cb;
@@ -16323,8 +16536,8 @@ index 000000000..e5573b5bb
 +  --update: var(--neo-accent);
 +  --update-foreground: #9c5219;
 +  --update-surface: var(--neo-accent-soft);
-+  --info: #4f7fb8;
-+  --info-foreground: #2f5f95;
++  --info: var(--neo-accent);
++  --info-foreground: #9c5219;
 +  --success: var(--neo-green);
 +  --success-foreground: var(--neo-green-deep);
 +  --sidebar: #d1c6b5;
@@ -16400,8 +16613,8 @@ index 000000000..e5573b5bb
 +  --error-surface: rgb(229 72 77 / 10%);
 +  --warning-foreground: #f7b487;
 +  --update-foreground: #f7b487;
-+  --info: #7aa7dd;
-+  --info-foreground: #a8c6ec;
++  --info: var(--neo-accent);
++  --info-foreground: #f7b487;
 +  --success: var(--neo-green);
 +  --success-foreground: var(--neo-green);
 +  --sidebar: #0c0b0a;
@@ -16548,12 +16761,6 @@ index 000000000..e5573b5bb
 +html[data-look="neo"] [data-slot="alert-dialog-popup"],
 +html[data-look="neo"] [data-slot="command-dialog-popup"] {
 +  border-radius: 1.25rem;
-+}
-+
-+/* Thread status: working reads in the look's amber, not upstream's sky blue. */
-+html[data-look="neo"] [data-app-sidebar] .text-sky-600,
-+html[data-look="neo"].dark [data-app-sidebar] .dark\:text-sky-400 {
-+  color: var(--neo-accent);
 +}
 +
 +/* Sidebar: solid column with pill rows. It draws no right edge of its own — the

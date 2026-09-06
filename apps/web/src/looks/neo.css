@@ -47,6 +47,12 @@ html[data-look="neo"][data-theme-id]:root {
   --color-emerald-700: var(--neo-green-deeper);
   --color-teal-300: var(--neo-green-bright);
   --color-teal-600: var(--neo-green-deeper);
+  /* Upstream's "working" blue (thread dots, status text) is the accent here. */
+  --color-sky-300: var(--neo-accent);
+  --color-sky-400: var(--neo-accent);
+  --color-sky-500: var(--neo-accent);
+  --color-sky-600: var(--neo-accent);
+  --color-sky-700: var(--neo-accent);
 
   /* Light Neo: warm parchment rather than white, with firmer borders and ink. */
   --background: #e3d9cb;
@@ -93,8 +99,8 @@ html[data-look="neo"][data-theme-id]:root {
   --update: var(--neo-accent);
   --update-foreground: #9c5219;
   --update-surface: var(--neo-accent-soft);
-  --info: #4f7fb8;
-  --info-foreground: #2f5f95;
+  --info: var(--neo-accent);
+  --info-foreground: #9c5219;
   --success: var(--neo-green);
   --success-foreground: var(--neo-green-deep);
   --sidebar: #d1c6b5;
@@ -170,8 +176,8 @@ html[data-look="neo"][data-theme-id].dark:root {
   --error-surface: rgb(229 72 77 / 10%);
   --warning-foreground: #f7b487;
   --update-foreground: #f7b487;
-  --info: #7aa7dd;
-  --info-foreground: #a8c6ec;
+  --info: var(--neo-accent);
+  --info-foreground: #f7b487;
   --success: var(--neo-green);
   --success-foreground: var(--neo-green);
   --sidebar: #0c0b0a;
@@ -318,12 +324,6 @@ html[data-look="neo"] [data-slot="dialog-popup"],
 html[data-look="neo"] [data-slot="alert-dialog-popup"],
 html[data-look="neo"] [data-slot="command-dialog-popup"] {
   border-radius: 1.25rem;
-}
-
-/* Thread status: working reads in the look's amber, not upstream's sky blue. */
-html[data-look="neo"] [data-app-sidebar] .text-sky-600,
-html[data-look="neo"].dark [data-app-sidebar] .dark\:text-sky-400 {
-  color: var(--neo-accent);
 }
 
 /* Sidebar: solid column with pill rows. It draws no right edge of its own — the
