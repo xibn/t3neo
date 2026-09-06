@@ -1,4 +1,10 @@
-import { DownloadIcon, ExternalLinkIcon, LoaderCircleIcon, SearchIcon } from "lucide-react";
+import {
+  AwardIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  LoaderCircleIcon,
+  SearchIcon,
+} from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -191,6 +197,16 @@ const SheetThumbnail = memo(function SheetThumbnail({
   );
 });
 
+/** The award mark next to a gallery's name, in the select's list and its closed trigger. */
+const GalleryAward = memo(function GalleryAward({ label }: { label: string }) {
+  return (
+    <span className="neo-gallery-award" role="img" aria-label={label}>
+      {/* A text- class keeps the control's icon colour rule off it; the card sets the gold. */}
+      <AwardIcon className="size-3.5 text-[var(--neo-award)]" />
+    </span>
+  );
+});
+
 /** One cell of a frame strip: the strip at cell height behind a cell-sized window. */
 const StripThumbnail = memo(function StripThumbnail({ url }: { url: string }) {
   const height = spriteFrameHeight(THUMBNAIL_WIDTH);
@@ -376,13 +392,21 @@ export function PetGalleryBrowser({
             if (next) onGalleryChange(next.id);
           }}
         >
-          <SelectTrigger className="w-full sm:w-40" aria-label="Gallery">
-            <SelectValue>{source.host}</SelectValue>
+          <SelectTrigger className="w-full sm:w-44" aria-label="Gallery">
+            <SelectValue>
+              <span className="flex items-center gap-1.5">
+                {source.host}
+                {source.award ? <GalleryAward label={source.award} /> : null}
+              </span>
+            </SelectValue>
           </SelectTrigger>
           <SelectPopup align="start" alignItemWithTrigger={false}>
             {PET_GALLERIES.map((entry) => (
               <SelectItem hideIndicator key={entry.id} value={entry.id}>
-                {entry.host}
+                <span className="flex items-center gap-1.5">
+                  {entry.host}
+                  {entry.award ? <GalleryAward label={entry.award} /> : null}
+                </span>
               </SelectItem>
             ))}
           </SelectPopup>

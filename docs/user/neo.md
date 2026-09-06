@@ -125,7 +125,8 @@ desktop app; the web app has no window to put them in.
 
 Below the pet picker, **Codex pets** lists four community galleries. Pick one in the first
 select: [codexpet.top](https://codexpet.top), [codex-pet.com](https://codex-pet.com),
-[codexpets.org](https://codexpets.org) or [openpets.sh](https://openpets.sh). Search by name,
+[codexpets.org](https://codexpets.org) or [openpets.sh](https://openpets.sh). codexpet.top carries an
+award mark: its pets are drawn by hand, without AI blur or outline halos. Search by name,
 author or category, or narrow the list with the category select where the gallery has one; the
 list loads fresh every time you open the tab, so new pets show up on their own. Hover a card to
 see the pet move. The pill in the section header opens the selected gallery's site, the GitHub

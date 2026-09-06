@@ -169,6 +169,33 @@ html[data-neo-ascii-color="dark"] .neo-ascii-pet {
   object-fit: contain;
 }
 
+/* The award for a gallery that earned it: gold, on the same translucent card
+   the composer's usage pill uses, so it reads as praise rather than a warning.
+   The icon-only mark sits in the gallery select, the icon-text pill in the
+   section header. */
+:root {
+  --neo-award: #9a7411;
+}
+
+.dark {
+  --neo-award: #e6bd45;
+}
+
+.neo-award-badge,
+.neo-gallery-award {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--neo-award) 40%, transparent);
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--neo-award) 14%, transparent);
+  color: var(--neo-award);
+}
+
+.neo-gallery-award {
+  padding: 1px 3px;
+}
+
 /* A gallery card without a thumbnail shows the sheet's first cell: the whole
    sheet loads lazily as an image and only its top-left frame shows through. */
 .neo-sheet-thumbnail {

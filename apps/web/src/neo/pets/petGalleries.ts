@@ -27,13 +27,15 @@ export interface PetGallery {
   readonly categories: ReadonlyArray<string>;
   /** Only the desktop app can reach it: the site refuses cross-origin requests. */
   readonly needsDesktop: boolean;
+  /** An award shown next to the gallery, for one whose pets are hand-made and clean-edged. */
+  readonly award: string | null;
 }
 
 function gallery(
   id: PetGalleryId,
   host: string,
   repository: string,
-  options: Partial<Pick<PetGallery, "mode" | "categories" | "needsDesktop">> = {},
+  options: Partial<Pick<PetGallery, "mode" | "categories" | "needsDesktop" | "award">> = {},
 ): PetGallery {
   return {
     id,
@@ -44,11 +46,15 @@ function gallery(
     mode: options.mode ?? "catalog",
     categories: options.categories ?? [],
     needsDesktop: options.needsDesktop ?? false,
+    award: options.award ?? null,
   };
 }
 
 export const PET_GALLERIES: ReadonlyArray<PetGallery> = [
-  gallery("codexpet-top", "codexpet.top", "legeling/awesome-codex-pet"),
+  gallery("codexpet-top", "codexpet.top", "legeling/awesome-codex-pet", {
+    // Drawn by hand, no AI blur, no outline halos: the gallery to start with.
+    award: "High-Quality Designs",
+  }),
   gallery("codex-pet-com", "codex-pet.com", "BeiXiao/awesome-codex-pets"),
   gallery("codexpets-org", "codexpets.org", "eyichan/awesome-codex-pets"),
   gallery("openpets-sh", "openpets.sh", "alterhq/openpets", {

@@ -53,6 +53,11 @@ describe("petGallery", () => {
     }
     expect(petGallery("openpets-sh").mode).toBe("api");
     expect(petGallery("openpets-sh").needsDesktop).toBe(true);
+    // Only the hand-drawn gallery carries the award.
+    expect(PET_GALLERIES.filter((entry) => entry.award !== null).map((entry) => entry.id)).toEqual([
+      "codexpet-top",
+    ]);
+    expect(petGallery("codexpet-top").award).toBe("High-Quality Designs");
   });
 });
 

@@ -15076,11 +15076,11 @@ index 000000000..2e64d13dc
 +}
 diff --git a/apps/web/src/components/settings/PetSettingsPanel.tsx b/apps/web/src/components/settings/PetSettingsPanel.tsx
 new file mode 100644
-index 000000000..9cba1d8a8
+index 000000000..daaf433a9
 --- /dev/null
 +++ b/apps/web/src/components/settings/PetSettingsPanel.tsx
-@@ -0,0 +1,258 @@
-+import { GithubIcon, InfoIcon, PawPrintIcon, StoreIcon } from "lucide-react";
+@@ -0,0 +1,264 @@
++import { AwardIcon, GithubIcon, InfoIcon, PawPrintIcon, StoreIcon } from "lucide-react";
 +import { useCallback, useState, type CSSProperties } from "react";
 +
 +import { isElectron } from "~/env";
@@ -15282,6 +15282,12 @@ index 000000000..9cba1d8a8
 +        badge={<NeoFeatureBadge />}
 +        headerAction={
 +          <div className="flex items-center gap-1">
++            {gallery.award ? (
++              <span className="neo-award-badge h-6 gap-1 px-2 text-[11px] font-medium">
++                <AwardIcon className="size-3 text-[var(--neo-award)]" />
++                {gallery.award}
++              </span>
++            ) : null}
 +            <Tooltip>
 +              <TooltipTrigger
 +                render={
@@ -19265,10 +19271,10 @@ index 000000000..68c94d57b
 +});
 diff --git a/apps/web/src/neo/neo.css b/apps/web/src/neo/neo.css
 new file mode 100644
-index 000000000..739bd9df8
+index 000000000..6257eddbf
 --- /dev/null
 +++ b/apps/web/src/neo/neo.css
-@@ -0,0 +1,1003 @@
+@@ -0,0 +1,1030 @@
 +/*
 + * T3 Neo fork styles that apply under every look: the pet, the sidebar
 + * starfield, and the small Neo pills. Animations are stepped or transform
@@ -19438,6 +19444,33 @@ index 000000000..739bd9df8
 +  display: block;
 +  image-rendering: auto;
 +  object-fit: contain;
++}
++
++/* The award for a gallery that earned it: gold, on the same translucent card
++   the composer's usage pill uses, so it reads as praise rather than a warning.
++   The icon-only mark sits in the gallery select, the icon-text pill in the
++   section header. */
++:root {
++  --neo-award: #9a7411;
++}
++
++.dark {
++  --neo-award: #e6bd45;
++}
++
++.neo-award-badge,
++.neo-gallery-award {
++  display: inline-flex;
++  flex-shrink: 0;
++  align-items: center;
++  border: 1px solid color-mix(in srgb, var(--neo-award) 40%, transparent);
++  border-radius: 0.375rem;
++  background: color-mix(in srgb, var(--neo-award) 14%, transparent);
++  color: var(--neo-award);
++}
++
++.neo-gallery-award {
++  padding: 1px 3px;
 +}
 +
 +/* A gallery card without a thumbnail shows the sheet's first cell: the whole
@@ -21520,11 +21553,17 @@ index 000000000..f6aeb94ef
 +});
 diff --git a/apps/web/src/neo/pets/PetGalleryBrowser.tsx b/apps/web/src/neo/pets/PetGalleryBrowser.tsx
 new file mode 100644
-index 000000000..5678a7e7c
+index 000000000..8cf2d524d
 --- /dev/null
 +++ b/apps/web/src/neo/pets/PetGalleryBrowser.tsx
-@@ -0,0 +1,477 @@
-+import { DownloadIcon, ExternalLinkIcon, LoaderCircleIcon, SearchIcon } from "lucide-react";
+@@ -0,0 +1,501 @@
++import {
++  AwardIcon,
++  DownloadIcon,
++  ExternalLinkIcon,
++  LoaderCircleIcon,
++  SearchIcon,
++} from "lucide-react";
 +import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 +
 +import { Button } from "~/components/ui/button";
@@ -21717,6 +21756,16 @@ index 000000000..5678a7e7c
 +  );
 +});
 +
++/** The award mark next to a gallery's name, in the select's list and its closed trigger. */
++const GalleryAward = memo(function GalleryAward({ label }: { label: string }) {
++  return (
++    <span className="neo-gallery-award" role="img" aria-label={label}>
++      {/* A text- class keeps the control's icon colour rule off it; the card sets the gold. */}
++      <AwardIcon className="size-3.5 text-[var(--neo-award)]" />
++    </span>
++  );
++});
++
 +/** One cell of a frame strip: the strip at cell height behind a cell-sized window. */
 +const StripThumbnail = memo(function StripThumbnail({ url }: { url: string }) {
 +  const height = spriteFrameHeight(THUMBNAIL_WIDTH);
@@ -21902,13 +21951,21 @@ index 000000000..5678a7e7c
 +            if (next) onGalleryChange(next.id);
 +          }}
 +        >
-+          <SelectTrigger className="w-full sm:w-40" aria-label="Gallery">
-+            <SelectValue>{source.host}</SelectValue>
++          <SelectTrigger className="w-full sm:w-44" aria-label="Gallery">
++            <SelectValue>
++              <span className="flex items-center gap-1.5">
++                {source.host}
++                {source.award ? <GalleryAward label={source.award} /> : null}
++              </span>
++            </SelectValue>
 +          </SelectTrigger>
 +          <SelectPopup align="start" alignItemWithTrigger={false}>
 +            {PET_GALLERIES.map((entry) => (
 +              <SelectItem hideIndicator key={entry.id} value={entry.id}>
-+                {entry.host}
++                <span className="flex items-center gap-1.5">
++                  {entry.host}
++                  {entry.award ? <GalleryAward label={entry.award} /> : null}
++                </span>
 +              </SelectItem>
 +            ))}
 +          </SelectPopup>
@@ -23755,10 +23812,10 @@ index 000000000..df4a2d0ad
 +}
 diff --git a/apps/web/src/neo/pets/petGalleries.test.ts b/apps/web/src/neo/pets/petGalleries.test.ts
 new file mode 100644
-index 000000000..fe292c571
+index 000000000..e93f8e2e9
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petGalleries.test.ts
-@@ -0,0 +1,322 @@
+@@ -0,0 +1,327 @@
 +import JSZip from "jszip";
 +import { describe, expect, it } from "vite-plus/test";
 +
@@ -23814,6 +23871,11 @@ index 000000000..fe292c571
 +    }
 +    expect(petGallery("openpets-sh").mode).toBe("api");
 +    expect(petGallery("openpets-sh").needsDesktop).toBe(true);
++    // Only the hand-drawn gallery carries the award.
++    expect(PET_GALLERIES.filter((entry) => entry.award !== null).map((entry) => entry.id)).toEqual([
++      "codexpet-top",
++    ]);
++    expect(petGallery("codexpet-top").award).toBe("High-Quality Designs");
 +  });
 +});
 +
@@ -24083,10 +24145,10 @@ index 000000000..fe292c571
 +});
 diff --git a/apps/web/src/neo/pets/petGalleries.ts b/apps/web/src/neo/pets/petGalleries.ts
 new file mode 100644
-index 000000000..13136b69b
+index 000000000..68a5802c4
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petGalleries.ts
-@@ -0,0 +1,437 @@
+@@ -0,0 +1,443 @@
 +/**
 + * The community Codex pet galleries the pet browser can import from. Each
 + * gallery is a GitHub repository with a site in front of it. Catalogs and
@@ -24116,13 +24178,15 @@ index 000000000..13136b69b
 +  readonly categories: ReadonlyArray<string>;
 +  /** Only the desktop app can reach it: the site refuses cross-origin requests. */
 +  readonly needsDesktop: boolean;
++  /** An award shown next to the gallery, for one whose pets are hand-made and clean-edged. */
++  readonly award: string | null;
 +}
 +
 +function gallery(
 +  id: PetGalleryId,
 +  host: string,
 +  repository: string,
-+  options: Partial<Pick<PetGallery, "mode" | "categories" | "needsDesktop">> = {},
++  options: Partial<Pick<PetGallery, "mode" | "categories" | "needsDesktop" | "award">> = {},
 +): PetGallery {
 +  return {
 +    id,
@@ -24133,11 +24197,15 @@ index 000000000..13136b69b
 +    mode: options.mode ?? "catalog",
 +    categories: options.categories ?? [],
 +    needsDesktop: options.needsDesktop ?? false,
++    award: options.award ?? null,
 +  };
 +}
 +
 +export const PET_GALLERIES: ReadonlyArray<PetGallery> = [
-+  gallery("codexpet-top", "codexpet.top", "legeling/awesome-codex-pet"),
++  gallery("codexpet-top", "codexpet.top", "legeling/awesome-codex-pet", {
++    // Drawn by hand, no AI blur, no outline halos: the gallery to start with.
++    award: "High-Quality Designs",
++  }),
 +  gallery("codex-pet-com", "codex-pet.com", "BeiXiao/awesome-codex-pets"),
 +  gallery("codexpets-org", "codexpets.org", "eyichan/awesome-codex-pets"),
 +  gallery("openpets-sh", "openpets.sh", "alterhq/openpets", {
@@ -73531,10 +73599,10 @@ index 97f1f5cb1..1b96f477b 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..da7b34fc5
+index 000000000..f424b85bd
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,170 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -73662,7 +73730,8 @@ index 000000000..da7b34fc5
 +
 +Below the pet picker, **Codex pets** lists four community galleries. Pick one in the first
 +select: [codexpet.top](https://codexpet.top), [codex-pet.com](https://codex-pet.com),
-+[codexpets.org](https://codexpets.org) or [openpets.sh](https://openpets.sh). Search by name,
++[codexpets.org](https://codexpets.org) or [openpets.sh](https://openpets.sh). codexpet.top carries an
++award mark: its pets are drawn by hand, without AI blur or outline halos. Search by name,
 +author or category, or narrow the list with the category select where the gallery has one; the
 +list loads fresh every time you open the tab, so new pets show up on their own. Hover a card to
 +see the pet move. The pill in the section header opens the selected gallery's site, the GitHub

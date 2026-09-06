@@ -1,4 +1,4 @@
-import { GithubIcon, InfoIcon, PawPrintIcon, StoreIcon } from "lucide-react";
+import { AwardIcon, GithubIcon, InfoIcon, PawPrintIcon, StoreIcon } from "lucide-react";
 import { useCallback, useState, type CSSProperties } from "react";
 
 import { isElectron } from "~/env";
@@ -200,6 +200,12 @@ export function PetSettingsPanel() {
         badge={<NeoFeatureBadge />}
         headerAction={
           <div className="flex items-center gap-1">
+            {gallery.award ? (
+              <span className="neo-award-badge h-6 gap-1 px-2 text-[11px] font-medium">
+                <AwardIcon className="size-3 text-[var(--neo-award)]" />
+                {gallery.award}
+              </span>
+            ) : null}
             <Tooltip>
               <TooltipTrigger
                 render={

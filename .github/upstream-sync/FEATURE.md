@@ -638,6 +638,12 @@ contracts or server settings.
    - The section header carries a source pill (info icon + the selected gallery's host,
      links to the site) and a GitHub icon button (links to that gallery's repository), so the
      origin stays traceable even if a domain lapses. The panel owns the selected gallery.
+     `PetGallery.award` (only codexpet.top: "High-Quality Designs", for hand-drawn pets without
+     AI blur or outline halos) shows a lucide `AwardIcon` after the host in the gallery select's
+     list and its closed trigger (`.neo-gallery-award`), and an icon-text pill with that label
+     left of the source pill in the section header (`.neo-award-badge`). Both are gold
+     (`--neo-award`: `#e6bd45` dark, `#9a7411` light) on the usage pill's translucent card
+     (40 % border, 14 % fill, 0.375rem corners).
    - `importedPets.ts`: an import is an independent copy. The spritesheet blob goes to
      IndexedDB (`t3code:neo-pets` / `spritesheets`, keyed by the pet id), the metadata
      `{ id, name, spriteVersion, source: { slug, name, author, gallery? }, importedAt }` to
