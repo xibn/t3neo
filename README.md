@@ -6,18 +6,17 @@
 
 A fork of [T3 Code](https://github.com/pingdotgg/t3code) that follows every stable upstream release and adds:
 
-- **Neo look.** Warm amber palette, flat bordered surfaces, pill controls, a star sky over sidebar and top bar. On by default; the standard look stays selectable.
-- **Message queue.** Messages sent during a running turn wait and start their own turn afterwards. Send now steers instead. Per-message edit, reorder, discard, retry.
-- **Usage badges.** Every finished turn shows its share of your plan window, or the billed cost. The composer pill shows the tightest limit and opens plan, last turn, and month-to-date.
-- **Collapsible header.** One button folds the header actions away into a slim bar with a rounded workspace below.
-- **Pets.** Hoppy, Wukong the reactive ASCII monkey, or a still Lunar badge. Running-thread count, unseen-completion marker, activity list, optional floating desktop window.
-- **Neo settings.** Toggles for all of the above, chevron animations, ASCII color, branch manager position, default context window and fast mode, in-place desktop updates, and more.
+- **Message queue.** Messages sent while a turn runs wait their turn and start their own afterwards. Send now steers instead. Edit, reorder, discard and retry queued messages; attachments stay uploaded until sent.
+- **Usage badges.** Every finished turn shows its share of your plan window or its billed cost. The composer pill shows the tightest limit and opens plan, last turn and month-to-date.
+- **Pets.** A companion in its own floating window that mirrors your agents: running, needs input, blocked, ready. Import any pet from the four Codex pet galleries, or pick Wukong the ASCII monkey, Hoppy the rabbit or the still Lunar badge.
+- **Neo look.** Warm amber palette, flat bordered surfaces, soft corners, a star sky over sidebar and top bar. On by default; the standard look stays selectable.
+- **Processes.** One dialog lists everything your agents and terminals run, including dev servers that outlived their shell, with Stop and Kill.
+- **Collapsible header.** One button folds the header actions into a slim bar with a rounded workspace card below. The branch manager can move into the header too.
+- **Neo settings.** Toggles for all of the above, in-place desktop updates, default context window and fast mode, chevron animations, ASCII pet color, and more.
 
 ## Screenshots
 
 <img src="assets/neo/screenshots/header-collapsed.jpg" alt="Chat in the Neo look with the header collapsed to a slim bar" width="100%">
-
-<img src="assets/neo/screenshots/pets.jpg" alt="Pet settings with the four pet cards" width="100%">
 
 ---
 
