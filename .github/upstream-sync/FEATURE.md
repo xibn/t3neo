@@ -531,11 +531,15 @@ contracts or server settings.
      arc: crouch, rise, tilt, land with a squash) and `neo-rabbit-kick` (feet box-shadows) loop
      smoothly; nothing is stepped or jerky.
    - Wukong is an ASCII monkey drawn from frame JSON files (`apps/web/src/neo/pets/frames/*.json`,
-     loaded lazily). Moods: **sleeping** while the user is not typing, **typing** while the user
-     types in the chat composer, **working** while any thread runs; the working state rotates
-     through several clips semi-regularly (about every 9 s) in shuffle-bag order
-     (`createWorkingClipShuffle`: every clip once before any repeats, never the same clip twice
-     in a row).
+     loaded lazily). Three clips only: **sleeping** while the user is not typing, **typing**
+     while the user types in the chat composer, **working** (sitting and hammering) while any
+     thread runs. The farmer, hula-hoop and rolling clips were removed on 2026-09-06; the
+     working frames were re-aligned vertically (a row-density match against the first frame,
+     ±1 row) and carry an explicit `rows`/`columns` canvas so the monkey no longer bobs.
+     `createClipShuffle` (generic, shuffle-bag order) now serves the settings preview and the
+     imported sprite pets' working rotation. Typing reaches the desktop pet window over a
+     `BroadcastChannel` (`t3code:neo-pet-typing`, posts throttled to 400 ms): every window
+     that sees a composer keystroke tells the others, which mark typing the same way.
    - A thread with queued messages counts as running for the pet, so Wukong keeps working between
      one turn finishing and the next queued message starting.
    - ASCII frames always fit: `AsciiAnimation` measures the monospace cell width once, sizes the

@@ -1,16 +1,15 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { AsciiAnimation } from "./AsciiAnimation";
 import {
   loadWukongClip,
-  WUKONG_WORKING_CLIPS,
   wukongClipForMood,
   type AsciiFrames,
   type PetMood,
   type WukongClip,
 } from "./petRegistry";
 
-/** While agents work, Wukong changes exercise every so often; Settings → Pets tunes this. */
+/** How often a pet with several working clips changes between them; Settings → Pets tunes this. */
 export const WORKING_CLIP_ROTATION_MS = 6_000;
 
 const clipCache = new Map<WukongClip, AsciiFrames>();
@@ -67,28 +66,15 @@ export const WukongPet = memo(function WukongPet({
   mood,
   width,
   playing = true,
-  rotationMs = WORKING_CLIP_ROTATION_MS,
   clip: forcedClip,
 }: {
   mood: PetMood;
   width: number;
   playing?: boolean;
-  /** How often the working exercise changes. */
-  rotationMs?: number;
   /** Play this clip regardless of mood; previews use it to tour every clip. */
   clip?: WukongClip;
 }) {
-  const shuffle = useRef<(() => WukongClip) | null>(null);
-  if (shuffle.current === null) shuffle.current = createClipShuffle(WUKONG_WORKING_CLIPS);
-  const [workingClip, setWorkingClip] = useState<WukongClip>(() => shuffle.current!());
-
-  useEffect(() => {
-    if (mood !== "working" || forcedClip) return;
-    const timer = setInterval(() => setWorkingClip(shuffle.current!()), rotationMs);
-    return () => clearInterval(timer);
-  }, [mood, rotationMs, forcedClip]);
-
-  const clip = forcedClip ?? (mood === "working" ? workingClip : wukongClipForMood(mood));
+  const clip = forcedClip ?? wukongClipForMood(mood);
   const frames = useWukongClip(clip);
   if (!frames) {
     return <div style={{ width: `${width}px`, height: `${Math.round(width * 0.9)}px` }} />;

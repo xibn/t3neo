@@ -24,7 +24,7 @@ export const PET_DEFINITIONS: ReadonlyArray<PetDefinition> = [
     id: "wukong",
     label: "Wukong (Reactive)",
     description:
-      "An ASCII monkey. He sleeps while you are away, hangs around while you type, and does shapeshifter shenanigans while your agents work.",
+      "An ASCII monkey. He sleeps while you are away, watches while you type, and hammers away while your agents work.",
   },
   {
     id: "lunar",
@@ -49,21 +49,10 @@ export interface AsciiFrames {
   readonly rows?: number;
 }
 
-export type WukongClip = "sleeping" | "typing" | "monk" | "somersault" | "working" | "hoop";
-
-export const WUKONG_WORKING_CLIPS: ReadonlyArray<WukongClip> = [
-  "monk",
-  "somersault",
-  "working",
-  "hoop",
-];
+export type WukongClip = "sleeping" | "typing" | "working";
 
 /** Every clip Wukong has, for previews that tour all of them. */
-export const WUKONG_CLIPS: ReadonlyArray<WukongClip> = [
-  "sleeping",
-  "typing",
-  ...WUKONG_WORKING_CLIPS,
-];
+export const WUKONG_CLIPS: ReadonlyArray<WukongClip> = ["sleeping", "typing", "working"];
 
 /** Frames are lazy: they weigh a few hundred kilobytes and only pets use them. */
 export function loadWukongClip(clip: WukongClip): Promise<AsciiFrames> {
@@ -72,22 +61,12 @@ export function loadWukongClip(clip: WukongClip): Promise<AsciiFrames> {
       return import("./frames/wukong-sleeping.json").then((module) => module.default);
     case "typing":
       return import("./frames/wukong-typing.json").then((module) => module.default);
-    case "monk":
-      return import("./frames/wukong-monk.json").then((module) => module.default);
-    case "somersault":
-      return import("./frames/wukong-somersault.json").then((module) => module.default);
     case "working":
       return import("./frames/wukong-working.json").then((module) => module.default);
-    case "hoop":
-      return import("./frames/wukong-hoop.json").then((module) => module.default);
   }
 }
 
-export function wukongClipForMood(
-  mood: PetMood,
-  pickWorkingClip: () => WukongClip = () =>
-    WUKONG_WORKING_CLIPS[Math.floor(Math.random() * WUKONG_WORKING_CLIPS.length)]!,
-): WukongClip {
+export function wukongClipForMood(mood: PetMood): WukongClip {
   switch (mood) {
     case "idle":
     case "done":
@@ -95,7 +74,7 @@ export function wukongClipForMood(
     case "typing":
       return "typing";
     case "working":
-      return pickWorkingClip();
+      return "working";
   }
 }
 

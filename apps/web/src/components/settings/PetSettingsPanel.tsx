@@ -163,7 +163,7 @@ export function PetSettingsPanel() {
 
         <SettingsRow
           {...searchableSetting("neo-pet-working-interval")}
-          description="How long Wukong keeps one exercise before switching to the next while agents work."
+          description="How long an imported pet keeps one working animation before switching to the next. Wukong hammers away throughout."
           resetAction={
             settings.petWorkingIntervalSec !== DEFAULT_NEO_SETTINGS.petWorkingIntervalSec ? (
               <SettingResetButton

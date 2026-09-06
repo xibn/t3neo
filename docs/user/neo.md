@@ -78,9 +78,8 @@ floats above other apps, never inside T3 Neo itself. Choose one under **Settings
 
 - **No pet** closes the pet window. Its preview shows a spinning ASCII X.
 - **Hoppy (Loop)** is a white rabbit that hops in a smooth loop.
-- **Wukong (Reactive)** is an ASCII monkey. He sleeps while you read, wakes up while you type in
-  the composer, and gets to work while any thread is running, switching between a few working
-  animations every so often.
+- **Wukong (Reactive)** is an ASCII monkey. He sleeps while you read, watches while you type in
+  the composer, and sits hammering while any thread is running.
 - **Lunar (No Animation)** is the still moon with its ring glow: no pet, just the status. The
   badge and the activity list stay.
 
@@ -88,9 +87,9 @@ The pet floats above the app. Drag it anywhere; the position is remembered. The 
 slider changes how big it is, down to a 32 px corner companion, and the preview cards tour every
 mood so you can see what each pet does. Wukong's preview shows each of his animations for a few
 seconds, and none comes back until all the others have played. Wukong keeps working between queued
-messages instead of dozing off, unless the queue is paused, and never repeats an exercise until he
-has done all of them. **Working animation interval** sets how long he keeps one exercise before
-switching, from 2 to 12 seconds; the default is 6.
+messages instead of dozing off, unless the queue is paused. **Working animation interval** sets
+how long an imported pet keeps one working animation before switching, from 2 to 12 seconds; the
+default is 6. Typing counts in every window: the pet window sees you type in the main window.
 
 **ASCII pet color** sets the glyph color of the X and of Wukong. **System** follows the appearance:
 warm amber on a dark canvas, the accent orange on a light one. **Light** and **Dark** pin one of

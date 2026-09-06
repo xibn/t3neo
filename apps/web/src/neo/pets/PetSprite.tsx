@@ -20,7 +20,7 @@ export const PetSprite = memo(function PetSprite({
   mood: PetMood;
   size: number;
   playing?: boolean;
-  /** How often Wukong and the imported pets change exercise while working. */
+  /** How often an imported pet changes between its working clips. */
   rotationMs?: number;
 }) {
   switch (pet) {
@@ -38,14 +38,7 @@ export const PetSprite = memo(function PetSprite({
     case "lunar":
       return <LunarPet size={size} />;
     case "wukong":
-      return (
-        <WukongPet
-          mood={mood}
-          width={size}
-          playing={playing}
-          {...(rotationMs !== undefined ? { rotationMs } : {})}
-        />
-      );
+      return <WukongPet mood={mood} width={size} playing={playing} />;
     default:
       return (
         <ImportedPetSprite

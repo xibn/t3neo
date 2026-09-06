@@ -1,7 +1,8 @@
 /**
  * What the pet reacts to: whether the user is typing in the composer, which
  * threads have agents working, and which finished while nobody looked. Kept
- * in memory; the desktop pet window receives the same picture over IPC.
+ * in memory per window; the desktop pet window reads thread state itself and
+ * hears about typing over the broadcast channel below.
  */
 
 import { create } from "zustand";
@@ -119,14 +120,40 @@ export function petBadgeFor(
 }
 
 const TYPING_IDLE_MS = 1_800;
+/** Keystrokes come fast; the other windows only need to hear about them now and then. */
+const TYPING_BROADCAST_MIN_INTERVAL_MS = 400;
+const TYPING_CHANNEL_NAME = "t3code:neo-pet-typing";
 let typingTimer: ReturnType<typeof setTimeout> | null = null;
+let lastTypingBroadcastAt = 0;
 
-/** Called on every composer keystroke; typing ends after a short pause. */
-export function notePetTyping(): void {
+/**
+ * Typing happens in the main window, but the pet lives in its own window on
+ * desktop. Every window shares this channel: whoever sees a keystroke tells
+ * the others, so the pet looks up wherever the typing happens.
+ */
+const typingChannel: BroadcastChannel | null =
+  typeof BroadcastChannel === "function" ? new BroadcastChannel(TYPING_CHANNEL_NAME) : null;
+
+typingChannel?.addEventListener("message", () => {
+  markPetTyping();
+});
+
+function markPetTyping(): void {
   usePetActivityStore.getState().setTyping(true);
   if (typingTimer !== null) clearTimeout(typingTimer);
   typingTimer = setTimeout(() => {
     typingTimer = null;
     usePetActivityStore.getState().setTyping(false);
   }, TYPING_IDLE_MS);
+}
+
+/** Called on every composer keystroke; typing ends after a short pause. */
+export function notePetTyping(): void {
+  markPetTyping();
+  const now = Date.now();
+  if (typingChannel && now - lastTypingBroadcastAt >= TYPING_BROADCAST_MIN_INTERVAL_MS) {
+    lastTypingBroadcastAt = now;
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin -- a BroadcastChannel has no target origin
+    typingChannel.postMessage("typing");
+  }
 }
