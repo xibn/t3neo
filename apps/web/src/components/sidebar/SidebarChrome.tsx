@@ -84,7 +84,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
-      <SidebarBrand centered={neoLook} onBackdrop={backdropVariant !== null || neoLook} />
+      <SidebarBrand pinnedEnd={neoLook} onBackdrop={backdropVariant !== null || neoLook} />
       {pillLabel ? (
         <Badge
           className="relative z-10 ml-1 rounded-full px-1.5 text-muted-foreground"
@@ -99,15 +99,16 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
-function SidebarBrand({ centered, onBackdrop }: { centered: boolean; onBackdrop: boolean }) {
+function SidebarBrand({ pinnedEnd, onBackdrop }: { pinnedEnd: boolean; onBackdrop: boolean }) {
   return (
     <Link
       aria-label="Go to threads"
       className={cn(
         "z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden rounded-md pl-1 outline-hidden ring-ring focus-visible:ring-2 md:flex",
-        // The Neo look centers the brand over its starfield; the standard look keeps it left.
-        centered
-          ? "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        // The Neo look pins the brand to the right edge of its starfield, clear of the
+        // sidebar toggle on the left; the standard look keeps it left.
+        pinnedEnd
+          ? "absolute right-3 top-1/2 -translate-y-1/2"
           : "relative ml-[calc(var(--workspace-titlebar-content-left)+0.5rem)]",
         onBackdrop ? "text-white" : "text-foreground",
       )}

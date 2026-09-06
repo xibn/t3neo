@@ -274,7 +274,7 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
    `calc(var(--workspace-topbar-height) * 2)` tall with a `mask-image` that stays solid over
    the header and fades to transparent by 90 %, so the field relaxes into the sidebar over a
    short distance instead of stopping at the header's edge. The brand itself is a moon-star icon in `#f1a629`
-   with a stepped ember glow, the T3 wordmark, and "Neo", absolutely centered in the header under
+   with a stepped ember glow, the T3 wordmark, and "Neo", pinned to the right edge of the header under
    the Neo look (no spark, no other decoration). The art has no sky fill of its own and no fade mask: the header shows the sidebar's
    background in both schemes, so header and star sky below it are one continuous surface.
    Stars twinkle in a few stepped groups; the starfield is hidden

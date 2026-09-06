@@ -14917,7 +14917,7 @@ index a3e5cf4b9..f538e7e0c 100644
      // Prefixed because the slider control already owns the `appearance-contrast` id.
      id: "setting-appearance-contrast",
 diff --git a/apps/web/src/components/sidebar/SidebarChrome.tsx b/apps/web/src/components/sidebar/SidebarChrome.tsx
-index 705216b93..d83004ad7 100644
+index 705216b93..f02d416f0 100644
 --- a/apps/web/src/components/sidebar/SidebarChrome.tsx
 +++ b/apps/web/src/components/sidebar/SidebarChrome.tsx
 @@ -1,6 +1,8 @@
@@ -14987,25 +14987,26 @@ index 705216b93..d83004ad7 100644
          )}
        />
 -      <SidebarBrand onBackdrop={backdropVariant !== null} />
-+      <SidebarBrand centered={neoLook} onBackdrop={backdropVariant !== null || neoLook} />
++      <SidebarBrand pinnedEnd={neoLook} onBackdrop={backdropVariant !== null || neoLook} />
        {pillLabel ? (
          <Badge
            className="relative z-10 ml-1 rounded-full px-1.5 text-muted-foreground"
-@@ -79,16 +99,21 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
+@@ -79,16 +99,22 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
    );
  });
  
 -function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
-+function SidebarBrand({ centered, onBackdrop }: { centered: boolean; onBackdrop: boolean }) {
++function SidebarBrand({ pinnedEnd, onBackdrop }: { pinnedEnd: boolean; onBackdrop: boolean }) {
    return (
      <Link
        aria-label="Go to threads"
        className={cn(
 -        "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
 +        "z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden rounded-md pl-1 outline-hidden ring-ring focus-visible:ring-2 md:flex",
-+        // The Neo look centers the brand over its starfield; the standard look keeps it left.
-+        centered
-+          ? "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
++        // The Neo look pins the brand to the right edge of its starfield, clear of the
++        // sidebar toggle on the left; the standard look keeps it left.
++        pinnedEnd
++          ? "absolute right-3 top-1/2 -translate-y-1/2"
 +          : "relative ml-[calc(var(--workspace-titlebar-content-left)+0.5rem)]",
          onBackdrop ? "text-white" : "text-foreground",
        )}
@@ -15015,7 +15016,7 @@ index 705216b93..d83004ad7 100644
        <T3Wordmark />
        <span
          className={cn(
-@@ -96,7 +121,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+@@ -96,7 +122,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
            onBackdrop ? "text-white/70" : "text-muted-foreground",
          )}
        >
@@ -15024,7 +15025,7 @@ index 705216b93..d83004ad7 100644
        </span>
      </Link>
    );
-@@ -185,6 +210,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+@@ -185,6 +211,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
      }
      void navigate({ to: "/usage" });
    }, [isMobile, navigate, setOpenMobile]);
@@ -15035,7 +15036,7 @@ index 705216b93..d83004ad7 100644
  
    const handleBackClick = useCallback(() => {
      closeMobileSidebar();
-@@ -223,6 +252,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+@@ -223,6 +253,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
              label="Usage"
              onClick={handleUsageClick}
            />
@@ -15043,7 +15044,7 @@ index 705216b93..d83004ad7 100644
          </>
        )}
        <SidebarUpdatePill />
-@@ -239,3 +269,15 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+@@ -239,3 +270,15 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
      </SidebarFooter>
    );
  });
@@ -21167,6 +21168,33 @@ index 000000000..a21dd67cf
 +      document.removeEventListener("keydown", onInput, true);
 +    };
 +  }, []);
++}
+diff --git a/apps/web/src/neo/pets/usePetWindowSync.ts b/apps/web/src/neo/pets/usePetWindowSync.ts
+new file mode 100644
+index 000000000..95b855941
+--- /dev/null
++++ b/apps/web/src/neo/pets/usePetWindowSync.ts
+@@ -0,0 +1,21 @@
++import { useEffect } from "react";
++
++import { useNeoSettings } from "../neoSettings";
++
++/**
++ * Desktop only: the pet lives in its own window, never inside the app.
++ * Picking a pet opens that window (or leaves it open), "No pet" closes it.
++ * The pet window itself reads the same settings, so it swaps pets on its own.
++ */
++export function usePetWindowSync(enabled: boolean): void {
++  const pet = useNeoSettings().pet;
++  useEffect(() => {
++    const bridge = window.desktopBridge?.pet;
++    if (!bridge || !enabled) return;
++    if (pet === "none") {
++      void bridge.closeWindow();
++    } else {
++      void bridge.openWindow();
++    }
++  }, [enabled, pet]);
 +}
 diff --git a/apps/web/src/neo/processGroups.test.ts b/apps/web/src/neo/processGroups.test.ts
 new file mode 100644
