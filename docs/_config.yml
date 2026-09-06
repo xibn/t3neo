@@ -1,0 +1,12 @@
+# GitHub Pages builds this folder with Jekyll. The download page is the site
+# root; the manuals keep their repository paths and render under /docs/.
+title: T3 Neo
+defaults:
+  - scope:
+      path: ""
+    values:
+      permalink: /docs/:path/:basename/
+  - scope:
+      path: README.md
+    values:
+      permalink: /docs/

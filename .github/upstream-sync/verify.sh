@@ -113,6 +113,8 @@ require_files \
   assets/neo/app-icon.svg \
   assets/neo/screenshots/pets.jpg \
   assets/neo/screenshots/header-collapsed.jpg \
+  docs/_config.yml \
+  docs/favicon.svg \
   docs/download/index.html \
   scripts/neo/generate-neo-icons.ts
 require_grep '"T3 Neo"' apps/web/src/branding.ts "web branding fallback is not T3 Neo"

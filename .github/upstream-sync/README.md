@@ -143,8 +143,9 @@ Repository settings:
 - Enable Actions, enable the five workflows above, and disable upstream's own **Release**,
   **Deploy Relay**, EAS, AUR, and web preview workflows; they need upstream's secrets.
 - Allow the token to force-push `main` (no branch protection, or exempt it).
-- Enable GitHub Pages from `main`, folder `/docs`, so `docs/download/index.html` (the README
-  download button target) is served.
+- Enable GitHub Pages from `main`, folder `/docs`. `docs/_config.yml` makes the download page
+  (`docs/download/index.html`, the README button target) the site root and renders the manuals
+  under `/docs/`; `docs/CNAME` sets the custom domain, delete it to stay on github.io.
 - Run **Neo Refresh Upstream Tags** once so the dropdowns are populated.
 
 ## Files

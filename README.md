@@ -1,7 +1,7 @@
 # T3 Neo
 
 <p>
-  <a href="https://xibn.github.io/t3neo/download/"><img src="assets/neo/download-button.svg" alt="Download T3 Neo for your OS" width="340" height="56"></a>
+  <a href="https://xibn.github.io/t3neo/"><img src="assets/neo/download-button.svg" alt="Download T3 Neo for your OS" width="340" height="56"></a>
 </p>
 
 A fork of [T3 Code](https://github.com/pingdotgg/t3code) that follows every stable upstream release and adds:

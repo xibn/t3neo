@@ -316,8 +316,11 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
 6. **README download button.** `assets/neo/download-button.svg` (a static pill button image) and
    `docs/download/index.html` (a self-contained page that detects the visitor's OS, reads the
    latest fork release from the GitHub API, and links or redirects to the matching asset; the
-   repository slug comes from the GitHub Pages URL, with a `repo` query override). The README
-   starts with a T3 Neo section that embeds the button linking to that page.
+   repository slug comes from the GitHub Pages URL, with a `repo` query override). Its footer
+   links the repository with a GitHub mark, and it carries a T3 Neo favicon (`docs/favicon.svg`).
+   `docs/_config.yml` serves it at the site root (`/download/` redirects there) and renders the
+   manuals under `/docs/`. The README starts with a T3 Neo section that embeds the button
+   linking to that page.
 7. **README screenshots.** `assets/neo/screenshots/header-collapsed.jpg` (a chat in the Neo
    look with the header actions folded away) and `pets.jpg` (the pet settings, "No pet"
    selected), embedded under a "Screenshots" heading in the T3 Neo README section. The README
