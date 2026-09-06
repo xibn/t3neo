@@ -1,5 +1,5 @@
-import { PawPrintIcon, PictureInPicture2Icon } from "lucide-react";
-import { useCallback, type CSSProperties } from "react";
+import { PawPrintIcon } from "lucide-react";
+import { type CSSProperties } from "react";
 
 import { isElectron } from "~/env";
 import {
@@ -17,7 +17,6 @@ import {
 import { PET_DEFINITIONS } from "~/neo/pets/petRegistry";
 import { PetPreview } from "~/neo/pets/PetPreview";
 import { NeoFeatureBadge } from "~/neo/NeoBadge";
-import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import {
   SettingResetButton,
@@ -46,10 +45,6 @@ export function PetSettingsPanel() {
     "--settings-slider-progress": `${workingIntervalRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - workingIntervalRatio}rem`,
   } as CSSProperties;
-  const openPetWindow = useCallback(() => {
-    void window.desktopBridge?.pet?.openWindow();
-  }, []);
-
   return (
     <SettingsPageContainer>
       <SettingsSection
@@ -74,17 +69,20 @@ export function PetSettingsPanel() {
             />
           ))}
         </div>
+        {isElectron ? null : (
+          <p className="px-3 text-xs text-muted-foreground sm:px-4">
+            Pets live in their own window and need the desktop app.
+          </p>
+        )}
 
         <SettingsRow
           {...searchableSetting("neo-pet-size")}
-          description="Size of the pet. Drag it anywhere; it remembers the spot."
+          description="Size of the pet. Drag it to move its window."
           resetAction={
-            settings.petSize !== DEFAULT_NEO_SETTINGS.petSize || settings.petPosition !== null ? (
+            settings.petSize !== DEFAULT_NEO_SETTINGS.petSize ? (
               <SettingResetButton
-                label="pet size and position"
-                onClick={() =>
-                  updateSettings({ petSize: DEFAULT_NEO_SETTINGS.petSize, petPosition: null })
-                }
+                label="pet size"
+                onClick={() => updateSettings({ petSize: DEFAULT_NEO_SETTINGS.petSize })}
               />
             ) : null
           }
@@ -192,24 +190,6 @@ export function PetSettingsPanel() {
             </div>
           }
         />
-
-        {isElectron && window.desktopBridge?.pet ? (
-          <SettingsRow
-            {...searchableSetting("neo-pet-window")}
-            description="Show the pet in its own always-on-top window that floats over other apps. Clicking it brings T3 Neo forward."
-            control={
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={settings.pet === "none"}
-                onClick={openPetWindow}
-              >
-                <PictureInPicture2Icon />
-                Open pet window
-              </Button>
-            }
-          />
-        ) : null}
       </SettingsSection>
     </SettingsPageContainer>
   );

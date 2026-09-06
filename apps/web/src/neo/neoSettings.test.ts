@@ -12,6 +12,7 @@ import {
   MIN_PET_WORKING_INTERVAL_SEC,
   NEO_SETTINGS_STORAGE_KEY,
   readStoredNeoSettings,
+  reloadNeoSettingsFromStorage,
   resetNeoSettingsForTest,
   useNeoSettingsStore,
 } from "./neoSettings";
@@ -94,6 +95,15 @@ describe("neo settings", () => {
       readStoredNeoSettings({ getItem: () => JSON.stringify({ petWorkingIntervalSec: 1 }) })
         .petWorkingIntervalSec,
     ).toBe(MIN_PET_WORKING_INTERVAL_SEC);
+  });
+
+  it("reloads settings another window wrote to storage", () => {
+    const storage = createMemoryNeoSettingsStorage();
+    resetNeoSettingsForTest(storage);
+    storage.setItem(NEO_SETTINGS_STORAGE_KEY, JSON.stringify({ pet: "wukong", petSize: 200 }));
+    expect(useNeoSettingsStore.getState().settings.pet).toBe(DEFAULT_NEO_SETTINGS.pet);
+    reloadNeoSettingsFromStorage();
+    expect(useNeoSettingsStore.getState().settings).toMatchObject({ pet: "wukong", petSize: 200 });
   });
 
   it("persists updates", () => {

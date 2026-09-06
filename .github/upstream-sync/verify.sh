@@ -160,6 +160,7 @@ require_files \
   apps/web/src/neo/pets/petActivity.test.ts \
   apps/web/src/neo/pets/usePetActivitySync.ts \
   apps/web/src/neo/pets/PetWidget.tsx \
+  apps/web/src/neo/pets/usePetWindowSync.ts \
   apps/web/src/neo/pets/PetPreview.tsx \
   apps/web/src/neo/pets/RabbitPet.tsx \
   apps/web/src/neo/pets/WukongPet.tsx \

@@ -15,7 +15,7 @@ function PetWindowRoute() {
       delete document.documentElement.dataset.neoPetWindow;
     };
   }, []);
-  return <PetWidget mode="window" />;
+  return <PetWidget />;
 }
 
 export const Route = createFileRoute("/pet")({

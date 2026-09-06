@@ -452,7 +452,7 @@ The **Neo** tab has:
    label "Header") next to the workspace control lifts it into the header; docked in the header,
    the same pill (arrow-down-to-line, "Below composer") sits at the bottom of the branch popup
    (`BranchToolbarBranchSelector` `popupFooter`) and sends it back.
-6. On desktop, an **Open pet window** action that detaches the pet into its own window.
+6. On desktop the pet always lives in its own window: picking a pet opens it, "No pet" closes it.
 
 The **Pets** tab has:
 
@@ -525,9 +525,12 @@ contracts or server settings.
 2. **Visibility.** The pet has a transparent background but must read on any surface: ASCII pets
    render in the exact ember amber `#f1a629` with a dark halo (text shadow) in dark appearance
    and the same amber with a mixed halo in light appearance.
-3. **Placement.** The pet floats above the app (`PetWidget mode="overlay"`, mounted in
-   `routes/__root.tsx` when authenticated), draggable with a 4 px threshold; its position persists.
-   Size comes from settings. The sidebar footer has a paw-print **Pet** button (`SidebarPetButton`
+3. **Placement.** The pet never renders inside the app. On desktop `usePetWindowSync`
+   (`apps/web/src/neo/pets/usePetWindowSync.ts`, called from `routes/__root.tsx` once
+   authenticated) opens the pet window whenever a pet other than "none" is selected and closes it
+   for "none"; the pet window reads the same settings (a `storage` listener in `neoSettings.ts`
+   reloads them), so it swaps pets on its own. On the web app pets are unavailable and the Pets tab
+   says so. Size comes from settings. The sidebar footer has a paw-print **Pet** button (`SidebarPetButton`
    in `SidebarChrome.tsx`, a `SidebarUtilityItem` like Settings and Usage) next to the existing
    footer buttons that navigates straight to `/settings/pets`; it is filled in the primary color
    while a pet other than "none" is selected. It opens no menu.
@@ -550,7 +553,7 @@ contracts or server settings.
    and `petBadgeFor`.
 7. **Desktop pet window.** `apps/desktop/src/ipc/methods/pet.ts` opens a transparent, frameless,
    non-focusable, always-on-top window (280×380) that loads `#/pet` (`apps/web/src/routes/pet.tsx`
-   renders `PetWidget mode="window"` with a transparent document). IPC channels `pet.openWindow`,
+   renders `PetWidget` with a transparent document). IPC channels `pet.openWindow`,
    `pet.closeWindow`, `pet.moveWindow({dx,dy})` (dragging the pet moves the window), and
    `pet.focusMain(target)` (reveals the main window and sends the menu action
    `open-thread:<environmentId>:<threadId>`, handled in `AppSidebarLayout`). Exposed on

@@ -24,7 +24,7 @@ import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
 import { useEnvironmentThemeSync } from "../hooks/useEnvironmentTheme";
 import { useMessageQueueDrain } from "../hooks/useMessageQueueDrain";
-import { PetWidget } from "../neo/pets/PetWidget";
+import { usePetWindowSync } from "../neo/pets/usePetWindowSync";
 import { applyAsciiPetColor, useNeoSettings } from "../neo/neoSettings";
 import { Button } from "../components/ui/button";
 import {
@@ -100,6 +100,8 @@ function RootRouteView() {
   const isPetWindowRoute = pathname === "/pet";
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
+  // The pet never renders inside the app; on desktop it gets its own window.
+  usePetWindowSync(primaryEnvironmentAuthenticated && !isPetWindowRoute);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -159,7 +161,6 @@ function RootRouteView() {
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
-        {primaryEnvironmentAuthenticated && !isPetWindowRoute ? <PetWidget mode="overlay" /> : null}
         {appShell}
         {/* Above the router: a theme draft is judged by walking the app, so the
             editor has to survive navigation away from settings. */}

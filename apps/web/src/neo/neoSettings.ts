@@ -239,6 +239,21 @@ export const useNeoSettingsStore = create<NeoSettingsStore>()((set, get) => ({
   },
 }));
 
+/**
+ * Adopts what another window of this app wrote (the pet window and the main
+ * window share the key), so a pet picked in Settings changes in its window at once.
+ */
+export function reloadNeoSettingsFromStorage(): void {
+  useNeoSettingsStore.setState({ settings: readStoredNeoSettings() });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === null || event.key === NEO_SETTINGS_STORAGE_KEY)
+      reloadNeoSettingsFromStorage();
+  });
+}
+
 export function useNeoSettings(): NeoSettings {
   return useNeoSettingsStore((state) => state.settings);
 }

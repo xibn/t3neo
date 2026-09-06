@@ -65,9 +65,10 @@ off to keep every chevron still.
 
 ## Pets
 
-A pet keeps you company while agents work. Choose one under **Settings → Pets**:
+A pet keeps you company while agents work. On desktop it lives in its own small window that
+floats above other apps, never inside T3 Neo itself. Choose one under **Settings → Pets**:
 
-- **No pet** hides the pet. Its preview shows a spinning ASCII X.
+- **No pet** closes the pet window. Its preview shows a spinning ASCII X.
 - **Hoppy (Loop)** is a white rabbit that hops in a smooth loop.
 - **Wukong (Reactive)** is an ASCII monkey. He sleeps while you read, wakes up while you type in
   the composer, and gets to work while any thread is running, switching between a few working
@@ -103,11 +104,12 @@ T3 Neo forward, and inside the app it does nothing.
 The paw-print button in the sidebar footer opens **Settings → Pets** directly; it is filled in the
 accent color while a pet is on.
 
-### Desktop pet window
+### Pet window
 
-On desktop, **Open pet window** moves the pet into a small transparent window that stays above
-other apps and never steals keyboard focus. Drag the pet to move the window. Clicking it brings
-T3 Neo forward. The pet window closes with the main window.
+Picking a pet opens its window; picking another pet swaps it in place, and **No pet** closes the
+window. It stays above other apps and never steals keyboard focus. Drag the pet to move the window.
+Clicking it brings T3 Neo forward. The pet window closes with the main window. Pets need the
+desktop app; the web app has no window to put them in.
 
 ## Usage badges
 

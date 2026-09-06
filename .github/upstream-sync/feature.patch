@@ -14185,12 +14185,12 @@ index 000000000..2e64d13dc
 +}
 diff --git a/apps/web/src/components/settings/PetSettingsPanel.tsx b/apps/web/src/components/settings/PetSettingsPanel.tsx
 new file mode 100644
-index 000000000..bdddea9fa
+index 000000000..bc8b049e9
 --- /dev/null
 +++ b/apps/web/src/components/settings/PetSettingsPanel.tsx
-@@ -0,0 +1,216 @@
-+import { PawPrintIcon, PictureInPicture2Icon } from "lucide-react";
-+import { useCallback, type CSSProperties } from "react";
+@@ -0,0 +1,196 @@
++import { PawPrintIcon } from "lucide-react";
++import { type CSSProperties } from "react";
 +
 +import { isElectron } from "~/env";
 +import {
@@ -14208,7 +14208,6 @@ index 000000000..bdddea9fa
 +import { PET_DEFINITIONS } from "~/neo/pets/petRegistry";
 +import { PetPreview } from "~/neo/pets/PetPreview";
 +import { NeoFeatureBadge } from "~/neo/NeoBadge";
-+import { Button } from "../ui/button";
 +import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 +import {
 +  SettingResetButton,
@@ -14237,10 +14236,6 @@ index 000000000..bdddea9fa
 +    "--settings-slider-progress": `${workingIntervalRatio * 100}%`,
 +    "--settings-slider-fill-offset": `${0.5 - workingIntervalRatio}rem`,
 +  } as CSSProperties;
-+  const openPetWindow = useCallback(() => {
-+    void window.desktopBridge?.pet?.openWindow();
-+  }, []);
-+
 +  return (
 +    <SettingsPageContainer>
 +      <SettingsSection
@@ -14265,17 +14260,20 @@ index 000000000..bdddea9fa
 +            />
 +          ))}
 +        </div>
++        {isElectron ? null : (
++          <p className="px-3 text-xs text-muted-foreground sm:px-4">
++            Pets live in their own window and need the desktop app.
++          </p>
++        )}
 +
 +        <SettingsRow
 +          {...searchableSetting("neo-pet-size")}
-+          description="Size of the pet. Drag it anywhere; it remembers the spot."
++          description="Size of the pet. Drag it to move its window."
 +          resetAction={
-+            settings.petSize !== DEFAULT_NEO_SETTINGS.petSize || settings.petPosition !== null ? (
++            settings.petSize !== DEFAULT_NEO_SETTINGS.petSize ? (
 +              <SettingResetButton
-+                label="pet size and position"
-+                onClick={() =>
-+                  updateSettings({ petSize: DEFAULT_NEO_SETTINGS.petSize, petPosition: null })
-+                }
++                label="pet size"
++                onClick={() => updateSettings({ petSize: DEFAULT_NEO_SETTINGS.petSize })}
 +              />
 +            ) : null
 +          }
@@ -14383,24 +14381,6 @@ index 000000000..bdddea9fa
 +            </div>
 +          }
 +        />
-+
-+        {isElectron && window.desktopBridge?.pet ? (
-+          <SettingsRow
-+            {...searchableSetting("neo-pet-window")}
-+            description="Show the pet in its own always-on-top window that floats over other apps. Clicking it brings T3 Neo forward."
-+            control={
-+              <Button
-+                size="sm"
-+                variant="outline"
-+                disabled={settings.pet === "none"}
-+                onClick={openPetWindow}
-+              >
-+                <PictureInPicture2Icon />
-+                Open pet window
-+              </Button>
-+            }
-+          />
-+        ) : null}
 +      </SettingsSection>
 +    </SettingsPageContainer>
 +  );
@@ -14798,7 +14778,7 @@ index 5fdcb2443..aa3063a44 100644
          <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>
        </div>
 diff --git a/apps/web/src/components/settings/settingsSearch.ts b/apps/web/src/components/settings/settingsSearch.ts
-index a3e5cf4b9..ae7d29b11 100644
+index a3e5cf4b9..f538e7e0c 100644
 --- a/apps/web/src/components/settings/settingsSearch.ts
 +++ b/apps/web/src/components/settings/settingsSearch.ts
 @@ -3,6 +3,8 @@ import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/uti
@@ -14819,7 +14799,7 @@ index a3e5cf4b9..ae7d29b11 100644
    "/settings/appearance": "Appearance",
    "/settings/keybindings": "Keybindings",
    "/settings/providers": "Providers",
-@@ -80,6 +84,123 @@ export const SETTINGS_SEARCH_ITEMS = [
+@@ -80,6 +84,116 @@ export const SETTINGS_SEARCH_ITEMS = [
      // stable scroll destination for both.
      targetId: "appearance",
    },
@@ -14932,13 +14912,6 @@ index a3e5cf4b9..ae7d29b11 100644
 +    title: "ASCII pet color",
 +    to: "/settings/pets",
 +    searchTerms: ["ascii pet text font color glyph orange amber wukong system light dark"],
-+  },
-+  {
-+    id: "neo-pet-window",
-+    title: "Pet window",
-+    to: "/settings/pets",
-+    searchTerms: ["pet floating always on top desktop window"],
-+    desktopOnly: true,
 +  },
    {
      // Prefixed because the slider control already owns the `appearance-contrast` id.
@@ -19363,10 +19336,10 @@ index 000000000..0b7e6fd23
 +}
 diff --git a/apps/web/src/neo/neoSettings.test.ts b/apps/web/src/neo/neoSettings.test.ts
 new file mode 100644
-index 000000000..52405c9c7
+index 000000000..19f34313e
 --- /dev/null
 +++ b/apps/web/src/neo/neoSettings.test.ts
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,120 @@
 +import { beforeEach, describe, expect, it } from "vite-plus/test";
 +
 +import {
@@ -19381,6 +19354,7 @@ index 000000000..52405c9c7
 +  MIN_PET_WORKING_INTERVAL_SEC,
 +  NEO_SETTINGS_STORAGE_KEY,
 +  readStoredNeoSettings,
++  reloadNeoSettingsFromStorage,
 +  resetNeoSettingsForTest,
 +  useNeoSettingsStore,
 +} from "./neoSettings";
@@ -19465,6 +19439,15 @@ index 000000000..52405c9c7
 +    ).toBe(MIN_PET_WORKING_INTERVAL_SEC);
 +  });
 +
++  it("reloads settings another window wrote to storage", () => {
++    const storage = createMemoryNeoSettingsStorage();
++    resetNeoSettingsForTest(storage);
++    storage.setItem(NEO_SETTINGS_STORAGE_KEY, JSON.stringify({ pet: "wukong", petSize: 200 }));
++    expect(useNeoSettingsStore.getState().settings.pet).toBe(DEFAULT_NEO_SETTINGS.pet);
++    reloadNeoSettingsFromStorage();
++    expect(useNeoSettingsStore.getState().settings).toMatchObject({ pet: "wukong", petSize: 200 });
++  });
++
 +  it("persists updates", () => {
 +    const storage = createMemoryNeoSettingsStorage();
 +    resetNeoSettingsForTest(storage);
@@ -19479,10 +19462,10 @@ index 000000000..52405c9c7
 +});
 diff --git a/apps/web/src/neo/neoSettings.ts b/apps/web/src/neo/neoSettings.ts
 new file mode 100644
-index 000000000..bfa158fe8
+index 000000000..c41992a69
 --- /dev/null
 +++ b/apps/web/src/neo/neoSettings.ts
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,269 @@
 +/**
 + * Fork-only preferences (Settings → Neo). Client-local like the look and the
 + * message queue: nothing here crosses the wire or touches the server.
@@ -19723,6 +19706,21 @@ index 000000000..bfa158fe8
 +    set({ settings: next });
 +  },
 +}));
++
++/**
++ * Adopts what another window of this app wrote (the pet window and the main
++ * window share the key), so a pet picked in Settings changes in its window at once.
++ */
++export function reloadNeoSettingsFromStorage(): void {
++  useNeoSettingsStore.setState({ settings: readStoredNeoSettings() });
++}
++
++if (typeof window !== "undefined") {
++  window.addEventListener("storage", (event) => {
++    if (event.key === null || event.key === NEO_SETTINGS_STORAGE_KEY)
++      reloadNeoSettingsFromStorage();
++  });
++}
 +
 +export function useNeoSettings(): NeoSettings {
 +  return useNeoSettingsStore((state) => state.settings);
@@ -20154,11 +20152,10 @@ index 000000000..c9fcdb2c5
 +});
 diff --git a/apps/web/src/neo/pets/PetWidget.tsx b/apps/web/src/neo/pets/PetWidget.tsx
 new file mode 100644
-index 000000000..bc032804c
+index 000000000..79fd57b8f
 --- /dev/null
 +++ b/apps/web/src/neo/pets/PetWidget.tsx
-@@ -0,0 +1,265 @@
-+import { useNavigate } from "@tanstack/react-router";
+@@ -0,0 +1,178 @@
 +import {
 +  ArrowDownNarrowWideIcon,
 +  ArrowUpNarrowWideIcon,
@@ -20167,158 +20164,96 @@ index 000000000..bc032804c
 +} from "lucide-react";
 +import { memo, useCallback, useRef, useState, type PointerEvent } from "react";
 +
-+import { cn } from "~/lib/utils";
 +import { NEO_PRODUCT_NAME } from "../neoRepository";
-+import { useNeoSettings, useUpdateNeoSettings, type PetPosition } from "../neoSettings";
++import { useNeoSettings } from "../neoSettings";
 +import { petBadgeFor, petMoodFor, usePetActivityStore, type PetRunningThread } from "./petActivity";
 +import { petDefinition } from "./petRegistry";
 +import { PetSprite } from "./PetSprite";
 +import { usePetActivitySync } from "./usePetActivitySync";
 +
-+const DEFAULT_POSITION: PetPosition = { x: 16, y: 104 };
 +const DRAG_THRESHOLD_PX = 4;
 +
-+function clampPosition(position: PetPosition, size: number): PetPosition {
-+  if (typeof window === "undefined") return position;
-+  return {
-+    x: Math.min(Math.max(0, position.x), Math.max(0, window.innerWidth - size)),
-+    y: Math.min(Math.max(0, position.y), Math.max(0, window.innerHeight - size)),
-+  };
-+}
-+
 +/**
-+ * The floating pet: draggable, sized from settings. A bubble above it names
-+ * one run (the first running thread, else a finished one waiting to be seen);
-+ * round pills below always show the running count (0 when idle) and a fold
-+ * toggle that decides whether the bubble lists every run or just one. The
-+ * toggle is always live; its choice sticks across quiet spells, so the
++ * The pet in its own desktop window, sized from settings. A bubble above it
++ * names one run (the first running thread, else a finished one waiting to be
++ * seen); round pills below always show the running count (0 when idle) and a
++ * fold toggle that decides whether the bubble lists every run or just one.
++ * The toggle is always live; its choice sticks across quiet spells, so the
 + * controls never jump and the list never fills the screen on its own.
-+ * `mode="window"` renders it for the detached desktop pet window, where a
-+ * click brings the main window forward.
++ * Dragging the pet moves the window; a click brings the main window forward.
 + */
-+export const PetWidget = memo(function PetWidget({ mode }: { mode: "overlay" | "window" }) {
++export const PetWidget = memo(function PetWidget() {
 +  usePetActivitySync();
-+  const navigate = useNavigate();
-+  const { pet, petSize, petPosition, petWorkingIntervalSec } = useNeoSettings();
-+  const updateSettings = useUpdateNeoSettings();
++  const { pet, petSize, petWorkingIntervalSec } = useNeoSettings();
 +  const typing = usePetActivityStore((state) => state.typing);
 +  const running = usePetActivityStore((state) => state.running);
 +  const unseenCompleted = usePetActivityStore((state) => state.unseenCompleted);
 +  const [expanded, setExpanded] = useState(false);
-+  const [dragging, setDragging] = useState<PetPosition | null>(null);
 +  const dragRef = useRef<{
 +    pointerId: number;
 +    startX: number;
 +    startY: number;
 +    lastScreenX: number;
 +    lastScreenY: number;
-+    origin: PetPosition;
 +    moved: boolean;
 +  } | null>(null);
 +
 +  const mood = petMoodFor({ typing, running });
 +  const badge = petBadgeFor({ running, unseenCompleted });
-+  const position = clampPosition(dragging ?? petPosition ?? DEFAULT_POSITION, petSize);
 +
-+  /** List entries open their thread; the pet itself never navigates. */
-+  const openThread = useCallback(
-+    (thread: PetRunningThread) => {
-+      usePetActivityStore.getState().clearUnseen();
-+      if (mode === "window") {
-+        void window.desktopBridge?.pet?.focusMain({
-+          environmentId: thread.environmentId,
-+          threadId: thread.threadId,
-+        });
-+        return;
-+      }
-+      void navigate({
-+        to: "/$environmentId/$threadId",
-+        params: { environmentId: thread.environmentId, threadId: thread.threadId },
-+      });
-+    },
-+    [mode, navigate],
-+  );
-+  /**
-+   * A click on the pet only brings the app back, like a desktop pet: from the
-+   * detached window it reveals the main window, inside the app it does nothing.
-+   * Unseen work stays marked until its thread is actually opened.
-+   */
++  /** List entries open their thread in the main window; the pet itself never navigates. */
++  const openThread = useCallback((thread: PetRunningThread) => {
++    usePetActivityStore.getState().clearUnseen();
++    void window.desktopBridge?.pet?.focusMain({
++      environmentId: thread.environmentId,
++      threadId: thread.threadId,
++    });
++  }, []);
++  /** A click on the pet only reveals the main window; unseen work stays marked until opened. */
 +  const revealApp = useCallback(() => {
-+    if (mode === "window") void window.desktopBridge?.pet?.focusMain(null);
-+  }, [mode]);
++    void window.desktopBridge?.pet?.focusMain(null);
++  }, []);
 +
-+  const onPointerDown = useCallback(
-+    (event: PointerEvent<HTMLDivElement>) => {
-+      if (event.button !== 0) return;
-+      dragRef.current = {
-+        pointerId: event.pointerId,
-+        startX: event.clientX,
-+        startY: event.clientY,
-+        lastScreenX: event.screenX,
-+        lastScreenY: event.screenY,
-+        origin: position,
-+        moved: false,
-+      };
-+      event.currentTarget.setPointerCapture(event.pointerId);
-+    },
-+    [position],
-+  );
-+  const onPointerMove = useCallback(
-+    (event: PointerEvent<HTMLDivElement>) => {
-+      const drag = dragRef.current;
-+      if (!drag || drag.pointerId !== event.pointerId) return;
-+      if (mode === "window") {
-+        // The detached window moves itself: forward screen-space deltas.
-+        const dx = event.screenX - drag.lastScreenX;
-+        const dy = event.screenY - drag.lastScreenY;
-+        if (
-+          !drag.moved &&
-+          Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < DRAG_THRESHOLD_PX
-+        ) {
-+          return;
-+        }
-+        drag.moved = true;
-+        drag.lastScreenX = event.screenX;
-+        drag.lastScreenY = event.screenY;
-+        if (dx !== 0 || dy !== 0) void window.desktopBridge?.pet?.moveWindow({ dx, dy });
-+        return;
-+      }
-+      const dx = event.clientX - drag.startX;
-+      const dy = event.clientY - drag.startY;
-+      if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-+      drag.moved = true;
-+      setDragging(clampPosition({ x: drag.origin.x + dx, y: drag.origin.y - dy }, petSize));
-+    },
-+    [mode, petSize],
-+  );
++  const onPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
++    if (event.button !== 0) return;
++    dragRef.current = {
++      pointerId: event.pointerId,
++      startX: event.clientX,
++      startY: event.clientY,
++      lastScreenX: event.screenX,
++      lastScreenY: event.screenY,
++      moved: false,
++    };
++    event.currentTarget.setPointerCapture(event.pointerId);
++  }, []);
++  const onPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
++    const drag = dragRef.current;
++    if (!drag || drag.pointerId !== event.pointerId) return;
++    // The window moves itself: forward screen-space deltas.
++    const dx = event.screenX - drag.lastScreenX;
++    const dy = event.screenY - drag.lastScreenY;
++    if (
++      !drag.moved &&
++      Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < DRAG_THRESHOLD_PX
++    ) {
++      return;
++    }
++    drag.moved = true;
++    drag.lastScreenX = event.screenX;
++    drag.lastScreenY = event.screenY;
++    if (dx !== 0 || dy !== 0) void window.desktopBridge?.pet?.moveWindow({ dx, dy });
++  }, []);
 +  const onPointerUp = useCallback(
 +    (event: PointerEvent<HTMLDivElement>) => {
 +      const drag = dragRef.current;
 +      if (!drag || drag.pointerId !== event.pointerId) return;
 +      dragRef.current = null;
-+      if (drag.moved && mode === "window") {
-+        setDragging(null);
-+        return;
-+      }
-+      if (drag.moved) {
-+        const final = clampPosition(
-+          {
-+            x: drag.origin.x + (event.clientX - drag.startX),
-+            y: drag.origin.y - (event.clientY - drag.startY),
-+          },
-+          petSize,
-+        );
-+        setDragging(null);
-+        updateSettings({ petPosition: final });
-+        return;
-+      }
-+      setDragging(null);
-+      revealApp();
++      if (!drag.moved) revealApp();
 +    },
-+    [mode, petSize, revealApp, updateSettings],
++    [revealApp],
 +  );
 +
-+  if (pet === "none" && mode === "overlay") return null;
++  if (pet === "none") return null;
 +
 +  const listItems: Array<{ thread: PetRunningThread; state: "running" | "done" }> = [
 +    ...running.map((thread) => ({ thread, state: "running" as const })),
@@ -20326,30 +20261,11 @@ index 000000000..bc032804c
 +  ];
 +  const definition = petDefinition(pet);
 +  const shownItems = expanded ? listItems : listItems.slice(0, 1);
-+  // The bubble hangs off the pet toward the screen's middle so it stays on screen.
-+  const bubbleSide =
-+    mode === "overlay" && typeof window !== "undefined" && position.x > window.innerWidth / 2
-+      ? "end"
-+      : "start";
 +
 +  return (
-+    <div
-+      className={cn("neo-pet-widget", mode === "window" && "neo-pet-widget-window")}
-+      data-neo-pet={pet}
-+      data-mood={mood}
-+      style={
-+        mode === "window"
-+          ? undefined
-+          : { left: `${position.x}px`, bottom: `${position.y}px`, width: `${petSize}px` }
-+      }
-+    >
++    <div className="neo-pet-widget neo-pet-widget-window" data-neo-pet={pet} data-mood={mood}>
 +      {shownItems.length > 0 ? (
-+        <div
-+          className="neo-pet-bubble"
-+          data-side={bubbleSide}
-+          role="group"
-+          aria-label="Agent activity"
-+        >
++        <div className="neo-pet-bubble" data-side="start" role="group" aria-label="Agent activity">
 +          {shownItems.map(({ thread, state }) => (
 +            <button
 +              key={thread.key}
@@ -20373,18 +20289,13 @@ index 000000000..bc032804c
 +      <div
 +        role="button"
 +        tabIndex={0}
-+        aria-label={
-+          mode === "window"
-+            ? `${definition.label}: bring ${NEO_PRODUCT_NAME} forward`
-+            : definition.label
-+        }
++        aria-label={`${definition.label}: bring ${NEO_PRODUCT_NAME} forward`}
 +        className="neo-pet-sprite"
 +        onPointerDown={onPointerDown}
 +        onPointerMove={onPointerMove}
 +        onPointerUp={onPointerUp}
 +        onPointerCancel={() => {
 +          dragRef.current = null;
-+          setDragging(null);
 +        }}
 +        onKeyDown={(event) => {
 +          if (event.key === "Enter" || event.key === " ") {
@@ -21035,7 +20946,7 @@ index 000000000..dc2f94a7a
 +}
 diff --git a/apps/web/src/neo/pets/petRegistry.ts b/apps/web/src/neo/pets/petRegistry.ts
 new file mode 100644
-index 000000000..267f71b64
+index 000000000..0b6033f4c
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petRegistry.ts
 @@ -0,0 +1,145 @@
@@ -21053,7 +20964,7 @@ index 000000000..267f71b64
 +  {
 +    id: "none",
 +    label: "No pet",
-+    description: "Keeps the corner empty.",
++    description: "Closes the pet window.",
 +  },
 +  {
 +    id: "rabbit",
@@ -22101,7 +22012,7 @@ index f7c47ace6..1b108e21d 100644
    UsageRoute: UsageRoute,
    ConnectCallbackRoute: ConnectCallbackRoute,
 diff --git a/apps/web/src/routes/__root.tsx b/apps/web/src/routes/__root.tsx
-index 4476616a1..3e847bb4f 100644
+index 4476616a1..09c78a581 100644
 --- a/apps/web/src/routes/__root.tsx
 +++ b/apps/web/src/routes/__root.tsx
 @@ -23,6 +23,9 @@ import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToas
@@ -22109,7 +22020,7 @@ index 4476616a1..3e847bb4f 100644
  import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
  import { useEnvironmentThemeSync } from "../hooks/useEnvironmentTheme";
 +import { useMessageQueueDrain } from "../hooks/useMessageQueueDrain";
-+import { PetWidget } from "../neo/pets/PetWidget";
++import { usePetWindowSync } from "../neo/pets/usePetWindowSync";
 +import { applyAsciiPetColor, useNeoSettings } from "../neo/neoSettings";
  import { Button } from "../components/ui/button";
  import {
@@ -22123,15 +22034,19 @@ index 4476616a1..3e847bb4f 100644
  import { useClientSettings } from "../hooks/useSettings";
  import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
  import {
-@@ -92,6 +97,7 @@ export const Route = createRootRoute({
+@@ -92,8 +97,11 @@ export const Route = createRootRoute({
  
  function RootRouteView() {
    const pathname = useLocation({ select: (location) => location.pathname });
 +  const isPetWindowRoute = pathname === "/pet";
    const { authGateState } = Route.useRouteContext();
    const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
++  // The pet never renders inside the app; on desktop it gets its own window.
++  usePetWindowSync(primaryEnvironmentAuthenticated && !isPetWindowRoute);
  
-@@ -113,6 +119,11 @@ function RootRouteView() {
+   useEffect(() => {
+     const frame = window.requestAnimationFrame(() => {
+@@ -113,6 +121,11 @@ function RootRouteView() {
      );
    }
  
@@ -22143,15 +22058,7 @@ index 4476616a1..3e847bb4f 100644
    if (authGateState.status !== "authenticated" && authGateState.status !== "hosted-static") {
      return (
        <>
-@@ -148,6 +159,7 @@ function RootRouteView() {
-         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
-         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}
-         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
-+        {primaryEnvironmentAuthenticated && !isPetWindowRoute ? <PetWidget mode="overlay" /> : null}
-         {appShell}
-         {/* Above the router: a theme draft is judged by walking the app, so the
-             editor has to survive navigation away from settings. */}
-@@ -160,6 +172,7 @@ function RootRouteView() {
+@@ -160,6 +173,7 @@ function RootRouteView() {
  /** Follows the palette the primary environment's machine publishes, if any. */
  function EnvironmentThemeSync() {
    useEnvironmentThemeSync();
@@ -22159,7 +22066,7 @@ index 4476616a1..3e847bb4f 100644
    // Ordered after the palette sync so a first-run client adopting the
    // environment's own theme finds it already in the library.
    useDefaultThemeAdoption();
-@@ -173,6 +186,24 @@ function ContrastAppearanceSync() {
+@@ -173,6 +187,24 @@ function ContrastAppearanceSync() {
      applyAppearanceContrast(document.documentElement, appearanceContrast);
    }, [appearanceContrast]);
  
@@ -22186,7 +22093,7 @@ index 4476616a1..3e847bb4f 100644
  
 diff --git a/apps/web/src/routes/pet.tsx b/apps/web/src/routes/pet.tsx
 new file mode 100644
-index 000000000..ace7a5709
+index 000000000..e9cf6e51a
 --- /dev/null
 +++ b/apps/web/src/routes/pet.tsx
 @@ -0,0 +1,23 @@
@@ -22207,7 +22114,7 @@ index 000000000..ace7a5709
 +      delete document.documentElement.dataset.neoPetWindow;
 +    };
 +  }, []);
-+  return <PetWidget mode="window" />;
++  return <PetWidget />;
 +}
 +
 +export const Route = createFileRoute("/pet")({
@@ -73338,6 +73245,24 @@ index 000000000..107d3ed07
 @@ -0,0 +1 @@
 +t3neo.xibn.net
 \ No newline at end of file
+diff --git a/docs/_config.yml b/docs/_config.yml
+new file mode 100644
+index 000000000..e8fcb90ac
+--- /dev/null
++++ b/docs/_config.yml
+@@ -0,0 +1,12 @@
++# GitHub Pages builds this folder with Jekyll. The download page is the site
++# root; the manuals keep their repository paths and render under /docs/.
++title: T3 Neo
++defaults:
++  - scope:
++      path: ""
++    values:
++      permalink: /docs/:path/:basename/
++  - scope:
++      path: README.md
++    values:
++      permalink: /docs/
 diff --git a/docs/download/index.html b/docs/download/index.html
 new file mode 100644
 index 000000000..c914d1e8d
@@ -73574,6 +73499,33 @@ index 000000000..c914d1e8d
 +    </script>
 +  </body>
 +</html>
+diff --git a/docs/favicon.svg b/docs/favicon.svg
+new file mode 100644
+index 000000000..15e0f90c1
+--- /dev/null
++++ b/docs/favicon.svg
+@@ -0,0 +1,20 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
++  <defs>
++    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
++      <stop offset="0" stop-color="#1d1815"/>
++      <stop offset="1" stop-color="#0f0d0b"/>
++    </linearGradient>
++    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
++      <stop offset="0" stop-color="#f2a26e" stop-opacity="0.22"/>
++      <stop offset="1" stop-color="#f2a26e" stop-opacity="0"/>
++    </radialGradient>
++  </defs>
++  <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
++  <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#glow)"/>
++  <rect x="12.288" y="12.288" width="999.424" height="999.424" rx="218.5" fill="none" stroke="#f2a26e" stroke-opacity="0.18" stroke-width="12.288"/>
++  <g transform="translate(225.27999999999997 225.27999999999997) scale(23.893333333333334)" fill="none" stroke="#f2a26e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
++    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
++    <path d="M20 3v4"/>
++    <path d="M22 5h-4"/>
++  </g>
++</svg>
+\ No newline at end of file
 diff --git a/docs/internals/fork-automation.md b/docs/internals/fork-automation.md
 new file mode 100644
 index 000000000..8d66be7f3
@@ -73743,10 +73695,10 @@ index 97f1f5cb1..e358208d1 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..7fe94338f
+index 000000000..a9d0687ee
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,139 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -73814,9 +73766,10 @@ index 000000000..7fe94338f
 +
 +## Pets
 +
-+A pet keeps you company while agents work. Choose one under **Settings → Pets**:
++A pet keeps you company while agents work. On desktop it lives in its own small window that
++floats above other apps, never inside T3 Neo itself. Choose one under **Settings → Pets**:
 +
-+- **No pet** hides the pet. Its preview shows a spinning ASCII X.
++- **No pet** closes the pet window. Its preview shows a spinning ASCII X.
 +- **Hoppy (Loop)** is a white rabbit that hops in a smooth loop.
 +- **Wukong (Reactive)** is an ASCII monkey. He sleeps while you read, wakes up while you type in
 +  the composer, and gets to work while any thread is running, switching between a few working
@@ -73852,11 +73805,12 @@ index 000000000..7fe94338f
 +The paw-print button in the sidebar footer opens **Settings → Pets** directly; it is filled in the
 +accent color while a pet is on.
 +
-+### Desktop pet window
++### Pet window
 +
-+On desktop, **Open pet window** moves the pet into a small transparent window that stays above
-+other apps and never steals keyboard focus. Drag the pet to move the window. Clicking it brings
-+T3 Neo forward. The pet window closes with the main window.
++Picking a pet opens its window; picking another pet swaps it in place, and **No pet** closes the
++window. It stays above other apps and never steals keyboard focus. Drag the pet to move the window.
++Clicking it brings T3 Neo forward. The pet window closes with the main window. Pets need the
++desktop app; the web app has no window to put them in.
 +
 +## Usage badges
 +

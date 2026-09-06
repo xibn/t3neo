@@ -195,13 +195,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["ascii pet text font color glyph orange amber wukong system light dark"],
   },
   {
-    id: "neo-pet-window",
-    title: "Pet window",
-    to: "/settings/pets",
-    searchTerms: ["pet floating always on top desktop window"],
-    desktopOnly: true,
-  },
-  {
     // Prefixed because the slider control already owns the `appearance-contrast` id.
     id: "setting-appearance-contrast",
     title: "Contrast",

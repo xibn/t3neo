@@ -12,7 +12,7 @@ export const PET_DEFINITIONS: ReadonlyArray<PetDefinition> = [
   {
     id: "none",
     label: "No pet",
-    description: "Keeps the corner empty.",
+    description: "Closes the pet window.",
   },
   {
     id: "rabbit",
