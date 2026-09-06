@@ -187,6 +187,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         <Button
           type="submit"
           size="sm"
+          data-composer-split="start"
           className="h-9 rounded-l-full rounded-r-none bg-message-action px-4 text-message-action-foreground hover:bg-message-action-hover sm:h-8"
           {...pointerFocusProps}
           disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
@@ -199,6 +200,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               <Button
                 size="sm"
                 variant="default"
+                data-composer-split="end"
                 className="h-9 rounded-l-none rounded-r-full border-l-message-action-foreground/20 bg-message-action px-2 text-message-action-foreground hover:bg-message-action-hover sm:h-8"
                 aria-label="Implementation actions"
                 {...pointerFocusProps}
@@ -295,6 +297,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     <div className="flex items-center" data-chat-composer-queue-actions="true">
       <button
         type="submit"
+        data-composer-split="start"
         className={cn(
           "flex h-9 items-center gap-1.5 rounded-l-full bg-message-action pl-3 pr-2.5 text-xs font-medium text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer hover:bg-message-action-hover disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none sm:h-8",
           compact && "pl-2.5 pr-2",
@@ -311,6 +314,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           render={
             <button
               type="button"
+              data-composer-split="end"
               className="flex h-9 items-center rounded-r-full border-l border-l-message-action-foreground/20 bg-message-action px-1.5 text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer hover:bg-message-action-hover disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none sm:h-8"
               aria-label="Queue actions"
               {...pointerFocusProps}

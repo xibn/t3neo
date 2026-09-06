@@ -177,7 +177,9 @@ export const ComposerUsageBadge = memo(function ComposerUsageBadge({
   const headline = limited
     ? "Limit Unknown"
     : tightest
-      ? `${formatPercent(tightest.usedPercent)} · ${tightest.label}`
+      ? // The percent alone; the window's name is in the hover card, and the
+        // pill has no room to wrap.
+        formatPercent(tightest.usedPercent)
       : usage?.totalCostUsd !== null && usage?.totalCostUsd !== undefined
         ? `${formatUsd(usage.totalCostUsd)} last turn`
         : "Usage";
@@ -191,7 +193,7 @@ export const ComposerUsageBadge = memo(function ComposerUsageBadge({
           <button
             type="button"
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-[var(--control-radius)] border px-2.5 text-[11px] font-medium tabular-nums transition-colors",
+              "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[var(--control-radius)] border px-2.5 text-[11px] font-medium tabular-nums transition-colors",
               overage
                 ? "border-destructive/45 bg-destructive/15 text-destructive-foreground"
                 : "border-primary/40 bg-primary/12 text-foreground/85 hover:bg-primary/20",

@@ -12635,7 +12635,7 @@ index d180f2c69..079678f08 100644
    });
  });
 diff --git a/apps/web/src/components/chat/ComposerPrimaryActions.tsx b/apps/web/src/components/chat/ComposerPrimaryActions.tsx
-index 2a27796d9..35e060912 100644
+index 2a27796d9..82ea39b80 100644
 --- a/apps/web/src/components/chat/ComposerPrimaryActions.tsx
 +++ b/apps/web/src/components/chat/ComposerPrimaryActions.tsx
 @@ -1,5 +1,5 @@
@@ -12691,7 +12691,23 @@ index 2a27796d9..35e060912 100644
      >
        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
          <rect x="2" y="2" width="8" height="8" rx="1.5" />
-@@ -221,6 +224,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
+@@ -184,6 +187,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
+         <Button
+           type="submit"
+           size="sm"
++          data-composer-split="start"
+           className="h-9 rounded-l-full rounded-r-none bg-message-action px-4 text-message-action-foreground hover:bg-message-action-hover sm:h-8"
+           {...pointerFocusProps}
+           disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
+@@ -196,6 +200,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
+               <Button
+                 size="sm"
+                 variant="default"
++                data-composer-split="end"
+                 className="h-9 rounded-l-none rounded-r-full border-l-message-action-foreground/20 bg-message-action px-2 text-message-action-foreground hover:bg-message-action-hover sm:h-8"
+                 aria-label="Implementation actions"
+                 {...pointerFocusProps}
+@@ -221,6 +226,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
    const sendButton = (
      <button
        type="submit"
@@ -12699,7 +12715,7 @@ index 2a27796d9..35e060912 100644
        className={cn(
          "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-[0_1px_--theme(--color-white/16%)] hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8",
          stageBackdropVariant
-@@ -250,7 +254,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
+@@ -250,7 +256,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
        }
      >
        {stageBackdropVariant ? (
@@ -12708,7 +12724,7 @@ index 2a27796d9..35e060912 100644
            <StageBackdropButtonArt variant={stageBackdropVariant} />
          </span>
        ) : null}
-@@ -274,10 +278,61 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
+@@ -274,10 +280,63 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
      return sendButton;
    }
  
@@ -12729,6 +12745,7 @@ index 2a27796d9..35e060912 100644
 +    <div className="flex items-center" data-chat-composer-queue-actions="true">
 +      <button
 +        type="submit"
++        data-composer-split="start"
 +        className={cn(
 +          "flex h-9 items-center gap-1.5 rounded-l-full bg-message-action pl-3 pr-2.5 text-xs font-medium text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer hover:bg-message-action-hover disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none sm:h-8",
 +          compact && "pl-2.5 pr-2",
@@ -12745,6 +12762,7 @@ index 2a27796d9..35e060912 100644
 +          render={
 +            <button
 +              type="button"
++              data-composer-split="end"
 +              className="flex h-9 items-center rounded-r-full border-l border-l-message-action-foreground/20 bg-message-action px-1.5 text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer hover:bg-message-action-hover disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none sm:h-8"
 +              aria-label="Queue actions"
 +              {...pointerFocusProps}
@@ -15882,7 +15900,7 @@ index b2556bb4c..d59396dba 100644
 +}
 diff --git a/apps/web/src/looks/neo.css b/apps/web/src/looks/neo.css
 new file mode 100644
-index 000000000..67fe6662e
+index 000000000..e5573b5bb
 --- /dev/null
 +++ b/apps/web/src/looks/neo.css
 @@ -0,0 +1,732 @@
@@ -16305,22 +16323,22 @@ index 000000000..67fe6662e
 +}
 +
 +/* Split actions (Queue, Implement) are one control: the outer corners take
-+   the control radius, the shared edge stays square, and the segments drop
-+   their own shadows so nothing shows through the seam. */
-+html[data-look="neo"] [data-chat-composer-queue-actions] > *,
-+html[data-look="neo"] [data-chat-composer-implement-actions] > * {
++   the control radius, the shared edge stays square with no divider, and the
++   segments drop their own shadows so nothing shows through the seam. The
++   segments are named rather than counted: an open menu adds siblings, which
++   made the chevron lose its corners as :last-child. */
++html[data-look="neo"] [data-composer-split] {
 +  border-radius: 0;
 +  box-shadow: none;
 +}
 +
-+html[data-look="neo"] [data-chat-composer-queue-actions] > :first-child,
-+html[data-look="neo"] [data-chat-composer-implement-actions] > :first-child {
++html[data-look="neo"] [data-composer-split="start"] {
 +  border-start-start-radius: var(--control-radius);
 +  border-end-start-radius: var(--control-radius);
 +}
 +
-+html[data-look="neo"] [data-chat-composer-queue-actions] > :last-child,
-+html[data-look="neo"] [data-chat-composer-implement-actions] > :last-child {
++html[data-look="neo"] [data-composer-split="end"] {
++  border-left: 0;
 +  border-start-end-radius: var(--control-radius);
 +  border-end-end-radius: var(--control-radius);
 +}
@@ -17273,10 +17291,10 @@ index 12865d64a..cbf28a9db 100644
    return createModelSelection(defaultInstanceIdForDriver(provider), model, modelOptionsForDispatch);
 diff --git a/apps/web/src/neo/ComposerUsageBadge.tsx b/apps/web/src/neo/ComposerUsageBadge.tsx
 new file mode 100644
-index 000000000..c6c44b7f1
+index 000000000..c75dadd2d
 --- /dev/null
 +++ b/apps/web/src/neo/ComposerUsageBadge.tsx
-@@ -0,0 +1,216 @@
+@@ -0,0 +1,218 @@
 +import type { UsageDay } from "@t3tools/contracts";
 +import { GaugeIcon } from "lucide-react";
 +import { memo, useEffect, useMemo, useState } from "react";
@@ -17456,7 +17474,9 @@ index 000000000..c6c44b7f1
 +  const headline = limited
 +    ? "Limit Unknown"
 +    : tightest
-+      ? `${formatPercent(tightest.usedPercent)} · ${tightest.label}`
++      ? // The percent alone; the window's name is in the hover card, and the
++        // pill has no room to wrap.
++        formatPercent(tightest.usedPercent)
 +      : usage?.totalCostUsd !== null && usage?.totalCostUsd !== undefined
 +        ? `${formatUsd(usage.totalCostUsd)} last turn`
 +        : "Usage";
@@ -17470,7 +17490,7 @@ index 000000000..c6c44b7f1
 +          <button
 +            type="button"
 +            className={cn(
-+              "inline-flex h-7 items-center gap-1.5 rounded-[var(--control-radius)] border px-2.5 text-[11px] font-medium tabular-nums transition-colors",
++              "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[var(--control-radius)] border px-2.5 text-[11px] font-medium tabular-nums transition-colors",
 +              overage
 +                ? "border-destructive/45 bg-destructive/15 text-destructive-foreground"
 +                : "border-primary/40 bg-primary/12 text-foreground/85 hover:bg-primary/20",

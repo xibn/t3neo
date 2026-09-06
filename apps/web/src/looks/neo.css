@@ -417,22 +417,22 @@ html[data-look="neo"] [data-composer-stop] {
 }
 
 /* Split actions (Queue, Implement) are one control: the outer corners take
-   the control radius, the shared edge stays square, and the segments drop
-   their own shadows so nothing shows through the seam. */
-html[data-look="neo"] [data-chat-composer-queue-actions] > *,
-html[data-look="neo"] [data-chat-composer-implement-actions] > * {
+   the control radius, the shared edge stays square with no divider, and the
+   segments drop their own shadows so nothing shows through the seam. The
+   segments are named rather than counted: an open menu adds siblings, which
+   made the chevron lose its corners as :last-child. */
+html[data-look="neo"] [data-composer-split] {
   border-radius: 0;
   box-shadow: none;
 }
 
-html[data-look="neo"] [data-chat-composer-queue-actions] > :first-child,
-html[data-look="neo"] [data-chat-composer-implement-actions] > :first-child {
+html[data-look="neo"] [data-composer-split="start"] {
   border-start-start-radius: var(--control-radius);
   border-end-start-radius: var(--control-radius);
 }
 
-html[data-look="neo"] [data-chat-composer-queue-actions] > :last-child,
-html[data-look="neo"] [data-chat-composer-implement-actions] > :last-child {
+html[data-look="neo"] [data-composer-split="end"] {
+  border-left: 0;
   border-start-end-radius: var(--control-radius);
   border-end-end-radius: var(--control-radius);
 }
