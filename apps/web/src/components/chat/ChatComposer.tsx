@@ -107,6 +107,7 @@ import {
   releaseAttachmentUpload,
   releaseDraftAttachment,
   releasePersistedAttachmentUpload,
+  releaseQueuedAttachmentUploads,
   retryAttachmentUpload,
   startAttachmentUpload,
   useAttachmentUploadStore,
@@ -1493,6 +1494,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const markQueuedMessageSendNow = useMessageQueueStore((state) => state.markSendNow);
   const markQueuedThreadSendNow = useMessageQueueStore((state) => state.markThreadSendNow);
   const discardQueuedMessage = useMessageQueueStore((state) => state.remove);
+  const deleteQueuedMessage = useCallback(
+    (messageId: QueuedThreadMessage["id"]) => {
+      const removed = discardQueuedMessage(messageId);
+      // Unsent, the message's uploads have no turn to adopt them; free the server copies.
+      if (removed) releaseQueuedAttachmentUploads(removed.environmentId, removed.attachments);
+    },
+    [discardQueuedMessage],
+  );
   const reorderQueuedMessages = useMessageQueueStore((state) => state.reorderThread);
   const resumeQueuedMessages = useMessageQueueStore((state) => state.resumeThread);
   const sendQueuedThreadNow = useCallback(() => {
@@ -3643,7 +3652,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 onSendNow={markQueuedMessageSendNow}
                 onSendAllNow={sendQueuedThreadNow}
                 onEdit={editQueuedMessage}
-                onDiscard={discardQueuedMessage}
+                onDiscard={deleteQueuedMessage}
                 onReorder={reorderQueuedThread}
                 onResume={resumeQueuedThread}
               />

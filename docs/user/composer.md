@@ -58,7 +58,8 @@ On web and desktop, sending a message while the agent is working on a turn queue
 interrupting the agent. Queued messages wait until the current turn finishes, then send one after
 another in the order you wrote them. Each queued message starts its own turn, so the agent reads it
 with the finished work in context. Queued messages are stored on the device you sent them from and
-survive a reload; they send while the app is open and connected to the environment.
+survive a reload; they send while the app is open and connected to the environment. Attachments
+stay uploaded until the message is sent or deleted.
 
 The send button becomes **Queue** while a turn runs and `Enter` queues the draft. The queue appears
 above the composer with each waiting message. Use **Send now** on a message to hand it to the

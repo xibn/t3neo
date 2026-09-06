@@ -46,8 +46,10 @@ import {
   getUploadedAttachments,
   readAttachmentUpload,
   releaseAttachmentUpload,
+  handOffDraftAttachments,
   releaseDraftAttachment,
   releaseDraftAttachments,
+  releaseQueuedAttachmentUploads,
   releasePersistedAttachmentUpload,
   retryAttachmentUpload,
   startAttachmentUpload,
@@ -218,6 +220,39 @@ describe("attachmentUploadQueue", () => {
       {
         environmentId: firstEnvironment,
         input: { attachmentId: "pending-environment-1-image-1.png" },
+      },
+      expect.anything(),
+    );
+  });
+
+  it("keeps the server copy when a draft's uploads are handed to the queue", async () => {
+    const image = makeImage("image-2");
+    startAttachmentUpload({ environmentId: firstEnvironment, image });
+    await Promise.resolve();
+    const settled = awaitAttachmentUploads([image.id]);
+    TestXmlHttpRequest.requests[0]!.complete();
+    await settled;
+
+    handOffDraftAttachments([image]);
+    expect(readAttachmentUpload(image.id)).toBeUndefined();
+    expect(mocks.runAtomCommand).not.toHaveBeenCalledWith(
+      expect.anything(),
+      mocks.removeUpload,
+      expect.anything(),
+      expect.anything(),
+    );
+
+    // Deleting the queued message unsent is what frees the copy; inline images have none.
+    releaseQueuedAttachmentUploads(firstEnvironment, [
+      { id: "pending-environment-1-image-2.png" },
+      { dataUrl: "data:image/png;base64," },
+    ]);
+    expect(mocks.runAtomCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      mocks.removeUpload,
+      {
+        environmentId: firstEnvironment,
+        input: { attachmentId: "pending-environment-1-image-2.png" },
       },
       expect.anything(),
     );

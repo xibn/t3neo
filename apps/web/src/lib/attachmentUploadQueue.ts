@@ -607,3 +607,29 @@ export function releaseDraftAttachments(
     releaseDraftAttachment(attachment);
   }
 }
+
+/**
+ * Hands a draft's finished uploads to a queued message. The client forgets
+ * them so the composer clears, but the server copies stay put: the queue
+ * sends them later, and only deleting the message unsent frees them
+ * (`releaseQueuedAttachmentUploads`). Releasing them here, as a direct send
+ * does once its turn adopted them, left the queue pointing at deleted files.
+ */
+export function handOffDraftAttachments(
+  attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
+): void {
+  for (const attachment of attachments) {
+    clearUploadState(attachment.id);
+  }
+}
+
+/** Frees the server copies a queued message carried, once it is deleted unsent. */
+export function releaseQueuedAttachmentUploads(
+  environmentId: EnvironmentId,
+  attachments: ReadonlyArray<{ readonly id: string } | { readonly dataUrl: string }>,
+): void {
+  for (const attachment of attachments) {
+    // Inline images ride along as data URLs and have nothing on the server.
+    if ("id" in attachment) deletePendingUpload(environmentId, attachment.id);
+  }
+}

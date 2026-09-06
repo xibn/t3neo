@@ -397,6 +397,7 @@ import { useComposerHandleContext } from "../composerHandleContext";
 import {
   awaitAttachmentUploads,
   getUploadedAttachments,
+  handOffDraftAttachments,
   releaseDraftAttachments,
   startAttachmentUpload,
 } from "../lib/attachmentUploadQueue";
@@ -6058,7 +6059,7 @@ function ChatViewContent(props: ChatViewProps) {
         createdAt: new Date().toISOString(),
       });
       if (turnUsesAttachmentUploads) {
-        releaseDraftAttachments(composerAttachmentsSnapshot);
+        handOffDraftAttachments(composerAttachmentsSnapshot);
       }
       setThreadError(threadIdForSend, null);
       promptRef.current = "";
