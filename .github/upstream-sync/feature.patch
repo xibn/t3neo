@@ -16869,10 +16869,10 @@ index b2556bb4c..1a9c3338e 100644
 +}
 diff --git a/apps/web/src/looks/neo.css b/apps/web/src/looks/neo.css
 new file mode 100644
-index 000000000..58bcf51e1
+index 000000000..e9b625130
 --- /dev/null
 +++ b/apps/web/src/looks/neo.css
-@@ -0,0 +1,682 @@
+@@ -0,0 +1,758 @@
 +/*
 + * Neo look. A warm near-black canvas with cream text, a single amber
 + * accent and one leaf green for success; bordered frosted-glass surfaces;
@@ -16895,6 +16895,10 @@ index 000000000..58bcf51e1
 +  --radius: 0.875rem;
 +  /* Height of the top strip once the header actions are folded away. */
 +  --neo-collapsed-strip: 0.875rem;
++  /* The full top bar height, captured here so the folded header (which shrinks
++     its own --workspace-topbar-height to the strip) can still centre its
++     controls where they sit when unfolded. */
++  --neo-topbar-height: var(--workspace-topbar-height);
 +  /* Controls share one soft corner, in scale with the 1rem popups; no pills. */
 +  --control-radius: 0.625rem;
 +  /* Glass surfaces (composer, header, popups) frost what lies behind them. The
@@ -17347,8 +17351,11 @@ index 000000000..58bcf51e1
 +/* The composer footer pills (model, effort, runtime mode) are single buttons, not
 +   split groups, so each gets a divider before its dropdown chevron to match the split
 +   Open/Commit buttons in the top bar. The divider is a background gradient on the
-+   button — never on the SVG — so it stays put while the chevron rotates. */
-+html[data-look="neo"] [data-chat-composer-footer] button:has(svg.lucide-chevron-down) {
++   button — never on the SVG — so it stays put while the chevron rotates. The Queue
++   and Implement chevrons are split segments of their own and get no divider. */
++html[data-look="neo"]
++  [data-chat-composer-footer]
++  button:has(svg.lucide-chevron-down):not([data-composer-split]) {
 +  background-image: linear-gradient(var(--contrast-border), var(--contrast-border));
 +  background-size: 1px 1.5rem;
 +  background-position: right 1.75rem center;
@@ -17357,7 +17364,10 @@ index 000000000..58bcf51e1
 +  padding-right: 0.4375rem;
 +}
 +
-+html[data-look="neo"] [data-chat-composer-footer] svg.lucide-chevron-down {
++html[data-look="neo"]
++  [data-chat-composer-footer]
++  :not([data-composer-split])
++  > svg.lucide-chevron-down {
 +  margin-left: 0.75rem;
 +  margin-right: 0;
 +}
@@ -17446,7 +17456,13 @@ index 000000000..58bcf51e1
 +   look lives in neo/neo.css.) */
 +html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
 +  --workspace-topbar-height: var(--neo-collapsed-strip);
-+  --neo-notch-height: 2.5rem;
++  /* The controls keep the vertical place they have unfolded (a 1.75rem button
++     centred in the full top bar); the notch starts at the card's top edge and
++     ends 6px under them. */
++  --neo-notch-controls-top: calc((var(--neo-topbar-height) - 1.75rem) / 2);
++  --neo-notch-height: calc(
++    (var(--neo-topbar-height) + 1.75rem) / 2 + 0.375rem - var(--neo-collapsed-strip)
++  );
 +  overflow: visible;
 +  /* The header is an isolated stacking context (star trail) and the chat column
 +     after it is positioned too, so without this the notch paints underneath the
@@ -17466,10 +17482,10 @@ index 000000000..58bcf51e1
 +   below. */
 +html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions] {
 +  position: absolute;
-+  top: var(--workspace-topbar-height);
++  top: var(--neo-notch-controls-top);
 +  right: 0;
 +  z-index: 30;
-+  height: var(--neo-notch-height);
++  height: 1.75rem;
 +  align-items: center;
 +  /* The toggle hugs the swoosh: the curve lands 6px inside the notch, right
 +     where the toggle's icon inset begins. No CSS border here: the outline is
@@ -17482,9 +17498,11 @@ index 000000000..58bcf51e1
 +   vertical, sheared 30° so the card's top edge sweeps down and right into the
 +   notch. ::before is the strip-coloured fill, ::after the one-pixel outline
 +   along the curve; both are SVG masks so the colours stay theme tokens. The
-+   curve spans 50px and ends 6px inside the notch; the pieces start 60px left
-+   of it so the stroke takes over from the card's border on a straight run,
-+   16px before the curve, and the fill hides the border row underneath. */
++   400×40 masks scale to the notch height; the curve ends 6px inside the notch
++   and the pieces start 1.5 notch heights left of it so the stroke takes over
++   from the card's border on a straight run before the curve, and the fill
++   hides the border row underneath. They hang from the actions cluster but
++   start at the card's top edge, one strip below the header's top. */
 +html[data-look="neo"]
 +  [data-chat-header][data-neo-header-collapsed]
 +  [data-chat-header-actions]::before,
@@ -17493,13 +17511,13 @@ index 000000000..58bcf51e1
 +  [data-chat-header-actions]::after {
 +  content: "";
 +  position: absolute;
-+  top: 0;
-+  left: -60px;
-+  width: 400px;
-+  height: 40px;
++  top: calc(var(--neo-collapsed-strip) - var(--neo-notch-controls-top));
++  left: calc(var(--neo-notch-height) * -1.5);
++  width: calc(var(--neo-notch-height) * 10);
++  height: var(--neo-notch-height);
 +  pointer-events: none;
 +  mask-repeat: no-repeat;
-+  mask-size: 400px 40px;
++  mask-size: calc(var(--neo-notch-height) * 10) var(--neo-notch-height);
 +}
 +
 +html[data-look="neo"]
@@ -17521,8 +17539,8 @@ index 000000000..58bcf51e1
 +html[data-look="neo"]
 +  [data-chat-header][data-neo-header-collapsed]
 +  [data-workspace-titlebar-controls] {
-+  top: calc(var(--workspace-topbar-height) + 0.375rem);
-+  height: auto;
++  top: var(--neo-notch-controls-top);
++  height: 1.75rem;
 +}
 +
 +html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat-workspace] {
@@ -17531,9 +17549,67 @@ index 000000000..58bcf51e1
 +  border-top-right-radius: 0;
 +}
 +
-+/* No left notch: with the sidebar hidden the sidebar toggle keeps its place
-+   next to the window controls instead of dropping to the panel toggles' row,
-+   and the card's top-left corner stays rounded under it. */
++/* The left notch. With the sidebar hidden, the window controls and the sidebar
++   toggle sit over the card's top-left corner, so the card gets the mirror image
++   of the right notch there. The toggle itself never moves (dropping it to the
++   panel toggles' row was bad UX): the notch starts at the card's top edge, one
++   strip below the fixed cluster's top, and ends 6px under the toggle, so it is
++   shorter than the right notch and its masks scale down to match. It hangs off
++   the fixed cluster, the one element that knows where the controls are; the
++   cluster lives outside the header, hence the :has() on the folded header. */
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"] {
++  /* Toggle bottom (centred 1.75rem button in the cluster) plus 6px of air, from the card's top. */
++  --neo-left-notch-height: calc(
++    (var(--neo-topbar-height) + 1.75rem) / 2 + 0.375rem - var(--neo-collapsed-strip)
++  );
++}
++
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::before,
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::after {
++  content: "";
++  position: absolute;
++  top: var(--neo-collapsed-strip);
++  left: calc(-1 * var(--workspace-controls-left) - 1px);
++  /* Window edge to the toggle's right, 6px of air, then the swoosh run (scaled with the height). */
++  width: calc(
++    var(--workspace-controls-left) + 1px + 1.75rem + 0.375rem + var(--neo-left-notch-height) * 1.5
++  );
++  height: var(--neo-left-notch-height);
++  z-index: -1;
++  pointer-events: none;
++  transform: scaleX(-1);
++  mask-repeat: no-repeat;
++  mask-position: left top;
++  /* The 400×40 masks, scaled so the corner radii shrink with the notch. */
++  mask-size: calc(var(--neo-left-notch-height) * 10) var(--neo-left-notch-height);
++}
++
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::before {
++  background-color: var(--sidebar);
++  background-image: var(--surface-grain);
++  background-repeat: repeat;
++  background-size: var(--surface-grain-size);
++  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
++}
++
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::after {
++  background-color: var(--contrast-border);
++  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
++}
++
++/* Under that notch the card's top-left corner is square and bordered, like its
++   top-right under the panel toggles. */
++html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
++  [data-chat-header][data-neo-header-collapsed]
++  ~ [data-chat-workspace] {
++  border-left: 1px solid var(--contrast-border);
++  border-top-left-radius: 0;
++}
 +
 +html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header + div,
 +html[data-look="neo"] [data-chat-stage] {
@@ -21407,10 +21483,10 @@ index 000000000..f6aeb94ef
 +});
 diff --git a/apps/web/src/neo/pets/PetGalleryBrowser.tsx b/apps/web/src/neo/pets/PetGalleryBrowser.tsx
 new file mode 100644
-index 000000000..ce17009a1
+index 000000000..5678a7e7c
 --- /dev/null
 +++ b/apps/web/src/neo/pets/PetGalleryBrowser.tsx
-@@ -0,0 +1,455 @@
+@@ -0,0 +1,477 @@
 +import { DownloadIcon, ExternalLinkIcon, LoaderCircleIcon, SearchIcon } from "lucide-react";
 +import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 +
@@ -21604,20 +21680,35 @@ index 000000000..ce17009a1
 +  );
 +});
 +
++/** One cell of a frame strip: the strip at cell height behind a cell-sized window. */
++const StripThumbnail = memo(function StripThumbnail({ url }: { url: string }) {
++  const height = spriteFrameHeight(THUMBNAIL_WIDTH);
++  return (
++    <span
++      className="neo-sheet-thumbnail"
++      style={{ width: `${THUMBNAIL_WIDTH}px`, height: `${height}px` }}
++    >
++      <img alt="" decoding="async" loading="lazy" src={url} style={{ height: `${height}px` }} />
++    </span>
++  );
++});
++
 +/**
-+ * The card image: the gallery's thumbnail when it has one, else the first
-+ * frame of the sheet. Hovering plays the gallery's animation when it has one,
-+ * else the idle row of the sheet. A broken thumbnail falls back to the sheet.
++ * The card image: the gallery's still when it has one, the first cell of its
++ * frame strip, else the first frame of the sheet. Hovering plays the gallery's
++ * animation when it has one, else the idle row of the sheet. A broken still
++ * falls back to the sheet.
 + */
 +const GalleryPetThumbnail = memo(function GalleryPetThumbnail({ pet }: { pet: GalleryPet }) {
 +  const [hovered, setHovered] = useState(false);
 +  const [failed, setFailed] = useState(false);
-+  const thumbnail = failed ? null : pet.thumbnailUrl;
++  const preview = failed ? null : pet.preview;
++  const animationUrl = preview?.kind === "image" ? preview.animationUrl : null;
 +  const handlers = {
 +    onPointerEnter: () => setHovered(true),
 +    onPointerLeave: () => setHovered(false),
 +  };
-+  if (hovered && pet.spritesheetUrl && !(thumbnail && pet.animationUrl)) {
++  if (hovered && pet.spritesheetUrl && animationUrl === null) {
 +    return (
 +      <div {...handlers}>
 +        <SpritePet
@@ -21629,7 +21720,7 @@ index 000000000..ce17009a1
 +      </div>
 +    );
 +  }
-+  if (thumbnail) {
++  if (preview?.kind === "image") {
 +    return (
 +      <img
 +        alt=""
@@ -21638,10 +21729,17 @@ index 000000000..ce17009a1
 +        height={spriteFrameHeight(THUMBNAIL_WIDTH)}
 +        loading="lazy"
 +        onError={() => setFailed(true)}
-+        src={hovered && pet.animationUrl ? pet.animationUrl : thumbnail}
++        src={hovered && animationUrl ? animationUrl : preview.url}
 +        width={THUMBNAIL_WIDTH}
 +        {...handlers}
 +      />
++    );
++  }
++  if (preview?.kind === "strip") {
++    return (
++      <div {...handlers}>
++        <StripThumbnail url={preview.url} />
++      </div>
 +    );
 +  }
 +  if (pet.spritesheetUrl) {
@@ -23441,10 +23539,10 @@ index 000000000..2116bfc45
 +}
 diff --git a/apps/web/src/neo/pets/petGalleries.test.ts b/apps/web/src/neo/pets/petGalleries.test.ts
 new file mode 100644
-index 000000000..3b0ff60c0
+index 000000000..fe292c571
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petGalleries.test.ts
-@@ -0,0 +1,318 @@
+@@ -0,0 +1,322 @@
 +import JSZip from "jszip";
 +import { describe, expect, it } from "vite-plus/test";
 +
@@ -23514,9 +23612,11 @@ index 000000000..3b0ff60c0
 +      kind: "spritesheet",
 +      url: "https://raw.githubusercontent.com/legeling/awesome-codex-pet/main/pets/om-nom--kasyan1337/spritesheet.webp",
 +    });
-+    expect(pets[1]!.thumbnailUrl).toBe(
-+      "https://codexpet.top/assets/previews/om-nom--kasyan1337/thumbnail.webp",
-+    );
++    expect(pets[1]!.preview).toEqual({
++      kind: "image",
++      url: "https://codexpet.top/assets/previews/om-nom--kasyan1337/thumbnail.webp",
++      animationUrl: "https://codexpet.top/assets/previews/om-nom--kasyan1337/webp/idle.webp",
++    });
 +    expect(pets[1]!.sourceUrl).toBe(
 +      "https://github.com/legeling/awesome-codex-pet/tree/main/pets/om-nom--kasyan1337",
 +    );
@@ -23540,9 +23640,11 @@ index 000000000..3b0ff60c0
 +    const pets = parseCodexPetComReadme(readme);
 +    expect(pets.map((pet) => pet.slug)).toEqual(["ada-lovelace", "tom-jerry"]);
 +    expect(pets[1]!.name).toBe("Tom & Jerry");
-+    expect(pets[0]!.thumbnailUrl).toBe(
-+      "https://raw.githubusercontent.com/BeiXiao/awesome-codex-pets/main/pets/ada-lovelace/thumb.webp",
-+    );
++    expect(pets[0]!.preview).toEqual({
++      kind: "image",
++      url: "https://raw.githubusercontent.com/BeiXiao/awesome-codex-pets/main/pets/ada-lovelace/thumb.webp",
++      animationUrl: null,
++    });
 +    expect(pets[0]!.download).toEqual({
 +      kind: "zip",
 +      url: "https://codex-pet.com/api/download/ada-lovelace",
@@ -23572,7 +23674,7 @@ index 000000000..3b0ff60c0
 +      names: ["Tater", "starter", "pixel"],
 +      author: "Alex",
 +      category: "creature",
-+      thumbnailUrl: null,
++      preview: null,
 +      spritesheetUrl: "https://codexpets.org/pets/tater/spritesheet.webp",
 +      download: { kind: "spritesheet", url: "https://codexpets.org/pets/tater/spritesheet.webp" },
 +      sourceUrl: "https://github.com/eyichan/awesome-codex-pets/tree/main/pets/tater",
@@ -23616,7 +23718,7 @@ index 000000000..3b0ff60c0
 +      author: "videokid",
 +      category: "person",
 +      spriteVersion: 2,
-+      thumbnailUrl: "https://openpets.sh/api/pets/jordan/preview",
++      preview: { kind: "strip", url: "https://openpets.sh/api/pets/jordan/preview" },
 +      spritesheetUrl: "https://openpets.sh/api/pets/jordan/spritesheet",
 +      pageUrl: "https://openpets.sh/pets/jordan",
 +    });
@@ -23765,10 +23867,10 @@ index 000000000..3b0ff60c0
 +});
 diff --git a/apps/web/src/neo/pets/petGalleries.ts b/apps/web/src/neo/pets/petGalleries.ts
 new file mode 100644
-index 000000000..901a3a246
+index 000000000..13136b69b
 --- /dev/null
 +++ b/apps/web/src/neo/pets/petGalleries.ts
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,437 @@
 +/**
 + * The community Codex pet galleries the pet browser can import from. Each
 + * gallery is a GitHub repository with a site in front of it. Catalogs and
@@ -23853,10 +23955,15 @@ index 000000000..901a3a246
 +  readonly category: string | null;
 +  readonly description: string | null;
 +  readonly spriteVersion: SpriteVersion | null;
-+  /** A small still image for the card; null means cut the first frame from the sheet. */
-+  readonly thumbnailUrl: string | null;
-+  /** An animated image for hover; null means animate the sheet. */
-+  readonly animationUrl: string | null;
++  /**
++   * The card image. "image": a small still, with an animated image for hover
++   * when the gallery has one. "strip": every frame side by side at cell size,
++   * of which the first shows. Null means cut the first frame from the sheet.
++   */
++  readonly preview:
++    | { readonly kind: "image"; readonly url: string; readonly animationUrl: string | null }
++    | { readonly kind: "strip"; readonly url: string }
++    | null;
 +  /** The sheet as a plain image URL for previews; null when it only ships inside a zip. */
 +  readonly spritesheetUrl: string | null;
 +  readonly download:
@@ -23897,8 +24004,11 @@ index 000000000..901a3a246
 +      category: pet.primary_category,
 +      description: pet.description ?? null,
 +      spriteVersion: pet.spriteVersionNumber === 2 ? 2 : 1,
-+      thumbnailUrl: `${source.siteUrl}/assets/previews/${slug}/thumbnail.webp`,
-+      animationUrl: `${source.siteUrl}/assets/previews/${slug}/webp/idle.webp`,
++      preview: {
++        kind: "image",
++        url: `${source.siteUrl}/assets/previews/${slug}/thumbnail.webp`,
++        animationUrl: `${source.siteUrl}/assets/previews/${slug}/webp/idle.webp`,
++      },
 +      spritesheetUrl: `${raw}/pets/${slug}/spritesheet.webp`,
 +      download: { kind: "spritesheet", url: `${raw}/pets/${slug}/spritesheet.webp` },
 +      pageUrl: `${source.siteUrl}/pets/${slug}`,
@@ -23952,8 +24062,7 @@ index 000000000..901a3a246
 +      category: null,
 +      description: null,
 +      spriteVersion: null,
-+      thumbnailUrl: `${raw}/pets/${folder}/thumb.webp`,
-+      animationUrl: null,
++      preview: { kind: "image", url: `${raw}/pets/${folder}/thumb.webp`, animationUrl: null },
 +      spritesheetUrl: null,
 +      download: { kind: "zip", url: `${source.siteUrl}/api/download/${encodeURIComponent(slug)}` },
 +      pageUrl: `${source.siteUrl}/pets/${encodeURIComponent(slug)}`,
@@ -23990,8 +24099,7 @@ index 000000000..901a3a246
 +      category: pet.kind ?? null,
 +      description: pet.description ?? null,
 +      spriteVersion: null,
-+      thumbnailUrl: null,
-+      animationUrl: null,
++      preview: null,
 +      spritesheetUrl: pet.spritesheetUrl,
 +      download: { kind: "spritesheet", url: pet.spritesheetUrl },
 +      pageUrl: pet.pageUrl ?? `${source.siteUrl}/pets/${slug}`,
@@ -24050,8 +24158,8 @@ index 000000000..901a3a246
 +        category: pet.kind ?? null,
 +        description: pet.description ?? null,
 +        spriteVersion: version === 2 ? 2 : version === 1 ? 1 : null,
-+        thumbnailUrl: pet.previewUrl ? absolute(pet.previewUrl) : null,
-+        animationUrl: null,
++        // The site's preview is a strip of every frame at 96×104, not a still.
++        preview: pet.previewUrl ? { kind: "strip", url: absolute(pet.previewUrl) } : null,
 +        spritesheetUrl,
 +        download: { kind: "spritesheet", url: spritesheetUrl },
 +        pageUrl: `${source.siteUrl}/pets/${encodeURIComponent(pet.id)}`,
@@ -77175,10 +77283,10 @@ index 97f1f5cb1..1b96f477b 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..423f33eec
+index 000000000..0d6655871
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,166 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -77221,8 +77329,9 @@ index 000000000..423f33eec
 +- **Collapse header actions** folds those actions away from Settings, the same as pressing the
 +  button. While folded, the header slims to a thin bar and the workspace below it becomes a card
 +  with rounded top corners. The double-chevron and the panel toggles sit in a small notch at the
-+  card's top-right corner; press the chevron there to unfold. The sidebar button keeps its place
-+  next to the window controls whether the sidebar is open or hidden.
++  card's top-right corner; press the chevron there to unfold. With the sidebar hidden, the window
++  controls and the sidebar button get a matching notch at the top-left corner; the sidebar button
++  keeps its place next to the window controls whether the sidebar is open or hidden.
 +- **Branch manager position** moves the workspace and branch controls from below the message box
 +  into the header next to **Open**, which gives the composer more room. With **Show the branch
 +  manager move pill** on, an amber pill next to the workspace control moves it up, and the same

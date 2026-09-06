@@ -82,10 +82,15 @@ export interface GalleryPet {
   readonly category: string | null;
   readonly description: string | null;
   readonly spriteVersion: SpriteVersion | null;
-  /** A small still image for the card; null means cut the first frame from the sheet. */
-  readonly thumbnailUrl: string | null;
-  /** An animated image for hover; null means animate the sheet. */
-  readonly animationUrl: string | null;
+  /**
+   * The card image. "image": a small still, with an animated image for hover
+   * when the gallery has one. "strip": every frame side by side at cell size,
+   * of which the first shows. Null means cut the first frame from the sheet.
+   */
+  readonly preview:
+    | { readonly kind: "image"; readonly url: string; readonly animationUrl: string | null }
+    | { readonly kind: "strip"; readonly url: string }
+    | null;
   /** The sheet as a plain image URL for previews; null when it only ships inside a zip. */
   readonly spritesheetUrl: string | null;
   readonly download:
@@ -126,8 +131,11 @@ export function parseCodexpetTopCatalog(input: unknown): GalleryPet[] {
       category: pet.primary_category,
       description: pet.description ?? null,
       spriteVersion: pet.spriteVersionNumber === 2 ? 2 : 1,
-      thumbnailUrl: `${source.siteUrl}/assets/previews/${slug}/thumbnail.webp`,
-      animationUrl: `${source.siteUrl}/assets/previews/${slug}/webp/idle.webp`,
+      preview: {
+        kind: "image",
+        url: `${source.siteUrl}/assets/previews/${slug}/thumbnail.webp`,
+        animationUrl: `${source.siteUrl}/assets/previews/${slug}/webp/idle.webp`,
+      },
       spritesheetUrl: `${raw}/pets/${slug}/spritesheet.webp`,
       download: { kind: "spritesheet", url: `${raw}/pets/${slug}/spritesheet.webp` },
       pageUrl: `${source.siteUrl}/pets/${slug}`,
@@ -181,8 +189,7 @@ export function parseCodexPetComReadme(markdown: string): GalleryPet[] {
       category: null,
       description: null,
       spriteVersion: null,
-      thumbnailUrl: `${raw}/pets/${folder}/thumb.webp`,
-      animationUrl: null,
+      preview: { kind: "image", url: `${raw}/pets/${folder}/thumb.webp`, animationUrl: null },
       spritesheetUrl: null,
       download: { kind: "zip", url: `${source.siteUrl}/api/download/${encodeURIComponent(slug)}` },
       pageUrl: `${source.siteUrl}/pets/${encodeURIComponent(slug)}`,
@@ -219,8 +226,7 @@ export function parseCodexpetsOrgCatalog(input: unknown): GalleryPet[] {
       category: pet.kind ?? null,
       description: pet.description ?? null,
       spriteVersion: null,
-      thumbnailUrl: null,
-      animationUrl: null,
+      preview: null,
       spritesheetUrl: pet.spritesheetUrl,
       download: { kind: "spritesheet", url: pet.spritesheetUrl },
       pageUrl: pet.pageUrl ?? `${source.siteUrl}/pets/${slug}`,
@@ -279,8 +285,8 @@ export function parseOpenpetsPage(input: unknown): GalleryPage {
         category: pet.kind ?? null,
         description: pet.description ?? null,
         spriteVersion: version === 2 ? 2 : version === 1 ? 1 : null,
-        thumbnailUrl: pet.previewUrl ? absolute(pet.previewUrl) : null,
-        animationUrl: null,
+        // The site's preview is a strip of every frame at 96×104, not a still.
+        preview: pet.previewUrl ? { kind: "strip", url: absolute(pet.previewUrl) } : null,
         spritesheetUrl,
         download: { kind: "spritesheet", url: spritesheetUrl },
         pageUrl: `${source.siteUrl}/pets/${encodeURIComponent(pet.id)}`,

@@ -191,20 +191,35 @@ const SheetThumbnail = memo(function SheetThumbnail({
   );
 });
 
+/** One cell of a frame strip: the strip at cell height behind a cell-sized window. */
+const StripThumbnail = memo(function StripThumbnail({ url }: { url: string }) {
+  const height = spriteFrameHeight(THUMBNAIL_WIDTH);
+  return (
+    <span
+      className="neo-sheet-thumbnail"
+      style={{ width: `${THUMBNAIL_WIDTH}px`, height: `${height}px` }}
+    >
+      <img alt="" decoding="async" loading="lazy" src={url} style={{ height: `${height}px` }} />
+    </span>
+  );
+});
+
 /**
- * The card image: the gallery's thumbnail when it has one, else the first
- * frame of the sheet. Hovering plays the gallery's animation when it has one,
- * else the idle row of the sheet. A broken thumbnail falls back to the sheet.
+ * The card image: the gallery's still when it has one, the first cell of its
+ * frame strip, else the first frame of the sheet. Hovering plays the gallery's
+ * animation when it has one, else the idle row of the sheet. A broken still
+ * falls back to the sheet.
  */
 const GalleryPetThumbnail = memo(function GalleryPetThumbnail({ pet }: { pet: GalleryPet }) {
   const [hovered, setHovered] = useState(false);
   const [failed, setFailed] = useState(false);
-  const thumbnail = failed ? null : pet.thumbnailUrl;
+  const preview = failed ? null : pet.preview;
+  const animationUrl = preview?.kind === "image" ? preview.animationUrl : null;
   const handlers = {
     onPointerEnter: () => setHovered(true),
     onPointerLeave: () => setHovered(false),
   };
-  if (hovered && pet.spritesheetUrl && !(thumbnail && pet.animationUrl)) {
+  if (hovered && pet.spritesheetUrl && animationUrl === null) {
     return (
       <div {...handlers}>
         <SpritePet
@@ -216,7 +231,7 @@ const GalleryPetThumbnail = memo(function GalleryPetThumbnail({ pet }: { pet: Ga
       </div>
     );
   }
-  if (thumbnail) {
+  if (preview?.kind === "image") {
     return (
       <img
         alt=""
@@ -225,10 +240,17 @@ const GalleryPetThumbnail = memo(function GalleryPetThumbnail({ pet }: { pet: Ga
         height={spriteFrameHeight(THUMBNAIL_WIDTH)}
         loading="lazy"
         onError={() => setFailed(true)}
-        src={hovered && pet.animationUrl ? pet.animationUrl : thumbnail}
+        src={hovered && animationUrl ? animationUrl : preview.url}
         width={THUMBNAIL_WIDTH}
         {...handlers}
       />
+    );
+  }
+  if (preview?.kind === "strip") {
+    return (
+      <div {...handlers}>
+        <StripThumbnail url={preview.url} />
+      </div>
     );
   }
   if (pet.spritesheetUrl) {

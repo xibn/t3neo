@@ -67,9 +67,11 @@ describe("parseCodexpetTopCatalog", () => {
       kind: "spritesheet",
       url: "https://raw.githubusercontent.com/legeling/awesome-codex-pet/main/pets/om-nom--kasyan1337/spritesheet.webp",
     });
-    expect(pets[1]!.thumbnailUrl).toBe(
-      "https://codexpet.top/assets/previews/om-nom--kasyan1337/thumbnail.webp",
-    );
+    expect(pets[1]!.preview).toEqual({
+      kind: "image",
+      url: "https://codexpet.top/assets/previews/om-nom--kasyan1337/thumbnail.webp",
+      animationUrl: "https://codexpet.top/assets/previews/om-nom--kasyan1337/webp/idle.webp",
+    });
     expect(pets[1]!.sourceUrl).toBe(
       "https://github.com/legeling/awesome-codex-pet/tree/main/pets/om-nom--kasyan1337",
     );
@@ -93,9 +95,11 @@ describe("parseCodexPetComReadme", () => {
     const pets = parseCodexPetComReadme(readme);
     expect(pets.map((pet) => pet.slug)).toEqual(["ada-lovelace", "tom-jerry"]);
     expect(pets[1]!.name).toBe("Tom & Jerry");
-    expect(pets[0]!.thumbnailUrl).toBe(
-      "https://raw.githubusercontent.com/BeiXiao/awesome-codex-pets/main/pets/ada-lovelace/thumb.webp",
-    );
+    expect(pets[0]!.preview).toEqual({
+      kind: "image",
+      url: "https://raw.githubusercontent.com/BeiXiao/awesome-codex-pets/main/pets/ada-lovelace/thumb.webp",
+      animationUrl: null,
+    });
     expect(pets[0]!.download).toEqual({
       kind: "zip",
       url: "https://codex-pet.com/api/download/ada-lovelace",
@@ -125,7 +129,7 @@ describe("parseCodexpetsOrgCatalog", () => {
       names: ["Tater", "starter", "pixel"],
       author: "Alex",
       category: "creature",
-      thumbnailUrl: null,
+      preview: null,
       spritesheetUrl: "https://codexpets.org/pets/tater/spritesheet.webp",
       download: { kind: "spritesheet", url: "https://codexpets.org/pets/tater/spritesheet.webp" },
       sourceUrl: "https://github.com/eyichan/awesome-codex-pets/tree/main/pets/tater",
@@ -169,7 +173,7 @@ describe("openpets", () => {
       author: "videokid",
       category: "person",
       spriteVersion: 2,
-      thumbnailUrl: "https://openpets.sh/api/pets/jordan/preview",
+      preview: { kind: "strip", url: "https://openpets.sh/api/pets/jordan/preview" },
       spritesheetUrl: "https://openpets.sh/api/pets/jordan/spritesheet",
       pageUrl: "https://openpets.sh/pets/jordan",
     });

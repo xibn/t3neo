@@ -20,6 +20,10 @@ html[data-look="neo"][data-theme-id]:root {
   --radius: 0.875rem;
   /* Height of the top strip once the header actions are folded away. */
   --neo-collapsed-strip: 0.875rem;
+  /* The full top bar height, captured here so the folded header (which shrinks
+     its own --workspace-topbar-height to the strip) can still centre its
+     controls where they sit when unfolded. */
+  --neo-topbar-height: var(--workspace-topbar-height);
   /* Controls share one soft corner, in scale with the 1rem popups; no pills. */
   --control-radius: 0.625rem;
   /* Glass surfaces (composer, header, popups) frost what lies behind them. The
@@ -472,8 +476,11 @@ html[data-look="neo"] [data-slot="group"] > [data-slot="separator"] {
 /* The composer footer pills (model, effort, runtime mode) are single buttons, not
    split groups, so each gets a divider before its dropdown chevron to match the split
    Open/Commit buttons in the top bar. The divider is a background gradient on the
-   button — never on the SVG — so it stays put while the chevron rotates. */
-html[data-look="neo"] [data-chat-composer-footer] button:has(svg.lucide-chevron-down) {
+   button — never on the SVG — so it stays put while the chevron rotates. The Queue
+   and Implement chevrons are split segments of their own and get no divider. */
+html[data-look="neo"]
+  [data-chat-composer-footer]
+  button:has(svg.lucide-chevron-down):not([data-composer-split]) {
   background-image: linear-gradient(var(--contrast-border), var(--contrast-border));
   background-size: 1px 1.5rem;
   background-position: right 1.75rem center;
@@ -482,7 +489,10 @@ html[data-look="neo"] [data-chat-composer-footer] button:has(svg.lucide-chevron-
   padding-right: 0.4375rem;
 }
 
-html[data-look="neo"] [data-chat-composer-footer] svg.lucide-chevron-down {
+html[data-look="neo"]
+  [data-chat-composer-footer]
+  :not([data-composer-split])
+  > svg.lucide-chevron-down {
   margin-left: 0.75rem;
   margin-right: 0;
 }
@@ -571,7 +581,13 @@ html[data-look="neo"] [data-app-sidebar] {
    look lives in neo/neo.css.) */
 html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
   --workspace-topbar-height: var(--neo-collapsed-strip);
-  --neo-notch-height: 2.5rem;
+  /* The controls keep the vertical place they have unfolded (a 1.75rem button
+     centred in the full top bar); the notch starts at the card's top edge and
+     ends 6px under them. */
+  --neo-notch-controls-top: calc((var(--neo-topbar-height) - 1.75rem) / 2);
+  --neo-notch-height: calc(
+    (var(--neo-topbar-height) + 1.75rem) / 2 + 0.375rem - var(--neo-collapsed-strip)
+  );
   overflow: visible;
   /* The header is an isolated stacking context (star trail) and the chat column
      after it is positioned too, so without this the notch paints underneath the
@@ -591,10 +607,10 @@ html[data-look="neo"]
    below. */
 html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions] {
   position: absolute;
-  top: var(--workspace-topbar-height);
+  top: var(--neo-notch-controls-top);
   right: 0;
   z-index: 30;
-  height: var(--neo-notch-height);
+  height: 1.75rem;
   align-items: center;
   /* The toggle hugs the swoosh: the curve lands 6px inside the notch, right
      where the toggle's icon inset begins. No CSS border here: the outline is
@@ -607,9 +623,11 @@ html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-h
    vertical, sheared 30° so the card's top edge sweeps down and right into the
    notch. ::before is the strip-coloured fill, ::after the one-pixel outline
    along the curve; both are SVG masks so the colours stay theme tokens. The
-   curve spans 50px and ends 6px inside the notch; the pieces start 60px left
-   of it so the stroke takes over from the card's border on a straight run,
-   16px before the curve, and the fill hides the border row underneath. */
+   400×40 masks scale to the notch height; the curve ends 6px inside the notch
+   and the pieces start 1.5 notch heights left of it so the stroke takes over
+   from the card's border on a straight run before the curve, and the fill
+   hides the border row underneath. They hang from the actions cluster but
+   start at the card's top edge, one strip below the header's top. */
 html[data-look="neo"]
   [data-chat-header][data-neo-header-collapsed]
   [data-chat-header-actions]::before,
@@ -618,13 +636,13 @@ html[data-look="neo"]
   [data-chat-header-actions]::after {
   content: "";
   position: absolute;
-  top: 0;
-  left: -60px;
-  width: 400px;
-  height: 40px;
+  top: calc(var(--neo-collapsed-strip) - var(--neo-notch-controls-top));
+  left: calc(var(--neo-notch-height) * -1.5);
+  width: calc(var(--neo-notch-height) * 10);
+  height: var(--neo-notch-height);
   pointer-events: none;
   mask-repeat: no-repeat;
-  mask-size: 400px 40px;
+  mask-size: calc(var(--neo-notch-height) * 10) var(--neo-notch-height);
 }
 
 html[data-look="neo"]
@@ -646,8 +664,8 @@ html[data-look="neo"]
 html[data-look="neo"]
   [data-chat-header][data-neo-header-collapsed]
   [data-workspace-titlebar-controls] {
-  top: calc(var(--workspace-topbar-height) + 0.375rem);
-  height: auto;
+  top: var(--neo-notch-controls-top);
+  height: 1.75rem;
 }
 
 html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat-workspace] {
@@ -656,9 +674,67 @@ html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat
   border-top-right-radius: 0;
 }
 
-/* No left notch: with the sidebar hidden the sidebar toggle keeps its place
-   next to the window controls instead of dropping to the panel toggles' row,
-   and the card's top-left corner stays rounded under it. */
+/* The left notch. With the sidebar hidden, the window controls and the sidebar
+   toggle sit over the card's top-left corner, so the card gets the mirror image
+   of the right notch there. The toggle itself never moves (dropping it to the
+   panel toggles' row was bad UX): the notch starts at the card's top edge, one
+   strip below the fixed cluster's top, and ends 6px under the toggle, so it is
+   shorter than the right notch and its masks scale down to match. It hangs off
+   the fixed cluster, the one element that knows where the controls are; the
+   cluster lives outside the header, hence the :has() on the folded header. */
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"] {
+  /* Toggle bottom (centred 1.75rem button in the cluster) plus 6px of air, from the card's top. */
+  --neo-left-notch-height: calc(
+    (var(--neo-topbar-height) + 1.75rem) / 2 + 0.375rem - var(--neo-collapsed-strip)
+  );
+}
+
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::before,
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::after {
+  content: "";
+  position: absolute;
+  top: var(--neo-collapsed-strip);
+  left: calc(-1 * var(--workspace-controls-left) - 1px);
+  /* Window edge to the toggle's right, 6px of air, then the swoosh run (scaled with the height). */
+  width: calc(
+    var(--workspace-controls-left) + 1px + 1.75rem + 0.375rem + var(--neo-left-notch-height) * 1.5
+  );
+  height: var(--neo-left-notch-height);
+  z-index: -1;
+  pointer-events: none;
+  transform: scaleX(-1);
+  mask-repeat: no-repeat;
+  mask-position: left top;
+  /* The 400×40 masks, scaled so the corner radii shrink with the notch. */
+  mask-size: calc(var(--neo-left-notch-height) * 10) var(--neo-left-notch-height);
+}
+
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::before {
+  background-color: var(--sidebar);
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: var(--surface-grain-size);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::after {
+  background-color: var(--contrast-border);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Under that notch the card's top-left corner is square and bordered, like its
+   top-right under the panel toggles. */
+html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
+  [data-chat-header][data-neo-header-collapsed]
+  ~ [data-chat-workspace] {
+  border-left: 1px solid var(--contrast-border);
+  border-top-left-radius: 0;
+}
 
 html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header + div,
 html[data-look="neo"] [data-chat-stage] {

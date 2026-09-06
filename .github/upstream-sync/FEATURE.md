@@ -382,14 +382,21 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
   `data-neo-header-collapsed`): modelled on a browser-tab header. Under Neo the top bar becomes
   a 14px strip (`--workspace-topbar-height: 0.875rem`, `overflow: visible`) that carries
   nothing: the thread breadcrumb (`[aria-label="Thread breadcrumb"]`) is hidden, and the header
-  actions cluster (`[data-chat-header-actions]`, which holds the show/hide toggle) floats
-  absolutely at `top: 0.375rem; right: 0.5rem` in the strip colour (`var(--sidebar)`) with a
-  `border-bottom-left-radius: 0.75rem`, over the card's top-right corner; the titlebar panel
-  controls (`[data-workspace-titlebar-controls]`) float at the same top. There is no left
-  notch: with the sidebar hidden, the fixed sidebar-toggle cluster (`[data-sidebar-control]`,
-  which carries `data-sidebar-visible`) keeps its normal place next to the window controls
-  (moving it down with the panel toggles was rejected as bad UX) and the card's top-left corner
-  stays rounded under it. The workspace below becomes the card: `border-top-left-radius` and `border-top-right-radius` both `0.75rem`, and
+  actions cluster (`[data-chat-header-actions]`, which holds the show/hide toggle) and the
+  titlebar panel controls (`[data-workspace-titlebar-controls]`) keep the vertical place they
+  have unfolded: `top: --neo-notch-controls-top` = a 1.75rem button centred in the full top
+  bar (`--neo-topbar-height`, captured on `html[data-look="neo"]` before the folded header
+  shrinks `--workspace-topbar-height` to the strip). The notch (strip colour, the swoosh
+  masks) starts at the card's top edge and ends 6px under the buttons
+  (`--neo-notch-height`); the 400×40 masks scale to that height. With the sidebar
+  hidden, the fixed sidebar-toggle cluster (`[data-sidebar-control]`, which carries
+  `data-sidebar-visible`) keeps its normal place next to the window controls (dropping it to
+  the panel toggles' row was rejected as bad UX) and draws the mirror image of that notch
+  around the window controls and the toggle: it starts at the card's top edge (one
+  `--neo-collapsed-strip` below the cluster's top) and ends 6px under the toggle
+  (`--neo-left-notch-height`), so it is shorter than the right notch and the 400×40 masks are
+  scaled down to that height; the card's top-left corner goes square and bordered underneath
+  it. The workspace below becomes the card: `border-top-left-radius` and `border-top-right-radius` both `0.75rem`, and
   the outline (`border-top`/`border-left` from the normal state plus `border-right`) wraps all
   three visible edges. The Default look keeps the generic `max(2rem, env(titlebar-area-height,
 0px))` strip from `neo/neo.css`.
@@ -581,37 +588,34 @@ contracts or server settings.
    - `petGalleries.ts` lists the galleries (`PET_GALLERIES`, ids `codexpet-top`,
      `codex-pet-com`, `codexpets-org`, `openpets-sh`; each has a host, site URL and GitHub
      repository) and the per-gallery parsers into one `GalleryPet` shape (name, names for
-     search, author, category, description, sprite version, thumbnail/animation/spritesheet
-     URLs, a `download` of kind `spritesheet` or `zip`, page and source URLs):
-     - **codexpet.top** (`legeling/awesome-codex-pet`): `pets.json` and `spritesheet.webp`
-       from `raw.githubusercontent.com`; only the preview images (untracked in git) come from
-       the site (`thumbnail.webp`, `webp/idle.webp` on hover).
-     - **codex-pet.com** (`BeiXiao/awesome-codex-pets`): the repository holds one
-       `pets/<slug>/thumb.webp` per pet and lists them in `README.md`, which
-       `parseCodexPetComReadme` reads (slug, thumbnail, HTML-unescaped name). Sprites only
-       exist as zips on the site (`/api/download/<slug>`); `downloadGalleryPet` unpacks
-       `spritesheet.webp` with jszip. No author or category.
-     - **codexpets.org** (`eyichan/awesome-codex-pets`): `pets.json` from GitHub with
-       `spritesheetUrl` on the site (CORS `*`); no thumbnails, so cards show the sheet's first
-       cell (`SheetThumbnail`: a lazily loaded image behind a frame-sized window). `kind` is
-       the category, tags join the search names.
-     - **openpets.sh** (`alterhq/openpets`): the site's `/api/pets?page&pageSize=30&q&kind`
-       API searches and pages (`mode: "api"`, fixed kinds animal/creature/person/object,
-       ~5,700 mirrored pets); `previewUrl` is the thumbnail, the sheet animates on hover.
-       The API refuses any foreign `Origin`, so the gallery is `needsDesktop`.
-     - `galleryFetch.ts`: on desktop every gallery request goes through
-       `desktopBridge.pet.fetchGallery(url)`; in a browser it is a plain `fetch`.
-       `apps/desktop/src/ipc/methods/pet.ts` adds `fetchPetGallery`
-       (`desktop:pet-fetch-gallery`): https only, hosts limited to `PET_GALLERY_HOSTS`
-       (raw.githubusercontent.com and the four sites), GET via the Effect `HttpClient`
-       (no Origin header), returns `{ status, contentType, body: Uint8Array }`; errors are
-       `DesktopPetGalleryFetchError` (`invalid-url` | `host-not-allowed` | `request-failed`).
-       Tested in `pet.test.ts`. Exposed in `preload.ts` and typed in
-       `packages/contracts/src/ipc.ts`.
-     - `filterGalleryPets` matches every query word against names, author, slug, category and
-       description and combines with a category filter (catalog galleries);
-       `downloadGalleryPet` decodes the image and takes the sheet version from its exact size
-       (1536×1872 → v1, 1536×2288 → v2), falling back to the gallery's claim, then v1.
+     search, author, category, description, sprite version, a `preview` of kind `image`
+     (still plus optional hover animation) or `strip` (frames side by side, first cell shown)
+     or null (first frame cut from the sheet), the spritesheet URL, a `download` of kind
+     `spritesheet` or `zip`, page and source URLs): - **codexpet.top** (`legeling/awesome-codex-pet`): `pets.json` and `spritesheet.webp`
+     from `raw.githubusercontent.com`; only the preview images (untracked in git) come from
+     the site (`thumbnail.webp`, `webp/idle.webp` on hover). - **codex-pet.com** (`BeiXiao/awesome-codex-pets`): the repository holds one
+     `pets/<slug>/thumb.webp` per pet and lists them in `README.md`, which
+     `parseCodexPetComReadme` reads (slug, thumbnail, HTML-unescaped name). Sprites only
+     exist as zips on the site (`/api/download/<slug>`); `downloadGalleryPet` unpacks
+     `spritesheet.webp` with jszip. No author or category. - **codexpets.org** (`eyichan/awesome-codex-pets`): `pets.json` from GitHub with
+     `spritesheetUrl` on the site (CORS `*`); no thumbnails, so cards show the sheet's first
+     cell (`SheetThumbnail`: a lazily loaded image behind a frame-sized window). `kind` is
+     the category, tags join the search names. - **openpets.sh** (`alterhq/openpets`): the site's `/api/pets?page&pageSize=30&q&kind`
+     API searches and pages (`mode: "api"`, fixed kinds animal/creature/person/object,
+     ~5,700 mirrored pets); `previewUrl` is a strip of every frame at 96×104 (`preview.kind:
+"strip"`, the card shows its first cell), the sheet animates on hover.
+     The API refuses any foreign `Origin`, so the gallery is `needsDesktop`. - `galleryFetch.ts`: on desktop every gallery request goes through
+     `desktopBridge.pet.fetchGallery(url)`; in a browser it is a plain `fetch`.
+     `apps/desktop/src/ipc/methods/pet.ts` adds `fetchPetGallery`
+     (`desktop:pet-fetch-gallery`): https only, hosts limited to `PET_GALLERY_HOSTS`
+     (raw.githubusercontent.com and the four sites), GET via the Effect `HttpClient`
+     (no Origin header), returns `{ status, contentType, body: Uint8Array }`; errors are
+     `DesktopPetGalleryFetchError` (`invalid-url` | `host-not-allowed` | `request-failed`).
+     Tested in `pet.test.ts`. Exposed in `preload.ts` and typed in
+     `packages/contracts/src/ipc.ts`. - `filterGalleryPets` matches every query word against names, author, slug, category and
+     description and combines with a category filter (catalog galleries);
+     `downloadGalleryPet` decodes the image and takes the sheet version from its exact size
+     (1536×1872 → v1, 1536×2288 → v2), falling back to the gallery's claim, then v1.
    - `PetGalleryBrowser.tsx`: gallery select (host names), search box (debounced 300 ms for
      api galleries), category select (hidden when the gallery has none), cards in pages of 40
      (catalog) or the site's 30 (api) with a **Show more** button, per-card **Import** and an
