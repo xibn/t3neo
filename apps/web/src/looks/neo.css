@@ -18,6 +18,8 @@ html[data-look="neo"][data-theme-id]:root {
     "JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 
   --radius: 0.875rem;
+  /* Height of the top strip once the header actions are folded away. */
+  --neo-collapsed-strip: 0.875rem;
   /* Controls share one soft corner, in scale with the 1rem popups; no pills. */
   --control-radius: 0.625rem;
   /* Glass surfaces (composer, header, popups) frost what lies behind them. The
@@ -568,7 +570,7 @@ html[data-look="neo"] [data-app-sidebar] {
    rounds back out at its bottom-left. (The generic strip height for the Default
    look lives in neo/neo.css.) */
 html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
-  --workspace-topbar-height: 0.875rem;
+  --workspace-topbar-height: var(--neo-collapsed-strip);
   --neo-notch-height: 2.5rem;
   overflow: visible;
   /* The header is an isolated stacking context (star trail) and the chat column
@@ -652,6 +654,60 @@ html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat
   border-right: 1px solid var(--contrast-border);
   border-top-left-radius: 1.25rem;
   border-top-right-radius: 0;
+}
+
+/* The left notch. With the sidebar hidden, the window controls and the sidebar
+   toggle sit over the card's top-left corner, so they get the mirror image of
+   the right notch. It hangs off the fixed control cluster, the one element that
+   knows where those controls are; the cluster lives outside the header, hence
+   the :has() on the folded header. Same masks as the right notch, flipped. */
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"] {
+  top: calc(var(--workspace-controls-top) + var(--neo-collapsed-strip) + 0.375rem);
+  height: auto;
+}
+
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::before,
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::after {
+  content: "";
+  position: absolute;
+  top: -0.375rem;
+  left: calc(-1 * var(--workspace-controls-left) - 1px);
+  /* Window edge to the toggle's right, 6px of air, then the 60px swoosh run. */
+  width: calc(var(--workspace-controls-left) + 1px + 1.75rem + 0.375rem + 60px);
+  height: 40px;
+  z-index: -1;
+  pointer-events: none;
+  transform: scaleX(-1);
+  mask-repeat: no-repeat;
+  mask-position: left top;
+  mask-size: 400px 40px;
+}
+
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::before {
+  background-color: var(--sidebar);
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: var(--surface-grain-size);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+  [data-sidebar-control][data-sidebar-visible="false"]::after {
+  background-color: var(--contrast-border);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Under that notch the card's top-left corner is square and bordered, like its
+   top-right under the panel toggles. */
+html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
+  [data-chat-header][data-neo-header-collapsed]
+  ~ [data-chat-workspace] {
+  border-left: 1px solid var(--contrast-border);
+  border-top-left-radius: 0;
 }
 
 html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header + div,

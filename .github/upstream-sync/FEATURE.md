@@ -373,8 +373,11 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
   actions cluster (`[data-chat-header-actions]`, which holds the show/hide toggle) floats
   absolutely at `top: 0.375rem; right: 0.5rem` in the strip colour (`var(--sidebar)`) with a
   `border-bottom-left-radius: 0.75rem`, over the card's top-right corner; the titlebar panel
-  controls (`[data-workspace-titlebar-controls]`) float at the same top. The workspace below
-  becomes the card: `border-top-left-radius` and `border-top-right-radius` both `0.75rem`, and
+  controls (`[data-workspace-titlebar-controls]`) float at the same top. With the sidebar hidden,
+  the fixed sidebar-toggle cluster (`[data-sidebar-control]`, which carries
+  `data-sidebar-visible`) drops to the same top and draws the mirror image of that notch around
+  the window controls and the toggle, and the card's top-left corner goes square and bordered
+  underneath it. The workspace below becomes the card: `border-top-left-radius` and `border-top-right-radius` both `0.75rem`, and
   the outline (`border-top`/`border-left` from the normal state plus `border-right`) wraps all
   three visible edges. The Default look keeps the generic `max(2rem, env(titlebar-area-height,
 0px))` strip from `neo/neo.css`.

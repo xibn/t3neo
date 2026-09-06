@@ -10856,7 +10856,7 @@ index 000000000..73ff0991f
 +  );
 +}
 diff --git a/apps/web/src/components/AppSidebarLayout.tsx b/apps/web/src/components/AppSidebarLayout.tsx
-index a3ba76679..3ad659956 100644
+index a3ba76679..bd7653a3a 100644
 --- a/apps/web/src/components/AppSidebarLayout.tsx
 +++ b/apps/web/src/components/AppSidebarLayout.tsx
 @@ -9,6 +9,8 @@ import {
@@ -10882,7 +10882,22 @@ index a3ba76679..3ad659956 100644
    );
    const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
  
-@@ -137,6 +143,9 @@ function ProjectProjectionRetention() {
+@@ -98,10 +104,13 @@ function SidebarControl() {
+   return (
+     // The right-side layout controls carry mr-px (border compensation inside
+     // the panel), so the trigger mirrors it: both clusters sit one extra pixel
+-    // off their edge and the titlebar reads symmetric.
++    // off their edge and the titlebar reads symmetric. data-sidebar-visible lets
++    // the Neo look's folded header draw its left notch around this cluster only
++    // while the sidebar is hidden and the cluster sits over the workspace card.
+     <div
+       className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center"
+       data-sidebar-control=""
++      data-sidebar-visible={isSidebarVisible ? "true" : "false"}
+     >
+       <Tooltip>
+         <TooltipTrigger
+@@ -137,6 +146,9 @@ function ProjectProjectionRetention() {
  }
  
  export function AppSidebarLayout({ children }: { children: ReactNode }) {
@@ -10892,7 +10907,7 @@ index a3ba76679..3ad659956 100644
    const navigate = useNavigate();
    const legacySidebarEnabled = useLegacySidebarEnabled();
    // Settings routes show the settings nav in place of whichever thread
-@@ -195,6 +204,15 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
+@@ -195,6 +207,15 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
      }
  
      const unsubscribe = onMenuAction((action) => {
@@ -10908,7 +10923,7 @@ index a3ba76679..3ad659956 100644
        if (action === "open-settings") {
          const isSettingsRoute = /^\/settings(\/|$)/.test(pathname);
          if (!isSettingsRoute) {
-@@ -226,6 +244,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
+@@ -226,6 +247,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
            onResize: setSidebarWidth,
          }}
        >
@@ -15754,10 +15769,10 @@ index e729335f9..a38b75ed8 100644
  
 diff --git a/apps/web/src/looks/neo.css b/apps/web/src/looks/neo.css
 new file mode 100644
-index 000000000..07a62b733
+index 000000000..67fe6662e
 --- /dev/null
 +++ b/apps/web/src/looks/neo.css
-@@ -0,0 +1,676 @@
+@@ -0,0 +1,732 @@
 +/*
 + * Neo look. A warm near-black canvas with cream text, a single amber
 + * accent and one leaf green for success; bordered frosted-glass surfaces;
@@ -15778,6 +15793,8 @@ index 000000000..07a62b733
 +    "JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 +
 +  --radius: 0.875rem;
++  /* Height of the top strip once the header actions are folded away. */
++  --neo-collapsed-strip: 0.875rem;
 +  /* Controls share one soft corner, in scale with the 1rem popups; no pills. */
 +  --control-radius: 0.625rem;
 +  /* Glass surfaces (composer, header, popups) frost what lies behind them. The
@@ -16328,7 +16345,7 @@ index 000000000..07a62b733
 +   rounds back out at its bottom-left. (The generic strip height for the Default
 +   look lives in neo/neo.css.) */
 +html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
-+  --workspace-topbar-height: 0.875rem;
++  --workspace-topbar-height: var(--neo-collapsed-strip);
 +  --neo-notch-height: 2.5rem;
 +  overflow: visible;
 +  /* The header is an isolated stacking context (star trail) and the chat column
@@ -16412,6 +16429,60 @@ index 000000000..07a62b733
 +  border-right: 1px solid var(--contrast-border);
 +  border-top-left-radius: 1.25rem;
 +  border-top-right-radius: 0;
++}
++
++/* The left notch. With the sidebar hidden, the window controls and the sidebar
++   toggle sit over the card's top-left corner, so they get the mirror image of
++   the right notch. It hangs off the fixed control cluster, the one element that
++   knows where those controls are; the cluster lives outside the header, hence
++   the :has() on the folded header. Same masks as the right notch, flipped. */
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"] {
++  top: calc(var(--workspace-controls-top) + var(--neo-collapsed-strip) + 0.375rem);
++  height: auto;
++}
++
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::before,
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::after {
++  content: "";
++  position: absolute;
++  top: -0.375rem;
++  left: calc(-1 * var(--workspace-controls-left) - 1px);
++  /* Window edge to the toggle's right, 6px of air, then the 60px swoosh run. */
++  width: calc(var(--workspace-controls-left) + 1px + 1.75rem + 0.375rem + 60px);
++  height: 40px;
++  z-index: -1;
++  pointer-events: none;
++  transform: scaleX(-1);
++  mask-repeat: no-repeat;
++  mask-position: left top;
++  mask-size: 400px 40px;
++}
++
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::before {
++  background-color: var(--sidebar);
++  background-image: var(--surface-grain);
++  background-repeat: repeat;
++  background-size: var(--surface-grain-size);
++  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
++}
++
++html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++  [data-sidebar-control][data-sidebar-visible="false"]::after {
++  background-color: var(--contrast-border);
++  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
++}
++
++/* Under that notch the card's top-left corner is square and bordered, like its
++   top-right under the panel toggles. */
++html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
++  [data-chat-header][data-neo-header-collapsed]
++  ~ [data-chat-workspace] {
++  border-left: 1px solid var(--contrast-border);
++  border-top-left-radius: 0;
 +}
 +
 +html[data-look="neo"] [data-slot="sidebar-inset"] > div > div > header + div,
@@ -73723,10 +73794,10 @@ index 97f1f5cb1..e358208d1 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..a9d0687ee
+index 000000000..b51a6df76
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,139 @@
+@@ -0,0 +1,140 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -73769,7 +73840,8 @@ index 000000000..a9d0687ee
 +- **Collapse header actions** folds those actions away from Settings, the same as pressing the
 +  button. While folded, the header slims to a thin bar and the workspace below it becomes a card
 +  with rounded top corners. The double-chevron and the panel toggles sit in a small notch at the
-+  card's top-right corner; press the chevron there to unfold.
++  card's top-right corner; press the chevron there to unfold. With the sidebar hidden, the window
++  controls and the sidebar button get a matching notch at the top-left corner.
 +- **Branch manager position** moves the workspace and branch controls from below the message box
 +  into the header next to **Open**, which gives the composer more room. With **Show the branch
 +  manager move pill** on, an amber pill next to the workspace control moves it up, and the same
