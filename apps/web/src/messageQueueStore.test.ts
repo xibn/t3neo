@@ -110,6 +110,32 @@ describe("useMessageQueueStore", () => {
     expect(useMessageQueueStore.getState().messages.every((m) => m.sendNow === true)).toBe(true);
   });
 
+  it("ends a forced send on failure so the message waits for Retry instead of looping", () => {
+    const store = useMessageQueueStore.getState();
+    store.enqueue(makeMessage("a", "2026-09-05T10:00:00.000Z"));
+    store.markSendNow(MessageId.make("a"));
+    store.setError(MessageId.make("a"), "Attachment not found");
+    const [message] = useMessageQueueStore.getState().messages;
+    expect(message?.error).toBe("Attachment not found");
+    expect(message?.sendNow).toBeUndefined();
+    expect(
+      resolveQueuedMessageDispatch({
+        message: message!,
+        threadExists: true,
+        threadBusy: false,
+        threadPaused: false,
+        shellStatus: "live",
+        connected: true,
+        inFlight: false,
+      }),
+    ).toBe("wait");
+
+    // Clearing the error keeps a forced flag that is still set.
+    store.markSendNow(MessageId.make("a"));
+    store.setError(MessageId.make("a"), null);
+    expect(useMessageQueueStore.getState().messages[0]?.sendNow).toBe(true);
+  });
+
   it("removes a message and returns it", () => {
     const store = useMessageQueueStore.getState();
     store.enqueue(makeMessage("a", "2026-09-05T10:00:00.000Z"));

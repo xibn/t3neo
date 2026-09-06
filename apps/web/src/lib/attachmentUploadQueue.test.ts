@@ -46,6 +46,7 @@ import {
   getUploadedAttachments,
   readAttachmentUpload,
   releaseAttachmentUpload,
+  fetchPendingAttachmentFile,
   handOffDraftAttachments,
   releaseDraftAttachment,
   releaseDraftAttachments,
@@ -235,6 +236,9 @@ describe("attachmentUploadQueue", () => {
 
     handOffDraftAttachments([image]);
     expect(readAttachmentUpload(image.id)).toBeUndefined();
+    // The draft clearing afterwards releases the same key; the copy is the queue's now.
+    releaseAttachmentUpload(image.id);
+    releaseDraftAttachments([image]);
     expect(mocks.runAtomCommand).not.toHaveBeenCalledWith(
       expect.anything(),
       mocks.removeUpload,
@@ -256,6 +260,43 @@ describe("attachmentUploadQueue", () => {
       },
       expect.anything(),
     );
+  });
+
+  it("downloads a queued image's bytes again for editing", async () => {
+    mocks.readPreparedConnection.mockReturnValue({ httpBaseUrl: "http://127.0.0.1:4100/" });
+    mocks.createAssetUrl.mockReturnValue(Symbol("asset-url-atom"));
+    mocks.executeAtomQuery.mockResolvedValueOnce({
+      _tag: "Success",
+      value: { relativeUrl: "/api/assets/pending-environment-1-image-9.png?token=t" },
+    });
+    const fetchMock = vi.fn(async () => new Response(new Blob([new Uint8Array([1, 2, 3])])));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const file = await fetchPendingAttachmentFile({
+        environmentId: firstEnvironment,
+        attachmentId: "pending-environment-1-image-9.png",
+        name: "image-9.png",
+        mimeType: "image/png",
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://127.0.0.1:4100/api/assets/pending-environment-1-image-9.png?token=t",
+      );
+      expect(file?.name).toBe("image-9.png");
+      expect(file?.type).toBe("image/png");
+      expect(file?.size).toBe(3);
+
+      mocks.executeAtomQuery.mockResolvedValueOnce({ _tag: "Failure", error: new Error("gone") });
+      expect(
+        await fetchPendingAttachmentFile({
+          environmentId: firstEnvironment,
+          attachmentId: "pending-environment-1-image-9.png",
+          name: "image-9.png",
+          mimeType: "image/png",
+        }),
+      ).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("uploads generic files and sends file attachment references", async () => {

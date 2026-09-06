@@ -12685,10 +12685,15 @@ index 18e197129..7a6543194 100644
        onFocus={(event) => event.currentTarget.select()}
        onKeyDown={handleRenameKeyDown}
 diff --git a/apps/web/src/components/chat/ChatComposer.tsx b/apps/web/src/components/chat/ChatComposer.tsx
-index cd69eceb7..999fb17eb 100644
+index cd69eceb7..ba2474d93 100644
 --- a/apps/web/src/components/chat/ChatComposer.tsx
 +++ b/apps/web/src/components/chat/ChatComposer.tsx
-@@ -107,6 +107,7 @@ import {
+@@ -103,10 +103,12 @@ import {
+   shouldHandleComposerAttachmentPaste,
+ } from "./composerAttachmentFiles";
+ import {
++  fetchPendingAttachmentFile,
+   readAttachmentUpload,
    releaseAttachmentUpload,
    releaseDraftAttachment,
    releasePersistedAttachmentUpload,
@@ -12696,7 +12701,7 @@ index cd69eceb7..999fb17eb 100644
    retryAttachmentUpload,
    startAttachmentUpload,
    useAttachmentUploadStore,
-@@ -144,6 +145,17 @@ import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+@@ -144,6 +146,18 @@ import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
  import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
  import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
  import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -12705,6 +12710,7 @@ index cd69eceb7..999fb17eb 100644
 +import { useNeoSettings } from "~/neo/neoSettings";
 +import type { TurnUsage } from "~/neo/turnUsage";
 +import {
++  type QueuedAttachment,
 +  type QueuedThreadMessage,
 +  useMessageQueueStore,
 +  useQueuedThreadMessages,
@@ -12714,7 +12720,7 @@ index cd69eceb7..999fb17eb 100644
  import { ComposerControl, ComposerControlIcon, ComposerSelectControl } from "./ComposerControl";
  import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
  import {
-@@ -411,6 +423,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
+@@ -411,6 +425,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
    runtimeMode: RuntimeMode;
    onToggleInteractionMode: () => void;
    onRuntimeModeChange: (mode: RuntimeMode) => void;
@@ -12724,7 +12730,7 @@ index cd69eceb7..999fb17eb 100644
  }) {
    const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
    const RuntimeModeIcon = runtimeModeOption.icon;
-@@ -432,6 +447,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
+@@ -432,6 +449,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
                    ? "bg-accent text-accent-foreground hover:bg-accent/80"
                    : "text-secondary-label hover:text-foreground",
                )}
@@ -12732,7 +12738,7 @@ index cd69eceb7..999fb17eb 100644
                type="button"
                onClick={props.onToggleInteractionMode}
                aria-label={interactionModeTooltip}
-@@ -467,7 +483,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
+@@ -467,7 +485,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
              <ComposerControlIcon icon={RuntimeModeIcon} />
              <SelectValue>{runtimeModeOption.label}</SelectValue>
            </TooltipTrigger>
@@ -12741,7 +12747,7 @@ index cd69eceb7..999fb17eb 100644
              {runtimeModeOptions.map((mode) => {
                const option = runtimeModeConfig[mode];
                const OptionIcon = option.icon;
-@@ -493,6 +509,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
+@@ -493,6 +511,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
        </Tooltip>
  
        {interactionModeToggle}
@@ -12751,7 +12757,7 @@ index cd69eceb7..999fb17eb 100644
      </>
    );
  });
-@@ -518,10 +537,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
+@@ -518,10 +539,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
    isEnvironmentUnavailable: boolean;
    hasSendableContent: boolean;
    preserveComposerFocusOnPointerDown?: boolean;
@@ -12764,7 +12770,7 @@ index cd69eceb7..999fb17eb 100644
    onCompactContext?: (() => void) | undefined;
    compactDisabled: boolean;
    compactDisabledReason: string | null;
-@@ -550,10 +570,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
+@@ -550,10 +572,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
          isPreparingWorktree={props.isPreparingWorktree}
          hasSendableContent={props.hasSendableContent}
          preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
@@ -12777,7 +12783,7 @@ index cd69eceb7..999fb17eb 100644
        />
      </>
    );
-@@ -634,6 +655,14 @@ export interface ChatComposerProps {
+@@ -634,6 +657,14 @@ export interface ChatComposerProps {
    phase: SessionPhase;
    isConnecting: boolean;
    isSendBusy: boolean;
@@ -12792,7 +12798,7 @@ index cd69eceb7..999fb17eb 100644
    sendDisabledReason: string | null;
    isPreparingWorktree: boolean;
    bannerItems: readonly ComposerBannerStackItem[];
-@@ -697,7 +726,10 @@ export interface ChatComposerProps {
+@@ -697,7 +728,10 @@ export interface ChatComposerProps {
    composerRef: React.RefObject<ChatComposerHandle | null>;
  
    // Callbacks
@@ -12804,7 +12810,7 @@ index cd69eceb7..999fb17eb 100644
    onInterrupt: () => void;
    onImplementPlanInNewThread: () => void;
    onRespondToApproval: (
-@@ -751,6 +783,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -751,6 +785,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
      forceExpandedOnMobile,
      projectSelectionRequired,
      phase,
@@ -12815,7 +12821,7 @@ index cd69eceb7..999fb17eb 100644
      isConnecting,
      isSendBusy,
      sendDisabledReason: externalSendDisabledReason,
-@@ -1116,6 +1152,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -1116,6 +1154,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
      () => getComposerPromptInjectionState(prompt),
      [prompt],
    );
@@ -12830,7 +12836,7 @@ index cd69eceb7..999fb17eb 100644
    const composerProviderState = useMemo(
      () =>
        getComposerProviderState({
-@@ -1125,10 +1169,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -1125,10 +1171,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
          promptInjectionState: composerPromptInjectionState,
          modelOptions: composerModelOptions?.[selectedInstanceId],
          planModeEnabled: settings.planModeEnabled,
@@ -12843,7 +12849,7 @@ index cd69eceb7..999fb17eb 100644
        selectedInstanceId,
        selectedModel,
        selectedProvider,
-@@ -1230,6 +1276,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -1230,6 +1278,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
    const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
    const attachmentInputRef = useRef<HTMLInputElement>(null);
    const composerFormRef = useRef<HTMLFormElement>(null);
@@ -12871,7 +12877,7 @@ index cd69eceb7..999fb17eb 100644
    const composerSurfaceRef = useRef<HTMLDivElement>(null);
    const providerInputRejectedRef = useRef(false);
    const composerSelectLockRef = useRef(false);
-@@ -1421,6 +1488,129 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -1421,6 +1490,169 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
  
    const isComposerApprovalState = activePendingApproval !== null;
    const activePendingUserInput = pendingUserInputs[0] ?? null;
@@ -12942,10 +12948,12 @@ index cd69eceb7..999fb17eb 100644
 +        dataUrl: string;
 +      }> = [];
 +      const uploadedFiles: ComposerFileAttachment[] = [];
-+      const lostImageNames: string[] = [];
++      const uploadedImages: Array<Extract<QueuedAttachment, { id: string }>> = [];
 +      for (const attachment of message.attachments) {
 +        if ("dataUrl" in attachment) {
 +          inlineImages.push({ ...attachment, id: randomUUID() });
++        } else if (attachment.type === "image") {
++          uploadedImages.push(attachment);
 +        } else if (attachment.type === "file") {
 +          uploadedFiles.push({
 +            type: "file",
@@ -12958,9 +12966,7 @@ index cd69eceb7..999fb17eb 100644
 +            uploadEnvironmentId: message.environmentId,
 +          });
 +        } else {
-+          // An uploaded image is a server-side reference; the composer needs
-+          // the bytes for its thumbnail, so it cannot come back. Free the upload.
-+          lostImageNames.push(attachment.name);
++          // Unknown attachment types have no way back into the composer.
 +          releasePersistedAttachmentUpload({
 +            id: attachment.id,
 +            environmentId: message.environmentId,
@@ -12974,16 +12980,56 @@ index cd69eceb7..999fb17eb 100644
 +      if (uploadedFiles.length > 0) {
 +        addComposerDraftFiles(composerDraftTarget, uploadedFiles);
 +      }
++      window.requestAnimationFrame(() => {
++        composerEditorRef.current?.focusAtEnd();
++      });
++
++      // An uploaded image is a server-side reference, and the composer needs
++      // the bytes for its thumbnail: download them again, then free the
++      // server copy. The image uploads afresh when the draft is sent.
++      if (uploadedImages.length === 0) return;
++      const restoreTarget = composerDraftTarget;
++      const restored = await Promise.all(
++        uploadedImages.map(async (attachment) => {
++          const file = await fetchPendingAttachmentFile({
++            environmentId: message.environmentId,
++            attachmentId: attachment.id,
++            name: attachment.name,
++            mimeType: attachment.mimeType,
++          });
++          releasePersistedAttachmentUpload({
++            id: attachment.id,
++            environmentId: message.environmentId,
++            attachmentId: attachment.id,
++          });
++          return { attachment, file };
++        }),
++      );
++      const images: ComposerImageAttachment[] = [];
++      const lostImageNames: string[] = [];
++      for (const { attachment, file } of restored) {
++        if (!file) {
++          lostImageNames.push(attachment.name);
++          continue;
++        }
++        images.push({
++          type: "image",
++          id: randomUUID(),
++          name: attachment.name,
++          mimeType: attachment.mimeType,
++          sizeBytes: file.size,
++          previewUrl: URL.createObjectURL(file),
++          file,
++        });
++      }
++      if (images.length > 0) addComposerDraftImages(restoreTarget, images);
 +      if (lostImageNames.length > 0) {
 +        toastManager.add({
 +          type: "warning",
 +          title: "Some attachments were not restored",
-+          description: `${lostImageNames.join(", ")}: uploaded images cannot return to the composer. Attach them again.`,
++          description: `${lostImageNames.join(", ")}: the uploads are no longer on the server. Attach them again.`,
 +        });
 +      }
-+      window.requestAnimationFrame(() => {
-+        composerEditorRef.current?.focusAtEnd();
-+      });
 +    },
 +    [
 +      addComposerDraftFiles,
@@ -13001,7 +13047,7 @@ index cd69eceb7..999fb17eb 100644
    const showComposerTopDrawer =
      isComposerApprovalState ||
      pendingUserInputs.length > 0 ||
-@@ -2302,6 +2492,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -2302,6 +2534,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
              shiftKey: event.shiftKey,
              modifierKey: event.metaKey || event.ctrlKey,
              isDraftThread: routeKind === "draft",
@@ -13009,7 +13055,7 @@ index cd69eceb7..999fb17eb 100644
            })
          : null;
      if (submissionIntent) {
-@@ -2526,7 +2717,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -2526,7 +2759,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
          // unique image into the overflow list for nothing.
          const existingDedupKeys = new Set(
            composerImagesRef.current.map(
@@ -13018,7 +13064,7 @@ index cd69eceb7..999fb17eb 100644
            ),
          );
          const capacity = Math.max(
-@@ -2540,7 +2731,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -2540,7 +2773,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
            (attachment) =>
              !existingIds.has(attachment.id) &&
              !existingDedupKeys.has(
@@ -13027,7 +13073,7 @@ index cd69eceb7..999fb17eb 100644
              ),
          );
          // Anything past the attachment limit cannot be restored. The entry is
-@@ -2684,7 +2875,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -2684,7 +2917,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
      // the composer has been cleared the user can type something genuinely
      // new (or switch threads) while encoding continues, and that deserves its
      // own entry.
@@ -13036,7 +13082,7 @@ index cd69eceb7..999fb17eb 100644
        .map((image) => `image:${image.id}`)
        .concat(files.map((file) => `file:${file.id}`))
        .join(",")}`;
-@@ -3211,6 +3402,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -3211,6 +3444,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
    const handleImplementPlanInNewThreadPrimaryAction = useCallback(() => {
      void onImplementPlanInNewThread();
    }, [onImplementPlanInNewThread]);
@@ -13046,7 +13092,7 @@ index cd69eceb7..999fb17eb 100644
    const scheduleComposerCollapseCheck = useCallback(() => {
      if (!isMobileViewport) {
        return;
-@@ -3400,6 +3594,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -3400,6 +3636,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
  
    // Render
    // ------------------------------------------------------------------
@@ -13054,7 +13100,7 @@ index cd69eceb7..999fb17eb 100644
    return (
      <form
        ref={composerFormRef}
-@@ -3428,6 +3623,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -3428,6 +3665,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
        onDropCapture={composerMentionDragHandlers.onDrop}
        className="mx-auto w-full min-w-0 max-w-3xl"
        data-chat-composer-form="true"
@@ -13062,7 +13108,7 @@ index cd69eceb7..999fb17eb 100644
      >
        <ComposerBanner.Dock>
          <ComposerBanner.Column>
-@@ -3447,6 +3643,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -3447,6 +3685,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                </ComposerBanner.Root>
              </ComposerBanner.Attachment>
            ) : null}
@@ -13084,7 +13130,7 @@ index cd69eceb7..999fb17eb 100644
            {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
              <ComposerBanner.Attachment>
                <ComposerBanner.Root
-@@ -4100,6 +4311,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -4100,6 +4353,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                <div
                  data-chat-composer-footer="true"
                  data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
@@ -13092,7 +13138,7 @@ index cd69eceb7..999fb17eb 100644
                  className={cn(
                    "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:px-4 sm:pb-4",
                    pendingUserInputs.length > 0 && "pt-2",
-@@ -4175,6 +4387,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -4175,6 +4429,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                          runtimeMode={runtimeMode}
                          onToggleInteractionMode={toggleInteractionMode}
                          onRuntimeModeChange={handleRuntimeModeChange}
@@ -13102,7 +13148,7 @@ index cd69eceb7..999fb17eb 100644
                        />
                      </>
                    )}
-@@ -4242,10 +4457,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
+@@ -4242,10 +4499,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                      isPreparingWorktree={isPreparingWorktree}
                      hasSendableContent={composerSendState.hasSendableContent}
                      preserveComposerFocusOnPointerDown={isMobileViewport}
@@ -16637,13 +16683,14 @@ index e729335f9..a38b75ed8 100644
    }
  
 diff --git a/apps/web/src/lib/attachmentUploadQueue.test.ts b/apps/web/src/lib/attachmentUploadQueue.test.ts
-index d7b30e452..2d4e05561 100644
+index d7b30e452..062ed07da 100644
 --- a/apps/web/src/lib/attachmentUploadQueue.test.ts
 +++ b/apps/web/src/lib/attachmentUploadQueue.test.ts
-@@ -46,8 +46,10 @@ import {
+@@ -46,8 +46,11 @@ import {
    getUploadedAttachments,
    readAttachmentUpload,
    releaseAttachmentUpload,
++  fetchPendingAttachmentFile,
 +  handOffDraftAttachments,
    releaseDraftAttachment,
    releaseDraftAttachments,
@@ -16651,7 +16698,7 @@ index d7b30e452..2d4e05561 100644
    releasePersistedAttachmentUpload,
    retryAttachmentUpload,
    startAttachmentUpload,
-@@ -223,6 +225,39 @@ describe("attachmentUploadQueue", () => {
+@@ -223,6 +226,79 @@ describe("attachmentUploadQueue", () => {
      );
    });
  
@@ -16665,6 +16712,9 @@ index d7b30e452..2d4e05561 100644
 +
 +    handOffDraftAttachments([image]);
 +    expect(readAttachmentUpload(image.id)).toBeUndefined();
++    // The draft clearing afterwards releases the same key; the copy is the queue's now.
++    releaseAttachmentUpload(image.id);
++    releaseDraftAttachments([image]);
 +    expect(mocks.runAtomCommand).not.toHaveBeenCalledWith(
 +      expect.anything(),
 +      mocks.removeUpload,
@@ -16688,14 +16738,59 @@ index d7b30e452..2d4e05561 100644
 +    );
 +  });
 +
++  it("downloads a queued image's bytes again for editing", async () => {
++    mocks.readPreparedConnection.mockReturnValue({ httpBaseUrl: "http://127.0.0.1:4100/" });
++    mocks.createAssetUrl.mockReturnValue(Symbol("asset-url-atom"));
++    mocks.executeAtomQuery.mockResolvedValueOnce({
++      _tag: "Success",
++      value: { relativeUrl: "/api/assets/pending-environment-1-image-9.png?token=t" },
++    });
++    const fetchMock = vi.fn(async () => new Response(new Blob([new Uint8Array([1, 2, 3])])));
++    vi.stubGlobal("fetch", fetchMock);
++    try {
++      const file = await fetchPendingAttachmentFile({
++        environmentId: firstEnvironment,
++        attachmentId: "pending-environment-1-image-9.png",
++        name: "image-9.png",
++        mimeType: "image/png",
++      });
++      expect(fetchMock).toHaveBeenCalledWith(
++        "http://127.0.0.1:4100/api/assets/pending-environment-1-image-9.png?token=t",
++      );
++      expect(file?.name).toBe("image-9.png");
++      expect(file?.type).toBe("image/png");
++      expect(file?.size).toBe(3);
++
++      mocks.executeAtomQuery.mockResolvedValueOnce({ _tag: "Failure", error: new Error("gone") });
++      expect(
++        await fetchPendingAttachmentFile({
++          environmentId: firstEnvironment,
++          attachmentId: "pending-environment-1-image-9.png",
++          name: "image-9.png",
++          mimeType: "image/png",
++        }),
++      ).toBeNull();
++    } finally {
++      vi.unstubAllGlobals();
++    }
++  });
++
    it("uploads generic files and sends file attachment references", async () => {
      const file = makeFile("report");
      startAttachmentUpload({ environmentId: firstEnvironment, image: file });
 diff --git a/apps/web/src/lib/attachmentUploadQueue.ts b/apps/web/src/lib/attachmentUploadQueue.ts
-index b2556bb4c..d59396dba 100644
+index b2556bb4c..1a9c3338e 100644
 --- a/apps/web/src/lib/attachmentUploadQueue.ts
 +++ b/apps/web/src/lib/attachmentUploadQueue.ts
-@@ -607,3 +607,29 @@ export function releaseDraftAttachments(
+@@ -5,6 +5,7 @@ import {
+ } from "@t3tools/contracts";
+ import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+ import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
++import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
+ import {
+   deletePendingAttachmentUpload,
+   runAttachmentUploadCycle,
+@@ -607,3 +608,74 @@ export function releaseDraftAttachments(
      releaseDraftAttachment(attachment);
    }
  }
@@ -16711,7 +16806,52 @@ index b2556bb4c..d59396dba 100644
 +  attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
 +): void {
 +  for (const attachment of attachments) {
++    // The finished job stays registered under the draft's key otherwise, and
++    // any later release of that key (the draft clearing, a capability flap)
++    // would delete the server copy the queued message still points at.
++    const job = jobsByImageId.get(attachment.id);
++    if (job) {
++      jobsByImageId.delete(attachment.id);
++      const queuedIndex = queue.indexOf(job);
++      if (queuedIndex !== -1) queue.splice(queuedIndex, 1);
++      job.resolveSettled();
++    }
 +    clearUploadState(attachment.id);
++  }
++}
++
++/**
++ * Downloads a pending upload's bytes again, for putting a queued image back
++ * into the composer. Null when the server cannot be asked or the upload is
++ * gone; the caller then tells the user to attach the image again.
++ */
++export async function fetchPendingAttachmentFile(input: {
++  readonly environmentId: EnvironmentId;
++  readonly attachmentId: string;
++  readonly name: string;
++  readonly mimeType: string;
++}): Promise<File | null> {
++  const connection = readPreparedConnection(input.environmentId);
++  if (!connection) return null;
++  const result = await executeAtomQuery(
++    appAtomRegistry,
++    assetEnvironment.createUrl({
++      environmentId: input.environmentId,
++      input: { resource: { _tag: "attachment", attachmentId: input.attachmentId } },
++    }),
++    { reportFailure: false, reportDefect: false, refresh: true },
++  );
++  if (result._tag !== "Success") return null;
++  const url = resolveAssetUrl(connection.httpBaseUrl, result.value.relativeUrl);
++  if (!url) return null;
++  try {
++    const response = await fetch(url);
++    if (!response.ok) return null;
++    const blob = await response.blob();
++    if (blob.size === 0) return null;
++    return new File([blob], input.name, { type: input.mimeType });
++  } catch {
++    return null;
 +  }
 +}
 +
@@ -17485,10 +17625,10 @@ index 3cdc8188b..e0d2b62aa 100644
  import { ManagedRelayAuthProvider } from "./cloud/managedAuth";
 diff --git a/apps/web/src/messageQueueStore.test.ts b/apps/web/src/messageQueueStore.test.ts
 new file mode 100644
-index 000000000..6ec62bc60
+index 000000000..0ecb7e152
 --- /dev/null
 +++ b/apps/web/src/messageQueueStore.test.ts
-@@ -0,0 +1,268 @@
+@@ -0,0 +1,294 @@
 +import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 +import { beforeEach, describe, expect, it } from "vite-plus/test";
 +
@@ -17599,6 +17739,32 @@ index 000000000..6ec62bc60
 +
 +    store.markThreadSendNow(queuedMessageThreadKey({ environmentId, threadId }));
 +    expect(useMessageQueueStore.getState().messages.every((m) => m.sendNow === true)).toBe(true);
++  });
++
++  it("ends a forced send on failure so the message waits for Retry instead of looping", () => {
++    const store = useMessageQueueStore.getState();
++    store.enqueue(makeMessage("a", "2026-09-05T10:00:00.000Z"));
++    store.markSendNow(MessageId.make("a"));
++    store.setError(MessageId.make("a"), "Attachment not found");
++    const [message] = useMessageQueueStore.getState().messages;
++    expect(message?.error).toBe("Attachment not found");
++    expect(message?.sendNow).toBeUndefined();
++    expect(
++      resolveQueuedMessageDispatch({
++        message: message!,
++        threadExists: true,
++        threadBusy: false,
++        threadPaused: false,
++        shellStatus: "live",
++        connected: true,
++        inFlight: false,
++      }),
++    ).toBe("wait");
++
++    // Clearing the error keeps a forced flag that is still set.
++    store.markSendNow(MessageId.make("a"));
++    store.setError(MessageId.make("a"), null);
++    expect(useMessageQueueStore.getState().messages[0]?.sendNow).toBe(true);
 +  });
 +
 +  it("removes a message and returns it", () => {
@@ -17759,10 +17925,10 @@ index 000000000..6ec62bc60
 +});
 diff --git a/apps/web/src/messageQueueStore.ts b/apps/web/src/messageQueueStore.ts
 new file mode 100644
-index 000000000..e91fa500a
+index 000000000..9a28d6aba
 --- /dev/null
 +++ b/apps/web/src/messageQueueStore.ts
-@@ -0,0 +1,325 @@
+@@ -0,0 +1,331 @@
 +import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 +import { hasQueuedTurnStart } from "@t3tools/client-runtime/state/thread-settled";
 +import type { EnvironmentShellStatus } from "@t3tools/client-runtime/state/shell";
@@ -17938,9 +18104,15 @@ index 000000000..e91fa500a
 +  return { ...rest, sendNow: true };
 +}
 +
++/**
++ * A failure ends a forced send: with `sendNow` left on, the drain would send
++ * the same message again at once and loop, showing "Sending…" forever.
++ * The row shows the error and offers Retry instead.
++ */
 +function withError(message: QueuedThreadMessage, error: string | null): QueuedThreadMessage {
-+  const { error: _error, ...rest } = message;
-+  return error === null ? rest : { ...rest, error };
++  const { error: _error, sendNow, ...rest } = message;
++  if (error === null) return sendNow === undefined ? rest : { ...rest, sendNow };
++  return { ...rest, error };
 +}
 +
 +export const useMessageQueueStore = create<MessageQueueStoreState>()((set, get) => {
@@ -76983,7 +77155,7 @@ index 000000000..f16657f7f
 +unset preference means Schibsted Grotesk; under Default (Themes) it means the platform face. Either
 +one, or any installed font, can be chosen explicitly regardless of the look.
 diff --git a/docs/user/composer.md b/docs/user/composer.md
-index 97f1f5cb1..aaf138d6c 100644
+index 97f1f5cb1..1b96f477b 100644
 --- a/docs/user/composer.md
 +++ b/docs/user/composer.md
 @@ -52,6 +52,37 @@ On mobile, the model picker shows each OpenCode model's upstream provider, such
@@ -77009,8 +77181,8 @@ index 97f1f5cb1..aaf138d6c 100644
 +
 +The pencil button takes a queued message back into the composer so you can change it and send or
 +queue it again. If the composer already holds a draft, that draft moves to the back of the queue
-+first. Uploaded images cannot return to the composer; pasted images and attached files come back
-+with the text.
++first. Text, pasted images, uploaded images and attached files all come back with the message;
++uploaded images are downloaded again for their thumbnail and upload afresh when you send.
 +
 +Stopping a turn also pauses its queue, so the next queued message does not start on its own. The
 +queue header says so and offers **Resume**. Resume, send a message from the composer, or use

@@ -103,6 +103,7 @@ import {
   shouldHandleComposerAttachmentPaste,
 } from "./composerAttachmentFiles";
 import {
+  fetchPendingAttachmentFile,
   readAttachmentUpload,
   releaseAttachmentUpload,
   releaseDraftAttachment,
@@ -150,6 +151,7 @@ import { ComposerUsageBadge } from "~/neo/ComposerUsageBadge";
 import { useNeoSettings } from "~/neo/neoSettings";
 import type { TurnUsage } from "~/neo/turnUsage";
 import {
+  type QueuedAttachment,
   type QueuedThreadMessage,
   useMessageQueueStore,
   useQueuedThreadMessages,
@@ -1555,10 +1557,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         dataUrl: string;
       }> = [];
       const uploadedFiles: ComposerFileAttachment[] = [];
-      const lostImageNames: string[] = [];
+      const uploadedImages: Array<Extract<QueuedAttachment, { id: string }>> = [];
       for (const attachment of message.attachments) {
         if ("dataUrl" in attachment) {
           inlineImages.push({ ...attachment, id: randomUUID() });
+        } else if (attachment.type === "image") {
+          uploadedImages.push(attachment);
         } else if (attachment.type === "file") {
           uploadedFiles.push({
             type: "file",
@@ -1571,9 +1575,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             uploadEnvironmentId: message.environmentId,
           });
         } else {
-          // An uploaded image is a server-side reference; the composer needs
-          // the bytes for its thumbnail, so it cannot come back. Free the upload.
-          lostImageNames.push(attachment.name);
+          // Unknown attachment types have no way back into the composer.
           releasePersistedAttachmentUpload({
             id: attachment.id,
             environmentId: message.environmentId,
@@ -1587,16 +1589,56 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       if (uploadedFiles.length > 0) {
         addComposerDraftFiles(composerDraftTarget, uploadedFiles);
       }
+      window.requestAnimationFrame(() => {
+        composerEditorRef.current?.focusAtEnd();
+      });
+
+      // An uploaded image is a server-side reference, and the composer needs
+      // the bytes for its thumbnail: download them again, then free the
+      // server copy. The image uploads afresh when the draft is sent.
+      if (uploadedImages.length === 0) return;
+      const restoreTarget = composerDraftTarget;
+      const restored = await Promise.all(
+        uploadedImages.map(async (attachment) => {
+          const file = await fetchPendingAttachmentFile({
+            environmentId: message.environmentId,
+            attachmentId: attachment.id,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+          });
+          releasePersistedAttachmentUpload({
+            id: attachment.id,
+            environmentId: message.environmentId,
+            attachmentId: attachment.id,
+          });
+          return { attachment, file };
+        }),
+      );
+      const images: ComposerImageAttachment[] = [];
+      const lostImageNames: string[] = [];
+      for (const { attachment, file } of restored) {
+        if (!file) {
+          lostImageNames.push(attachment.name);
+          continue;
+        }
+        images.push({
+          type: "image",
+          id: randomUUID(),
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          sizeBytes: file.size,
+          previewUrl: URL.createObjectURL(file),
+          file,
+        });
+      }
+      if (images.length > 0) addComposerDraftImages(restoreTarget, images);
       if (lostImageNames.length > 0) {
         toastManager.add({
           type: "warning",
           title: "Some attachments were not restored",
-          description: `${lostImageNames.join(", ")}: uploaded images cannot return to the composer. Attach them again.`,
+          description: `${lostImageNames.join(", ")}: the uploads are no longer on the server. Attach them again.`,
         });
       }
-      window.requestAnimationFrame(() => {
-        composerEditorRef.current?.focusAtEnd();
-      });
     },
     [
       addComposerDraftFiles,

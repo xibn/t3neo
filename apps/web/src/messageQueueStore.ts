@@ -173,9 +173,15 @@ function forced(message: QueuedThreadMessage): QueuedThreadMessage {
   return { ...rest, sendNow: true };
 }
 
+/**
+ * A failure ends a forced send: with `sendNow` left on, the drain would send
+ * the same message again at once and loop, showing "Sending…" forever.
+ * The row shows the error and offers Retry instead.
+ */
 function withError(message: QueuedThreadMessage, error: string | null): QueuedThreadMessage {
-  const { error: _error, ...rest } = message;
-  return error === null ? rest : { ...rest, error };
+  const { error: _error, sendNow, ...rest } = message;
+  if (error === null) return sendNow === undefined ? rest : { ...rest, sendNow };
+  return { ...rest, error };
 }
 
 export const useMessageQueueStore = create<MessageQueueStoreState>()((set, get) => {

@@ -71,8 +71,8 @@ running turn without queueing it.
 
 The pencil button takes a queued message back into the composer so you can change it and send or
 queue it again. If the composer already holds a draft, that draft moves to the back of the queue
-first. Uploaded images cannot return to the composer; pasted images and attached files come back
-with the text.
+first. Text, pasted images, uploaded images and attached files all come back with the message;
+uploaded images are downloaded again for their thumbnail and upload afresh when you send.
 
 Stopping a turn also pauses its queue, so the next queued message does not start on its own. The
 queue header says so and offers **Resume**. Resume, send a message from the composer, or use

@@ -70,7 +70,17 @@ untouched.** Server and contract changes are limited to what features 4, 5, and 
 - `apps/web/src/components/ChatView.tsx` `onSend`: after attachments are uploaded and before
   local dispatch, `shouldQueueComposerSubmission` (in `ChatView.logic.ts`) decides whether to
   enqueue instead of starting the turn. The queued message stores the fully composed outgoing text
-  and prepared attachments, then the composer draft is cleared.
+  and prepared attachments, then the composer draft is cleared. The draft's finished uploads
+  are handed to the queue (`handOffDraftAttachments`): the client forgets the upload state
+  _and_ the finished job under the draft's key, so the later draft clearing or a capability
+  flap releasing that key cannot delete the server copy; only deleting the queued message
+  unsent frees it (`releaseQueuedAttachmentUploads`). Editing a queued message puts every
+  attachment back: pasted images from their data URLs, files as persisted-upload references,
+  uploaded images by downloading their bytes again (`fetchPendingAttachmentFile` via the asset
+  URL) and freeing the server copy; they upload afresh on send.
+- `messageQueueStore.ts` `setError` also clears `sendNow`: a failed forced send would
+  otherwise be re-dispatched at once and loop with "Sending…" shown forever. The row shows the
+  error and **Retry** (which sets `sendNow` again and clears the error).
 - `apps/web/src/composer-logic.ts`: `ComposerSubmissionIntent` gains `"immediate"`;
   `composerSubmissionIntentForEnter` returns it for `Mod+Enter` on a running server thread.
 - `apps/web/src/components/chat/ComposerPrimaryActions.tsx`: while running with sendable
