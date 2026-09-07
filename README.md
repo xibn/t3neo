@@ -16,7 +16,27 @@ A fork of [T3 Code](https://github.com/pingdotgg/t3code) that follows every stab
 
 ## Screenshots
 
-<img src="assets/neo/screenshots/header-collapsed.jpg" alt="Chat in the Neo look with the header collapsed to a slim bar" width="100%">
+<img src="assets/neo/screenshots/header-collapsed.jpg" alt="A chat in the Neo look: the header folded to a slim starry strip, the workspace a rounded card with the panel toggles in its top-right notch" width="100%">
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/neo/screenshots/chat.jpg" alt="The same chat with the header unfolded: breadcrumb, Add action, Open, Initialize Git and the usage pill in the composer" width="100%"></td>
+    <td width="50%"><img src="assets/neo/screenshots/chat-focus.jpg" alt="Header folded and sidebar hidden: only the card remains, with a notch on each top corner" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/neo/screenshots/settings-pets.jpg" alt="Settings → Pets with the four built-in pet cards and the Codex pets gallery below" width="100%"></td>
+    <td><img src="assets/neo/screenshots/processes.jpg" alt="The Processes dialog listing dev servers and helper processes with Stop and Kill" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/neo/screenshots/usage.jpg" alt="The Usage page: cost per provider, the daily cost chart and the model breakdown" width="100%"></td>
+    <td><img src="assets/neo/screenshots/settings-neo.jpg" alt="Settings → Neo with updates, usage badges, the message queue and new chat defaults" width="100%"></td>
+  </tr>
+</table>
+
+<details>
+<summary>Appearance settings</summary>
+<img src="assets/neo/screenshots/settings-appearance.jpg" alt="Settings → Appearance with the color scheme tiles, the Look select and the Neo-only switches" width="100%">
+</details>
 
 ---
 

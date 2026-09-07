@@ -116,6 +116,13 @@ require_files \
   assets/neo/download-button.svg \
   assets/neo/app-icon.svg \
   assets/neo/screenshots/header-collapsed.jpg \
+  assets/neo/screenshots/chat.jpg \
+  assets/neo/screenshots/chat-focus.jpg \
+  assets/neo/screenshots/processes.jpg \
+  assets/neo/screenshots/settings-pets.jpg \
+  assets/neo/screenshots/settings-neo.jpg \
+  assets/neo/screenshots/settings-appearance.jpg \
+  assets/neo/screenshots/usage.jpg \
   docs/_config.yml \
   docs/favicon.svg \
   docs/download/index.html \
