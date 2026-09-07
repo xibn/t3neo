@@ -1,6 +1,15 @@
 import { CheckIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
 import { memo, useState, type FormEvent, type KeyboardEvent } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
@@ -16,7 +25,9 @@ import { PetSprite } from "./PetSprite";
 /**
  * A card for an imported pet in Settings → Pets. The preview selects it like
  * the built-in cards; the row below renames or deletes it. Renaming happens
- * in place: Enter or the check saves, Escape or the X gives up.
+ * in place: Enter or the check saves, Escape or the X gives up. Deleting asks
+ * first: the pet and its sheet are gone for good, only a fresh import brings
+ * them back.
  */
 export const ImportedPetCard = memo(function ImportedPetCard({
   pet,
@@ -33,6 +44,7 @@ export const ImportedPetCard = memo(function ImportedPetCard({
 }) {
   const mood = usePreviewMood();
   const [draft, setDraft] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const save = (event?: FormEvent) => {
     event?.preventDefault();
@@ -96,7 +108,7 @@ export const ImportedPetCard = memo(function ImportedPetCard({
               variant="ghost-muted"
               className="ml-auto hover:text-destructive"
               aria-label={`Delete ${pet.name}`}
-              onClick={() => onDelete(pet.id)}
+              onClick={() => setConfirmingDelete(true)}
             >
               <Trash2Icon />
               Delete
@@ -130,6 +142,29 @@ export const ImportedPetCard = memo(function ImportedPetCard({
           </form>
         )}
       </div>
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {pet.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The pet and its spritesheet are removed from this app. Import it again from the
+              gallery if you change your mind.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmingDelete(false);
+                onDelete(pet.id);
+              }}
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 });

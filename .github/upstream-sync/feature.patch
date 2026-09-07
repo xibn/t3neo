@@ -21558,13 +21558,22 @@ index 000000000..780b2ac71
 +});
 diff --git a/apps/web/src/neo/pets/ImportedPetCard.tsx b/apps/web/src/neo/pets/ImportedPetCard.tsx
 new file mode 100644
-index 000000000..3c9b181a7
+index 000000000..44c237014
 --- /dev/null
 +++ b/apps/web/src/neo/pets/ImportedPetCard.tsx
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,170 @@
 +import { CheckIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
 +import { memo, useState, type FormEvent, type KeyboardEvent } from "react";
 +
++import {
++  AlertDialog,
++  AlertDialogClose,
++  AlertDialogDescription,
++  AlertDialogFooter,
++  AlertDialogHeader,
++  AlertDialogPopup,
++  AlertDialogTitle,
++} from "~/components/ui/alert-dialog";
 +import { Button } from "~/components/ui/button";
 +import { Input } from "~/components/ui/input";
 +import { cn } from "~/lib/utils";
@@ -21580,7 +21589,9 @@ index 000000000..3c9b181a7
 +/**
 + * A card for an imported pet in Settings → Pets. The preview selects it like
 + * the built-in cards; the row below renames or deletes it. Renaming happens
-+ * in place: Enter or the check saves, Escape or the X gives up.
++ * in place: Enter or the check saves, Escape or the X gives up. Deleting asks
++ * first: the pet and its sheet are gone for good, only a fresh import brings
++ * them back.
 + */
 +export const ImportedPetCard = memo(function ImportedPetCard({
 +  pet,
@@ -21597,6 +21608,7 @@ index 000000000..3c9b181a7
 +}) {
 +  const mood = usePreviewMood();
 +  const [draft, setDraft] = useState<string | null>(null);
++  const [confirmingDelete, setConfirmingDelete] = useState(false);
 +
 +  const save = (event?: FormEvent) => {
 +    event?.preventDefault();
@@ -21660,7 +21672,7 @@ index 000000000..3c9b181a7
 +              variant="ghost-muted"
 +              className="ml-auto hover:text-destructive"
 +              aria-label={`Delete ${pet.name}`}
-+              onClick={() => onDelete(pet.id)}
++              onClick={() => setConfirmingDelete(true)}
 +            >
 +              <Trash2Icon />
 +              Delete
@@ -21694,6 +21706,29 @@ index 000000000..3c9b181a7
 +          </form>
 +        )}
 +      </div>
++      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
++        <AlertDialogPopup>
++          <AlertDialogHeader>
++            <AlertDialogTitle>Delete {pet.name}?</AlertDialogTitle>
++            <AlertDialogDescription>
++              The pet and its spritesheet are removed from this app. Import it again from the
++              gallery if you change your mind.
++            </AlertDialogDescription>
++          </AlertDialogHeader>
++          <AlertDialogFooter>
++            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
++            <Button
++              variant="destructive"
++              onClick={() => {
++                setConfirmingDelete(false);
++                onDelete(pet.id);
++              }}
++            >
++              Delete
++            </Button>
++          </AlertDialogFooter>
++        </AlertDialogPopup>
++      </AlertDialog>
 +    </div>
 +  );
 +});
@@ -73819,7 +73854,7 @@ index 97f1f5cb1..1b96f477b 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..481ff8632
+index 000000000..b0d5bfdd3
 --- /dev/null
 +++ b/docs/user/neo.md
 @@ -0,0 +1,173 @@
@@ -73963,8 +73998,8 @@ index 000000000..481ff8632
 +
 +**Import** downloads the pet and picks it right away. Every import is a copy of its own: it gets a
 +card in the pet picker with the gallery name, author and site, you can **Rename** or **Delete**
-+it there, you can import the same pet again, and changes in the gallery never reach the pets you
-+already have. Imported pets behave exactly like they do in the Codex app: when an agent starts
++it there (Delete asks first), you can import the same pet again, and changes in the gallery never
++reach the pets you already have. Imported pets behave exactly like they do in the Codex app: when an agent starts
 +working, needs your input, fails, or finishes while you look elsewhere, the pet plays that state's
 +animation three times and then settles into its slow idle breathing until something changes. Drag
 +the pet and it runs along in that direction; click it and it waves. They ignore typing, as Codex

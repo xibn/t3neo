@@ -666,7 +666,8 @@ contracts or server settings.
    - `ImportedPetCard.tsx` sits in the pet picker grid after the built-ins: live preview (tours
      idle → typing → working → done), name and "<source> by <author> · <gallery>", plus
      **Rename** (in-place input, Enter/check saves, Escape/X cancels, 40 characters max, empty
-     falls back to the source name) and **Delete**.
+     falls back to the source name) and **Delete**, which opens an `AlertDialog` ("Delete
+     <name>?", Cancel / destructive Delete) before removing the pet and its sheet.
    - `spriteSheet.ts` + `SpritePet.tsx` render Codex sheets the way the Codex app does
      (researched 2026-09-06 in `openai/codex` `codex-rs/tui/src/pets/{model,ambient}.rs` and
      `alterhq/OpenPetsKit`): 8 columns of 192×208 cells, one row per clip, Codex's own timing

@@ -138,8 +138,8 @@ pet's files and license. openpets.sh only answers the desktop app.
 
 **Import** downloads the pet and picks it right away. Every import is a copy of its own: it gets a
 card in the pet picker with the gallery name, author and site, you can **Rename** or **Delete**
-it there, you can import the same pet again, and changes in the gallery never reach the pets you
-already have. Imported pets behave exactly like they do in the Codex app: when an agent starts
+it there (Delete asks first), you can import the same pet again, and changes in the gallery never
+reach the pets you already have. Imported pets behave exactly like they do in the Codex app: when an agent starts
 working, needs your input, fails, or finishes while you look elsewhere, the pet plays that state's
 animation three times and then settles into its slow idle breathing until something changes. Drag
 the pet and it runs along in that direction; click it and it waves. They ignore typing, as Codex
