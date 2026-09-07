@@ -76,7 +76,7 @@ function SettingsContentLayout() {
           <div className="flex w-full items-center gap-3">
             <SettingsBreadcrumb pathname={location.pathname} />
             {showRestoreDefaults ? (
-              <div className="ms-auto flex items-center gap-2">
+              <div className="ms-auto flex items-center gap-2" data-workspace-page-actions>
                 <RestoreDefaultsButton onRestored={handleRestored} />
               </div>
             ) : null}

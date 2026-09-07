@@ -265,6 +265,20 @@ html[data-look="neo"] [data-slot="menu-trigger"] {
   border-radius: var(--control-radius);
 }
 
+/* Segmented toggle groups (usage: Cost / Tokens, the period, Model / Day) are
+   one bordered control like the split buttons, with the segments soft-cornered
+   inside it. */
+html[data-look="neo"] [data-slot="toggle-group"][data-variant="segmented"] {
+  padding: 2px;
+  border: 1px solid var(--contrast-border);
+  border-radius: var(--control-radius);
+  background-color: var(--toolbar-control);
+}
+
+html[data-look="neo"] [data-slot="toggle-group"][data-variant="segmented"] [data-slot="toggle"] {
+  border-radius: calc(var(--control-radius) - 2px);
+}
+
 html[data-look="neo"] [data-slot="input"],
 html[data-look="neo"] [data-slot="sidebar-input"],
 html[data-look="neo"] [data-slot="textarea"],
@@ -345,23 +359,24 @@ html[data-look="neo"] [data-sidebar="menu-item"] > button {
   border-radius: var(--control-radius);
 }
 
-/* Chat header: a hairline under the toolbar, pill controls. */
-html[data-look="neo"] [data-chat-header] {
+/* Top bars (chat, settings, usage, pull requests): a hairline under the
+   toolbar, pill controls. */
+html[data-look="neo"] [data-neo-page-header] {
   border-bottom: 1px solid var(--contrast-border);
   background-color: var(--app-chrome-background);
 }
 
-html[data-look="neo"] [data-chat-header] [data-slot="button"],
-html[data-look="neo"] [data-chat-header] [data-slot="menu-trigger"],
-html[data-look="neo"] [data-chat-header] [data-toolbar-control] {
+html[data-look="neo"] [data-neo-page-header] [data-slot="button"],
+html[data-look="neo"] [data-neo-page-header] [data-slot="menu-trigger"],
+html[data-look="neo"] [data-neo-page-header] [data-toolbar-control] {
   border: 1px solid var(--contrast-border);
   background-color: var(--toolbar-control);
   color: var(--contrast-toolbar-control-foreground);
 }
 
-html[data-look="neo"] [data-chat-header] [data-slot="button"]:hover,
-html[data-look="neo"] [data-chat-header] [data-slot="menu-trigger"]:hover,
-html[data-look="neo"] [data-chat-header] [data-toolbar-control]:hover {
+html[data-look="neo"] [data-neo-page-header] [data-slot="button"]:hover,
+html[data-look="neo"] [data-neo-page-header] [data-slot="menu-trigger"]:hover,
+html[data-look="neo"] [data-neo-page-header] [data-toolbar-control]:hover {
   background-color: var(--toolbar-control-hover);
 }
 
@@ -556,12 +571,18 @@ html[data-look="neo"]
    enough; the sidebar's grain lifts it a shade, so a flat bar next to it reads
    as a different surface.) The card's own border is the only edge, so the
    sidebar drops its right border line. */
-html[data-look="neo"] [data-chat-header],
+html[data-look="neo"] [data-neo-page-header],
 html[data-look="neo"] [data-chat-column-maximized-away],
-html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions],
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] [data-chat-header-actions],
 html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
-  [data-chat-header-actions]::before {
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions],
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::before,
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]::before {
   background-color: var(--sidebar);
   background-image: var(--surface-grain);
   background-repeat: repeat;
@@ -574,12 +595,15 @@ html[data-look="neo"] [data-app-sidebar] {
 
 /* With the header actions folded away the top bar becomes a 14px strip and the
    content a card under it, like t3.chat with its sidebar collapsed: the strip
-   carries nothing, the breadcrumb hides, and the toggles sit in a notch that
+   carries nothing, the breadcrumb hides, and the controls sit in a notch that
    drops from the strip over the card's top-right corner. The card's top edge
    curves down into the notch wall (the ::before inverted corner) and the notch
-   rounds back out at its bottom-left. (The generic strip height for the Default
-   look lives in neo/neo.css.) */
-html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
+   rounds back out at its bottom-left. Every page with the shared top bar folds
+   this way: the chat's actions cluster and a page's `data-workspace-page-actions`
+   (Restore defaults, the usage toggles, the pull requests' panel toggle) are the
+   notch hosts. (The generic strip height for the Default look lives in
+   neo/neo.css.) */
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] {
   --workspace-topbar-height: var(--neo-collapsed-strip);
   /* The controls keep the vertical place they have unfolded (a 1.75rem button
      centred in the full top bar); the notch starts at the card's top edge and
@@ -588,16 +612,16 @@ html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
   --neo-notch-height: calc(
     (var(--neo-topbar-height) + 1.75rem) / 2 + 0.375rem - var(--neo-collapsed-strip)
   );
+  position: relative;
   overflow: visible;
+  border-bottom: 0;
   /* The header is an isolated stacking context (star trail) and the chat column
      after it is positioned too, so without this the notch paints underneath the
      card and its buttons cannot be clicked. */
   z-index: 40;
 }
 
-html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
-  [aria-label="Thread breadcrumb"] {
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] nav[aria-label] {
   display: none;
 }
 
@@ -605,18 +629,33 @@ html[data-look="neo"]
    the panel toggles too, which float in its right part at their usual inset. Its
    bottom border continues the card's outline; the curved left edge is the swoosh
    below. */
-html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions] {
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] [data-chat-header-actions],
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions] {
   position: absolute;
   top: var(--neo-notch-controls-top);
   right: 0;
   z-index: 30;
   height: 1.75rem;
+  margin: 0;
   align-items: center;
+}
+
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] [data-chat-header-actions] {
   /* The toggle hugs the swoosh: the curve lands 6px inside the notch, right
      where the toggle's icon inset begins. No CSS border here: the outline is
      semi-transparent, so a border under the swoosh stroke would double up
      brighter. The ::after stroke draws the notch's bottom edge too. */
   padding: 0 calc(var(--workspace-controls-right, 0.75rem) + 4.125rem) 0 0;
+}
+
+/* A page's own cluster has no panel toggles to its right (the pull requests
+   page's cluster is the toggles), so it ends at the shared titlebar inset. */
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions] {
+  padding: 0 var(--workspace-controls-right, 0.75rem) 0 0.375rem;
 }
 
 /* The swoosh, t3.chat's corner shape: two quarter arcs joined by a short
@@ -629,48 +668,133 @@ html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-h
    hides the border row underneath. They hang from the actions cluster but
    start at the card's top edge, one strip below the header's top. */
 html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
+  [data-neo-page-header][data-neo-header-collapsed]
   [data-chat-header-actions]::before,
 html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
-  [data-chat-header-actions]::after {
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::after,
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]::before,
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]::after {
   content: "";
   position: absolute;
   top: calc(var(--neo-collapsed-strip) - var(--neo-notch-controls-top));
   left: calc(var(--neo-notch-height) * -1.5);
-  width: calc(var(--neo-notch-height) * 10);
+  /* The swoosh masks are ten notch heights wide; a wider cluster (usage's
+     toggles) continues the fill and the bottom stroke with a plain second
+     mask layer to its right. A narrower one just runs off the window edge. */
+  width: max(calc(100% + var(--neo-notch-height) * 1.5), calc(var(--neo-notch-height) * 10));
   height: var(--neo-notch-height);
   pointer-events: none;
   mask-repeat: no-repeat;
-  mask-size: calc(var(--neo-notch-height) * 10) var(--neo-notch-height);
 }
 
 html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
-  [data-chat-header-actions]::before {
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::before,
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]::before {
+  mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(#000, #000);
+  mask-size:
+    calc(var(--neo-notch-height) * 10) var(--neo-notch-height),
+    max(0px, calc(100% - var(--neo-notch-height) * 10)) var(--neo-notch-height);
+  mask-position:
+    left top,
+    right top;
 }
 
 html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
-  [data-chat-header-actions]::after {
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-chat-header-actions]::after,
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]::after {
   background-color: var(--contrast-border);
   /* One 1px stroke, the same weight and token as the card's border, running
      from the card's top edge through the curve and along the notch's bottom.
      Nothing else draws under it, so the line keeps a single alpha throughout. */
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
+  mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(#000, #000);
+  mask-size:
+    calc(var(--neo-notch-height) * 10) var(--neo-notch-height),
+    max(0px, calc(100% - var(--neo-notch-height) * 10)) 1px;
+  mask-position:
+    left top,
+    right bottom;
+}
+
+/* Everything in a page's notch stays inside its 1.75rem: the usage toggle
+   groups shrink to it instead of overlapping the notch's bottom edge. */
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]
+  [data-slot="toggle-group"][data-variant="segmented"] {
+  padding: 1px;
 }
 
 html[data-look="neo"]
-  [data-chat-header][data-neo-header-collapsed]
+  [data-neo-page-header][data-neo-header-collapsed]
+  [data-workspace-page-actions]
+  [data-slot="toggle"] {
+  height: calc(1.75rem - 4px);
+  min-height: 0;
+  padding-block: 0;
+}
+
+/* The pull requests scroller fades content under the bar; folded, the bar is
+   a strip and the card's own top border would fade with it. */
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] + .topbar-scroll-fade {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]
   [data-workspace-titlebar-controls] {
   top: var(--neo-notch-controls-top);
   height: 1.75rem;
 }
 
-html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat-workspace] {
+/* The card under the strip: bordered on three sides, both top corners round,
+   on the paper grain. The chat's workspace and every other page's content
+   (the element after its header) alike. */
+html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] ~ [data-chat-workspace],
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]:not([data-chat-header])
+  + * {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(60rem 22rem at 50% -8rem, rgb(242 162 110 / 7%), transparent 70%),
+    radial-gradient(rgb(241 166 41 / 8%) 1px, transparent 1.4px);
+  background-size:
+    100% 100%,
+    26px 26px;
+  border-top: 1px solid var(--contrast-border);
+  border-left: 1px solid var(--contrast-border);
   border-right: 1px solid var(--contrast-border);
   border-top-left-radius: 1.25rem;
+  border-top-right-radius: 1.25rem;
+}
+
+/* Under a notch the card's top-right corner is square; the swoosh draws the curve. */
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]:has(
+    [data-chat-header-actions],
+    [data-workspace-page-actions]
+  )
+  ~ [data-chat-workspace],
+html[data-look="neo"]
+  [data-neo-page-header][data-neo-header-collapsed]:not([data-chat-header]):has(
+    [data-workspace-page-actions]
+  )
+  + * {
   border-top-right-radius: 0;
 }
 
@@ -682,7 +806,7 @@ html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat
    shorter than the right notch and its masks scale down to match. It hangs off
    the fixed cluster, the one element that knows where the controls are; the
    cluster lives outside the header, hence the :has() on the folded header. */
-html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
   [data-sidebar-control][data-sidebar-visible="false"] {
   /* Toggle bottom (centred 1.75rem button in the cluster) plus 6px of air, from the card's top. */
   --neo-left-notch-height: calc(
@@ -690,9 +814,9 @@ html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
   );
 }
 
-html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
   [data-sidebar-control][data-sidebar-visible="false"]::before,
-html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
   [data-sidebar-control][data-sidebar-visible="false"]::after {
   content: "";
   position: absolute;
@@ -712,7 +836,7 @@ html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
   mask-size: calc(var(--neo-left-notch-height) * 10) var(--neo-left-notch-height);
 }
 
-html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
   [data-sidebar-control][data-sidebar-visible="false"]::before {
   background-color: var(--sidebar);
   background-image: var(--surface-grain);
@@ -721,7 +845,7 @@ html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 
-html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
+html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
   [data-sidebar-control][data-sidebar-visible="false"]::after {
   background-color: var(--contrast-border);
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
@@ -730,8 +854,11 @@ html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
 /* Under that notch the card's top-left corner is square and bordered, like its
    top-right under the panel toggles. */
 html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
-  [data-chat-header][data-neo-header-collapsed]
-  ~ [data-chat-workspace] {
+  [data-neo-page-header][data-neo-header-collapsed]
+  ~ [data-chat-workspace],
+html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
+  [data-neo-page-header][data-neo-header-collapsed]:not([data-chat-header])
+  + * {
   border-left: 1px solid var(--contrast-border);
   border-top-left-radius: 0;
 }

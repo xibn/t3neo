@@ -120,7 +120,10 @@ export function UsagePage() {
           <span className="truncate">{windowLabel}</span>
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      <div className="ms-auto hidden min-w-0 items-center justify-end gap-2 lg:flex">
+      <div
+        className="ms-auto hidden min-w-0 items-center justify-end gap-2 lg:flex"
+        data-workspace-page-actions
+      >
         <ToggleGroup
           aria-label="Usage metric"
           variant="segmented"
@@ -155,7 +158,10 @@ export function UsagePage() {
           <RefreshCwIcon className="size-3.5" />
         </Button>
       </div>
-      <div className="ms-auto flex min-w-0 items-center justify-end gap-1 lg:hidden">
+      <div
+        className="ms-auto flex min-w-0 items-center justify-end gap-1 lg:hidden"
+        data-workspace-page-actions
+      >
         <Select
           value={metric}
           onValueChange={(value) => {

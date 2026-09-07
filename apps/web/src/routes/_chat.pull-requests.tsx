@@ -1564,6 +1564,7 @@ function PullRequestsRouteView() {
       // edge.
       className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
       data-workspace-titlebar-controls
+      data-workspace-page-actions
     >
       {panelToggleControls}
     </div>

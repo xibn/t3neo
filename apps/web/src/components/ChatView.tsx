@@ -246,7 +246,6 @@ import {
   type DraftId,
 } from "../composerDraftStore";
 import { useMessageQueueStore } from "../messageQueueStore";
-import { NeoStarSky } from "../neo/NeoStarfield";
 import { useNeoSettings, useUpdateNeoSettings } from "../neo/neoSettings";
 import {
   latestTurnUsage as latestTurnUsageFrom,
@@ -7343,7 +7342,6 @@ function ChatViewContent(props: ChatViewProps) {
           reserveNativeControls={reserveTitleBarControlInset && !inlineRightPanelOwnsTitleBar}
           className="relative bg-background"
         >
-          <NeoStarSky variant="topbar" />
           {!rightPanelOpen ? panelLayoutControls : null}
           <ChatHeader
             {...(!supportsPullRequests || activeProjectRepository === null

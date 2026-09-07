@@ -42,7 +42,10 @@ and works on web and desktop.
   with rounded top corners. The double-chevron and the panel toggles sit in a small notch at the
   card's top-right corner; press the chevron there to unfold. With the sidebar hidden, the window
   controls and the sidebar button get a matching notch at the top-left corner; the sidebar button
-  keeps its place next to the window controls whether the sidebar is open or hidden.
+  keeps its place next to the window controls whether the sidebar is open or hidden. Settings,
+  Usage and Pull Requests always look this way under the Neo look, whatever the switch says:
+  their top bar is the strip, the page a card, and their controls (Restore defaults, the usage
+  toggles, the panel toggle) sit in the notch.
 - **Branch manager position** moves the workspace and branch controls from below the message box
   into the header next to **Open**, which gives the composer more room. With **Show the branch
   manager move pill** on, an amber pill next to the workspace control moves it up, and the same

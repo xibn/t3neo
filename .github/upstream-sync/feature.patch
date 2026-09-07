@@ -12198,15 +12198,14 @@ index a12bacad5..ddb4ce9db 100644
    isDraftHeroState: boolean;
    activeThreadKey: string | null;
 diff --git a/apps/web/src/components/ChatView.tsx b/apps/web/src/components/ChatView.tsx
-index a475230fe..7b3fd8920 100644
+index a475230fe..12e058bc7 100644
 --- a/apps/web/src/components/ChatView.tsx
 +++ b/apps/web/src/components/ChatView.tsx
-@@ -245,6 +245,17 @@ import {
+@@ -245,6 +245,16 @@ import {
    useComposerDraftStore,
    type DraftId,
  } from "../composerDraftStore";
 +import { useMessageQueueStore } from "../messageQueueStore";
-+import { NeoStarSky } from "../neo/NeoStarfield";
 +import { useNeoSettings, useUpdateNeoSettings } from "../neo/neoSettings";
 +import {
 +  latestTurnUsage as latestTurnUsageFrom,
@@ -12219,7 +12218,7 @@ index a475230fe..7b3fd8920 100644
  import {
    appendTerminalContextsToPrompt,
    formatTerminalContextLabel,
-@@ -354,6 +365,7 @@ import {
+@@ -354,6 +364,7 @@ import {
    hasServerAcknowledgedLocalDispatch,
    isBranchMismatchDismissedForSession,
    shouldDockDraftHeroForSubmission,
@@ -12227,7 +12226,7 @@ index a475230fe..7b3fd8920 100644
    shouldReleaseTimelineAnchorForToolActivity,
    shouldShowBranchMismatchBanner,
    shouldShowPlanFollowUpPrompt,
-@@ -385,6 +397,7 @@ import { useComposerHandleContext } from "../composerHandleContext";
+@@ -385,6 +396,7 @@ import { useComposerHandleContext } from "../composerHandleContext";
  import {
    awaitAttachmentUploads,
    getUploadedAttachments,
@@ -12235,7 +12234,7 @@ index a475230fe..7b3fd8920 100644
    releaseDraftAttachments,
    startAttachmentUpload,
  } from "../lib/attachmentUploadQueue";
-@@ -2364,6 +2377,17 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -2364,6 +2376,17 @@ function ChatViewContent(props: ChatViewProps) {
    const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
    const phase = derivePhase(activeThread?.session ?? null);
    const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
@@ -12253,7 +12252,7 @@ index a475230fe..7b3fd8920 100644
    const latestCheckpointCompletedAt = activeThread?.checkpoints.at(-1)?.completedAt ?? null;
    const workspaceMutationId = useMemo(() => {
      const activityId = latestWorkspaceMutationId(threadActivities);
-@@ -4935,6 +4959,9 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -4935,6 +4958,9 @@ function ChatViewContent(props: ChatViewProps) {
    const handleStopBackgroundWork = useCallback(async () => {
      if (!activeThread) return;
      setIsStoppingBackgroundWork(true);
@@ -12263,7 +12262,7 @@ index a475230fe..7b3fd8920 100644
      const result = await interruptThreadTurn({
        environmentId,
        input: buildThreadTurnInterruptInput(activeThread),
-@@ -4944,6 +4971,7 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -4944,6 +4970,7 @@ function ChatViewContent(props: ChatViewProps) {
        // never reached the server, so liveness would hold "Stopping..."
        // forever. Only real failures toast.
        setIsStoppingBackgroundWork(false);
@@ -12271,7 +12270,7 @@ index a475230fe..7b3fd8920 100644
        if (!isAtomCommandInterrupted(result)) {
          const error = squashAtomCommandFailure(result);
          setThreadError(
-@@ -4952,7 +4980,7 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -4952,7 +4979,7 @@ function ChatViewContent(props: ChatViewProps) {
          );
        }
      }
@@ -12280,7 +12279,7 @@ index a475230fe..7b3fd8920 100644
    const backgroundLivenessBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
      if (activeBackgroundLiveness === null || !activeThread) {
        return null;
-@@ -5975,6 +6003,81 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -5975,6 +6002,81 @@ function ChatViewContent(props: ChatViewProps) {
        }
      }
  
@@ -12362,7 +12361,7 @@ index a475230fe..7b3fd8920 100644
      const resolvedSubmissionIntent =
        submissionIntent === "background" && isLocalDraftThread ? "background" : "foreground";
      if (
-@@ -6016,27 +6119,7 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -6016,27 +6118,7 @@ function ChatViewContent(props: ChatViewProps) {
  
      const messageIdForSend = newMessageId();
      const messageCreatedAt = new Date().toISOString();
@@ -12391,7 +12390,7 @@ index a475230fe..7b3fd8920 100644
      const optimisticAttachments = composerAttachmentsSnapshot.map((attachment) =>
        attachment.type === "image"
          ? {
-@@ -6357,7 +6440,11 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -6357,7 +6439,11 @@ function ChatViewContent(props: ChatViewProps) {
        }
      }
      sendInFlightRef.current = false;
@@ -12404,7 +12403,7 @@ index a475230fe..7b3fd8920 100644
        setDockedDraftHeroThreadKey((currentThreadKey) =>
          currentThreadKey === activeThreadKey ? null : currentThreadKey,
        );
-@@ -6367,10 +6454,16 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -6367,10 +6453,16 @@ function ChatViewContent(props: ChatViewProps) {
  
    const onInterrupt = async () => {
      if (!activeThread) return;
@@ -12421,7 +12420,7 @@ index a475230fe..7b3fd8920 100644
      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
        const error = squashAtomCommandFailure(result);
        setThreadError(
-@@ -7191,8 +7284,49 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7191,8 +7283,49 @@ function ChatViewContent(props: ChatViewProps) {
      addFiles: (files) => composerRef.current?.addDroppedFiles(files),
    });
  
@@ -12472,7 +12471,7 @@ index a475230fe..7b3fd8920 100644
        {rightPanelOpen && !shouldUseRightPanelSheet ? panelLayoutControls : null}
        <div
          className={cn(
-@@ -7204,10 +7338,12 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7204,6 +7337,7 @@ function ChatViewContent(props: ChatViewProps) {
          {/* Top bar */}
          <WorkspacePageHeader
            data-chat-header
@@ -12480,12 +12479,7 @@ index a475230fe..7b3fd8920 100644
            electron={isElectron}
            reserveNativeControls={reserveTitleBarControlInset && !inlineRightPanelOwnsTitleBar}
            className="relative bg-background"
-         >
-+          <NeoStarSky variant="topbar" />
-           {!rightPanelOpen ? panelLayoutControls : null}
-           <ChatHeader
-             {...(!supportsPullRequests || activeProjectRepository === null
-@@ -7218,10 +7354,20 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7218,10 +7352,20 @@ function ChatViewContent(props: ChatViewProps) {
              {...(routeKind === "draft" && draftId ? { draftId } : {})}
              activeThreadTitle={activeThread.title}
              isServerThread={isServerThread}
@@ -12506,7 +12500,7 @@ index a475230fe..7b3fd8920 100644
              activeProjectScripts={activeProject?.scripts}
              preferredScriptId={
                activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-@@ -7247,7 +7393,7 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7247,7 +7391,7 @@ function ChatViewContent(props: ChatViewProps) {
            }}
          />
          {/* Main content area with optional plan sidebar */}
@@ -12515,7 +12509,7 @@ index a475230fe..7b3fd8920 100644
            {/* Chat column */}
            <div
              className="relative flex min-h-0 min-w-0 flex-1 flex-col"
-@@ -7285,6 +7431,8 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7285,6 +7429,8 @@ function ChatViewContent(props: ChatViewProps) {
                  agentPanelModel={agentPanelModel}
                  onOpenAgents={addAgentsSurface}
                  key={activeThread.id}
@@ -12524,7 +12518,7 @@ index a475230fe..7b3fd8920 100644
                  isWorking={isWorking}
                  isPreparingWorktree={isPreparingWorktree}
                  activeTurnStartedAt={activeWorkStartedAt}
-@@ -7382,7 +7530,13 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7382,7 +7528,13 @@ function ChatViewContent(props: ChatViewProps) {
                          : undefined
                      }
                    >
@@ -12539,7 +12533,7 @@ index a475230fe..7b3fd8920 100644
                        <ComposerSurface.Host>
                          <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
                            <ChatComposer
-@@ -7405,6 +7559,11 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7405,6 +7557,11 @@ function ChatViewContent(props: ChatViewProps) {
                              phase={phase}
                              isConnecting={isConnecting}
                              isSendBusy={isSendBusy}
@@ -12551,7 +12545,7 @@ index a475230fe..7b3fd8920 100644
                              sendDisabledReason={
                                feedbackUploading
                                  ? "Sending feedback"
-@@ -7483,36 +7642,9 @@ function ChatViewContent(props: ChatViewProps) {
+@@ -7483,36 +7640,9 @@ function ChatViewContent(props: ChatViewProps) {
                            data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                            className="relative z-0"
                          >
@@ -12765,6 +12759,56 @@ index 18e197129..7a6543194 100644
        onChange={(event) => onRenameTitleChange(event.target.value)}
        onFocus={(event) => event.currentTarget.select()}
        onKeyDown={handleRenameKeyDown}
+diff --git a/apps/web/src/components/WorkspacePageHeader.tsx b/apps/web/src/components/WorkspacePageHeader.tsx
+index cd8a96273..c52bcce18 100644
+--- a/apps/web/src/components/WorkspacePageHeader.tsx
++++ b/apps/web/src/components/WorkspacePageHeader.tsx
+@@ -1,13 +1,21 @@
+ import type { ComponentPropsWithoutRef } from "react";
+ 
+ import { cn } from "../lib/utils";
++import { NeoStarSky } from "../neo/NeoStarfield";
+ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
+ 
+-/** Shared workspace top-bar geometry. */
++/**
++ * Shared workspace top-bar geometry. Under the Neo look every page is folded:
++ * the bar is a strip, the content a card, and whatever the page marks as
++ * `data-workspace-page-actions` sits in a notch at the card's top-right. Only
++ * the chat decides for itself, from the header-actions setting, and passes
++ * its own `data-neo-header-collapsed`.
++ */
+ export function WorkspacePageHeader({
+   electron = false,
+   reserveNativeControls = electron,
+   className,
++  children,
+   ...props
+ }: ComponentPropsWithoutRef<"header"> & {
+   readonly electron?: boolean;
+@@ -15,14 +23,20 @@ export function WorkspacePageHeader({
+ }) {
+   return (
+     <header
++      data-neo-page-header=""
++      data-neo-header-collapsed=""
+       className={cn(
+-        "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-3 pl-[calc(env(safe-area-inset-left)+0.75rem)] pr-[calc(env(safe-area-inset-right)+0.75rem)] transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none sm:pl-[calc(env(safe-area-inset-left)+1.25rem)] sm:pr-[calc(env(safe-area-inset-right)+1.25rem)]",
++        "relative flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-3 pl-[calc(env(safe-area-inset-left)+0.75rem)] pr-[calc(env(safe-area-inset-right)+0.75rem)] transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none sm:pl-[calc(env(safe-area-inset-left)+1.25rem)] sm:pr-[calc(env(safe-area-inset-right)+1.25rem)]",
+         electron && "drag-region",
+         reserveNativeControls && "wco:pr-[var(--workspace-native-controls-inset)]",
+         COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+         className,
+       )}
+       {...props}
+-    />
++    >
++      {/* The Neo look's star trail; it draws nothing under the other looks. */}
++      <NeoStarSky variant="topbar" />
++      {children}
++    </header>
+   );
+ }
 diff --git a/apps/web/src/components/chat/ChatComposer.tsx b/apps/web/src/components/chat/ChatComposer.tsx
 index cd69eceb7..ba2474d93 100644
 --- a/apps/web/src/components/chat/ChatComposer.tsx
@@ -16345,6 +16389,34 @@ index 46b2c8eb1..e939c8802 100644
          side={side}
          sideOffset={sideOffset}
        >
+diff --git a/apps/web/src/components/usage/UsagePage.tsx b/apps/web/src/components/usage/UsagePage.tsx
+index 7474bb9d6..b03f17025 100644
+--- a/apps/web/src/components/usage/UsagePage.tsx
++++ b/apps/web/src/components/usage/UsagePage.tsx
+@@ -120,7 +120,10 @@ export function UsagePage() {
+           <span className="truncate">{windowLabel}</span>
+         </WorkspaceBreadcrumbItem>
+       </WorkspaceBreadcrumb>
+-      <div className="ms-auto hidden min-w-0 items-center justify-end gap-2 lg:flex">
++      <div
++        className="ms-auto hidden min-w-0 items-center justify-end gap-2 lg:flex"
++        data-workspace-page-actions
++      >
+         <ToggleGroup
+           aria-label="Usage metric"
+           variant="segmented"
+@@ -155,7 +158,10 @@ export function UsagePage() {
+           <RefreshCwIcon className="size-3.5" />
+         </Button>
+       </div>
+-      <div className="ms-auto flex min-w-0 items-center justify-end gap-1 lg:hidden">
++      <div
++        className="ms-auto flex min-w-0 items-center justify-end gap-1 lg:hidden"
++        data-workspace-page-actions
++      >
+         <Select
+           value={metric}
+           onValueChange={(value) => {
 diff --git a/apps/web/src/composer-logic.test.ts b/apps/web/src/composer-logic.test.ts
 index 80b74f926..f63a4ef22 100644
 --- a/apps/web/src/composer-logic.test.ts
@@ -16900,10 +16972,10 @@ index b2556bb4c..1a9c3338e 100644
 +}
 diff --git a/apps/web/src/looks/neo.css b/apps/web/src/looks/neo.css
 new file mode 100644
-index 000000000..e9b625130
+index 000000000..3ae715b5e
 --- /dev/null
 +++ b/apps/web/src/looks/neo.css
-@@ -0,0 +1,758 @@
+@@ -0,0 +1,885 @@
 +/*
 + * Neo look. A warm near-black canvas with cream text, a single amber
 + * accent and one leaf green for success; bordered frosted-glass surfaces;
@@ -17171,6 +17243,20 @@ index 000000000..e9b625130
 +  border-radius: var(--control-radius);
 +}
 +
++/* Segmented toggle groups (usage: Cost / Tokens, the period, Model / Day) are
++   one bordered control like the split buttons, with the segments soft-cornered
++   inside it. */
++html[data-look="neo"] [data-slot="toggle-group"][data-variant="segmented"] {
++  padding: 2px;
++  border: 1px solid var(--contrast-border);
++  border-radius: var(--control-radius);
++  background-color: var(--toolbar-control);
++}
++
++html[data-look="neo"] [data-slot="toggle-group"][data-variant="segmented"] [data-slot="toggle"] {
++  border-radius: calc(var(--control-radius) - 2px);
++}
++
 +html[data-look="neo"] [data-slot="input"],
 +html[data-look="neo"] [data-slot="sidebar-input"],
 +html[data-look="neo"] [data-slot="textarea"],
@@ -17251,23 +17337,24 @@ index 000000000..e9b625130
 +  border-radius: var(--control-radius);
 +}
 +
-+/* Chat header: a hairline under the toolbar, pill controls. */
-+html[data-look="neo"] [data-chat-header] {
++/* Top bars (chat, settings, usage, pull requests): a hairline under the
++   toolbar, pill controls. */
++html[data-look="neo"] [data-neo-page-header] {
 +  border-bottom: 1px solid var(--contrast-border);
 +  background-color: var(--app-chrome-background);
 +}
 +
-+html[data-look="neo"] [data-chat-header] [data-slot="button"],
-+html[data-look="neo"] [data-chat-header] [data-slot="menu-trigger"],
-+html[data-look="neo"] [data-chat-header] [data-toolbar-control] {
++html[data-look="neo"] [data-neo-page-header] [data-slot="button"],
++html[data-look="neo"] [data-neo-page-header] [data-slot="menu-trigger"],
++html[data-look="neo"] [data-neo-page-header] [data-toolbar-control] {
 +  border: 1px solid var(--contrast-border);
 +  background-color: var(--toolbar-control);
 +  color: var(--contrast-toolbar-control-foreground);
 +}
 +
-+html[data-look="neo"] [data-chat-header] [data-slot="button"]:hover,
-+html[data-look="neo"] [data-chat-header] [data-slot="menu-trigger"]:hover,
-+html[data-look="neo"] [data-chat-header] [data-toolbar-control]:hover {
++html[data-look="neo"] [data-neo-page-header] [data-slot="button"]:hover,
++html[data-look="neo"] [data-neo-page-header] [data-slot="menu-trigger"]:hover,
++html[data-look="neo"] [data-neo-page-header] [data-toolbar-control]:hover {
 +  background-color: var(--toolbar-control-hover);
 +}
 +
@@ -17462,12 +17549,18 @@ index 000000000..e9b625130
 +   enough; the sidebar's grain lifts it a shade, so a flat bar next to it reads
 +   as a different surface.) The card's own border is the only edge, so the
 +   sidebar drops its right border line. */
-+html[data-look="neo"] [data-chat-header],
++html[data-look="neo"] [data-neo-page-header],
 +html[data-look="neo"] [data-chat-column-maximized-away],
-+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions],
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] [data-chat-header-actions],
 +html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
-+  [data-chat-header-actions]::before {
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions],
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-chat-header-actions]::before,
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]::before {
 +  background-color: var(--sidebar);
 +  background-image: var(--surface-grain);
 +  background-repeat: repeat;
@@ -17480,12 +17573,15 @@ index 000000000..e9b625130
 +
 +/* With the header actions folded away the top bar becomes a 14px strip and the
 +   content a card under it, like t3.chat with its sidebar collapsed: the strip
-+   carries nothing, the breadcrumb hides, and the toggles sit in a notch that
++   carries nothing, the breadcrumb hides, and the controls sit in a notch that
 +   drops from the strip over the card's top-right corner. The card's top edge
 +   curves down into the notch wall (the ::before inverted corner) and the notch
-+   rounds back out at its bottom-left. (The generic strip height for the Default
-+   look lives in neo/neo.css.) */
-+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] {
++   rounds back out at its bottom-left. Every page with the shared top bar folds
++   this way: the chat's actions cluster and a page's `data-workspace-page-actions`
++   (Restore defaults, the usage toggles, the pull requests' panel toggle) are the
++   notch hosts. (The generic strip height for the Default look lives in
++   neo/neo.css.) */
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] {
 +  --workspace-topbar-height: var(--neo-collapsed-strip);
 +  /* The controls keep the vertical place they have unfolded (a 1.75rem button
 +     centred in the full top bar); the notch starts at the card's top edge and
@@ -17494,16 +17590,16 @@ index 000000000..e9b625130
 +  --neo-notch-height: calc(
 +    (var(--neo-topbar-height) + 1.75rem) / 2 + 0.375rem - var(--neo-collapsed-strip)
 +  );
++  position: relative;
 +  overflow: visible;
++  border-bottom: 0;
 +  /* The header is an isolated stacking context (star trail) and the chat column
 +     after it is positioned too, so without this the notch paints underneath the
 +     card and its buttons cannot be clicked. */
 +  z-index: 40;
 +}
 +
-+html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
-+  [aria-label="Thread breadcrumb"] {
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] nav[aria-label] {
 +  display: none;
 +}
 +
@@ -17511,18 +17607,33 @@ index 000000000..e9b625130
 +   the panel toggles too, which float in its right part at their usual inset. Its
 +   bottom border continues the card's outline; the curved left edge is the swoosh
 +   below. */
-+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] [data-chat-header-actions] {
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] [data-chat-header-actions],
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions] {
 +  position: absolute;
 +  top: var(--neo-notch-controls-top);
 +  right: 0;
 +  z-index: 30;
 +  height: 1.75rem;
++  margin: 0;
 +  align-items: center;
++}
++
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] [data-chat-header-actions] {
 +  /* The toggle hugs the swoosh: the curve lands 6px inside the notch, right
 +     where the toggle's icon inset begins. No CSS border here: the outline is
 +     semi-transparent, so a border under the swoosh stroke would double up
 +     brighter. The ::after stroke draws the notch's bottom edge too. */
 +  padding: 0 calc(var(--workspace-controls-right, 0.75rem) + 4.125rem) 0 0;
++}
++
++/* A page's own cluster has no panel toggles to its right (the pull requests
++   page's cluster is the toggles), so it ends at the shared titlebar inset. */
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions] {
++  padding: 0 var(--workspace-controls-right, 0.75rem) 0 0.375rem;
 +}
 +
 +/* The swoosh, t3.chat's corner shape: two quarter arcs joined by a short
@@ -17535,48 +17646,133 @@ index 000000000..e9b625130
 +   hides the border row underneath. They hang from the actions cluster but
 +   start at the card's top edge, one strip below the header's top. */
 +html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
++  [data-neo-page-header][data-neo-header-collapsed]
 +  [data-chat-header-actions]::before,
 +html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
-+  [data-chat-header-actions]::after {
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-chat-header-actions]::after,
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]::before,
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]::after {
 +  content: "";
 +  position: absolute;
 +  top: calc(var(--neo-collapsed-strip) - var(--neo-notch-controls-top));
 +  left: calc(var(--neo-notch-height) * -1.5);
-+  width: calc(var(--neo-notch-height) * 10);
++  /* The swoosh masks are ten notch heights wide; a wider cluster (usage's
++     toggles) continues the fill and the bottom stroke with a plain second
++     mask layer to its right. A narrower one just runs off the window edge. */
++  width: max(calc(100% + var(--neo-notch-height) * 1.5), calc(var(--neo-notch-height) * 10));
 +  height: var(--neo-notch-height);
 +  pointer-events: none;
 +  mask-repeat: no-repeat;
-+  mask-size: calc(var(--neo-notch-height) * 10) var(--neo-notch-height);
 +}
 +
 +html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
-+  [data-chat-header-actions]::before {
-+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-chat-header-actions]::before,
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]::before {
++  mask-image:
++    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E"),
++    linear-gradient(#000, #000);
++  mask-size:
++    calc(var(--neo-notch-height) * 10) var(--neo-notch-height),
++    max(0px, calc(100% - var(--neo-notch-height) * 10)) var(--neo-notch-height);
++  mask-position:
++    left top,
++    right top;
 +}
 +
 +html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
-+  [data-chat-header-actions]::after {
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-chat-header-actions]::after,
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]::after {
 +  background-color: var(--contrast-border);
 +  /* One 1px stroke, the same weight and token as the card's border, running
 +     from the card's top edge through the curve and along the notch's bottom.
 +     Nothing else draws under it, so the line keeps a single alpha throughout. */
-+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
++  mask-image:
++    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E"),
++    linear-gradient(#000, #000);
++  mask-size:
++    calc(var(--neo-notch-height) * 10) var(--neo-notch-height),
++    max(0px, calc(100% - var(--neo-notch-height) * 10)) 1px;
++  mask-position:
++    left top,
++    right bottom;
++}
++
++/* Everything in a page's notch stays inside its 1.75rem: the usage toggle
++   groups shrink to it instead of overlapping the notch's bottom edge. */
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]
++  [data-slot="toggle-group"][data-variant="segmented"] {
++  padding: 1px;
 +}
 +
 +html[data-look="neo"]
-+  [data-chat-header][data-neo-header-collapsed]
++  [data-neo-page-header][data-neo-header-collapsed]
++  [data-workspace-page-actions]
++  [data-slot="toggle"] {
++  height: calc(1.75rem - 4px);
++  min-height: 0;
++  padding-block: 0;
++}
++
++/* The pull requests scroller fades content under the bar; folded, the bar is
++   a strip and the card's own top border would fade with it. */
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] + .topbar-scroll-fade {
++  -webkit-mask-image: none;
++  mask-image: none;
++}
++
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]
 +  [data-workspace-titlebar-controls] {
 +  top: var(--neo-notch-controls-top);
 +  height: 1.75rem;
 +}
 +
-+html[data-look="neo"] [data-chat-header][data-neo-header-collapsed] ~ [data-chat-workspace] {
++/* The card under the strip: bordered on three sides, both top corners round,
++   on the paper grain. The chat's workspace and every other page's content
++   (the element after its header) alike. */
++html[data-look="neo"] [data-neo-page-header][data-neo-header-collapsed] ~ [data-chat-workspace],
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]:not([data-chat-header])
++  + * {
++  background-color: var(--background);
++  background-image:
++    radial-gradient(60rem 22rem at 50% -8rem, rgb(242 162 110 / 7%), transparent 70%),
++    radial-gradient(rgb(241 166 41 / 8%) 1px, transparent 1.4px);
++  background-size:
++    100% 100%,
++    26px 26px;
++  border-top: 1px solid var(--contrast-border);
++  border-left: 1px solid var(--contrast-border);
 +  border-right: 1px solid var(--contrast-border);
 +  border-top-left-radius: 1.25rem;
++  border-top-right-radius: 1.25rem;
++}
++
++/* Under a notch the card's top-right corner is square; the swoosh draws the curve. */
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]:has(
++    [data-chat-header-actions],
++    [data-workspace-page-actions]
++  )
++  ~ [data-chat-workspace],
++html[data-look="neo"]
++  [data-neo-page-header][data-neo-header-collapsed]:not([data-chat-header]):has(
++    [data-workspace-page-actions]
++  )
++  + * {
 +  border-top-right-radius: 0;
 +}
 +
@@ -17588,7 +17784,7 @@ index 000000000..e9b625130
 +   shorter than the right notch and its masks scale down to match. It hangs off
 +   the fixed cluster, the one element that knows where the controls are; the
 +   cluster lives outside the header, hence the :has() on the folded header. */
-+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
 +  [data-sidebar-control][data-sidebar-visible="false"] {
 +  /* Toggle bottom (centred 1.75rem button in the cluster) plus 6px of air, from the card's top. */
 +  --neo-left-notch-height: calc(
@@ -17596,9 +17792,9 @@ index 000000000..e9b625130
 +  );
 +}
 +
-+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
 +  [data-sidebar-control][data-sidebar-visible="false"]::before,
-+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
 +  [data-sidebar-control][data-sidebar-visible="false"]::after {
 +  content: "";
 +  position: absolute;
@@ -17618,7 +17814,7 @@ index 000000000..e9b625130
 +  mask-size: calc(var(--neo-left-notch-height) * 10) var(--neo-left-notch-height);
 +}
 +
-+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
 +  [data-sidebar-control][data-sidebar-visible="false"]::before {
 +  background-color: var(--sidebar);
 +  background-image: var(--surface-grain);
@@ -17627,7 +17823,7 @@ index 000000000..e9b625130
 +  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Crect width='16' height='1'/%3E%3Cpath d='M0 0h16c7.4 0 13.4 6 13.4 13.4v13.2c0 7.4 6 13.4 13.4 13.4H400V0Z'/%3E%3C/g%3E%3C/svg%3E");
 +}
 +
-+html[data-look="neo"]:has([data-chat-header][data-neo-header-collapsed])
++html[data-look="neo"]:has([data-neo-page-header][data-neo-header-collapsed])
 +  [data-sidebar-control][data-sidebar-visible="false"]::after {
 +  background-color: var(--contrast-border);
 +  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cg transform='skewX(30)'%3E%3Cpath d='M0 0.5h16c7.4 0 13.4 6 13.4 13.4v12.2c0 7.4 6 13.4 13.4 13.4H400' fill='none' stroke='black' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
@@ -17636,8 +17832,11 @@ index 000000000..e9b625130
 +/* Under that notch the card's top-left corner is square and bordered, like its
 +   top-right under the panel toggles. */
 +html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
-+  [data-chat-header][data-neo-header-collapsed]
-+  ~ [data-chat-workspace] {
++  [data-neo-page-header][data-neo-header-collapsed]
++  ~ [data-chat-workspace],
++html[data-look="neo"]:has([data-sidebar-control][data-sidebar-visible="false"])
++  [data-neo-page-header][data-neo-header-collapsed]:not([data-chat-header])
++  + * {
 +  border-left: 1px solid var(--contrast-border);
 +  border-top-left-radius: 0;
 +}
@@ -26068,6 +26267,18 @@ index 4476616a1..09c78a581 100644
    return null;
  }
  
+diff --git a/apps/web/src/routes/_chat.pull-requests.tsx b/apps/web/src/routes/_chat.pull-requests.tsx
+index abe76a653..4fd83edb7 100644
+--- a/apps/web/src/routes/_chat.pull-requests.tsx
++++ b/apps/web/src/routes/_chat.pull-requests.tsx
+@@ -1564,6 +1564,7 @@ function PullRequestsRouteView() {
+       // edge.
+       className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
+       data-workspace-titlebar-controls
++      data-workspace-page-actions
+     >
+       {panelToggleControls}
+     </div>
 diff --git a/apps/web/src/routes/pet.tsx b/apps/web/src/routes/pet.tsx
 new file mode 100644
 index 000000000..8a4f429b3
@@ -26133,7 +26344,7 @@ index 000000000..e8292af76
 +  component: SettingsPetsRoute,
 +});
 diff --git a/apps/web/src/routes/settings.tsx b/apps/web/src/routes/settings.tsx
-index 5e921fca5..90eca21c6 100644
+index 5e921fca5..411bbe8d7 100644
 --- a/apps/web/src/routes/settings.tsx
 +++ b/apps/web/src/routes/settings.tsx
 @@ -15,6 +15,7 @@ import { Button } from "../components/ui/button";
@@ -26144,6 +26355,15 @@ index 5e921fca5..90eca21c6 100644
  
  function RestoreDefaultsButton({ onRestored }: { onRestored: () => void }) {
    const { changedSettingLabels, restoreDefaults } = useSettingsRestore(onRestored);
+@@ -75,7 +76,7 @@ function SettingsContentLayout() {
+           <div className="flex w-full items-center gap-3">
+             <SettingsBreadcrumb pathname={location.pathname} />
+             {showRestoreDefaults ? (
+-              <div className="ms-auto flex items-center gap-2">
++              <div className="ms-auto flex items-center gap-2" data-workspace-page-actions>
+                 <RestoreDefaultsButton onRestored={handleRestored} />
+               </div>
+             ) : null}
 @@ -83,6 +84,15 @@ function SettingsContentLayout() {
          </WorkspacePageHeader>
  
@@ -73599,10 +73819,10 @@ index 97f1f5cb1..1b96f477b 100644
  On web and desktop, changing the project from a new thread keeps the current environment when that
 diff --git a/docs/user/neo.md b/docs/user/neo.md
 new file mode 100644
-index 000000000..f424b85bd
+index 000000000..481ff8632
 --- /dev/null
 +++ b/docs/user/neo.md
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,173 @@
 +# T3 Neo
 +
 +T3 Neo is a fork of T3 Code that follows every stable T3 Code release and adds a few things on
@@ -73647,7 +73867,10 @@ index 000000000..f424b85bd
 +  with rounded top corners. The double-chevron and the panel toggles sit in a small notch at the
 +  card's top-right corner; press the chevron there to unfold. With the sidebar hidden, the window
 +  controls and the sidebar button get a matching notch at the top-left corner; the sidebar button
-+  keeps its place next to the window controls whether the sidebar is open or hidden.
++  keeps its place next to the window controls whether the sidebar is open or hidden. Settings,
++  Usage and Pull Requests always look this way under the Neo look, whatever the switch says:
++  their top bar is the strip, the page a card, and their controls (Restore defaults, the usage
++  toggles, the panel toggle) sit in the notch.
 +- **Branch manager position** moves the workspace and branch controls from below the message box
 +  into the header next to **Open**, which gives the composer more room. With **Show the branch
 +  manager move pill** on, an amber pill next to the workspace control moves it up, and the same

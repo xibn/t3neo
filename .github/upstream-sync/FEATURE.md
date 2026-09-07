@@ -383,6 +383,15 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
   `data-neo-header-collapsed`): modelled on a browser-tab header. Under Neo the top bar becomes
   a 14px strip (`--workspace-topbar-height: 0.875rem`, `overflow: visible`) that carries
   nothing: the thread breadcrumb (`[aria-label="Thread breadcrumb"]`) is hidden, and the header
+  Every `WorkspacePageHeader` carries `data-neo-page-header` and `data-neo-header-collapsed`
+  unconditionally (the chat overrides the latter from its setting), so Settings, Usage, Pull
+  Requests and the empty-thread pages are always folded under the Neo look: their `nav[aria-label]`
+  breadcrumb hides, the element after the header becomes the card (`+ *`, bordered on three
+  sides, both top corners round unless a notch host exists), and the page's
+  `data-workspace-page-actions` cluster (settings' Restore defaults, usage's toggle groups and
+  refresh, the pull requests' panel-toggle cluster) is the notch host with the swoosh, padded
+  only by the titlebar inset. Segmented toggle groups get the Neo pill treatment (bordered,
+  `--control-radius`, `--toolbar-control` fill). The chat's
   actions cluster (`[data-chat-header-actions]`, which holds the show/hide toggle) and the
   titlebar panel controls (`[data-workspace-titlebar-controls]`) keep the vertical place they
   have unfolded: `top: --neo-notch-controls-top` = a 1.75rem button centred in the full top

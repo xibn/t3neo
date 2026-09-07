@@ -55,6 +55,10 @@ require_grep "button:has(svg.lucide-chevron-down)" apps/web/src/looks/neo.css \
   "the composer footer chevron divider is not drawn on the button"
 require_grep "data-popup-side\]\[data-popup-open\]" apps/web/src/neo/neo.css \
   "chevrons do not rotate only while their popup is open"
+require_grep "data-neo-page-header" apps/web/src/components/WorkspacePageHeader.tsx \
+  "the shared page header does not fold under the Neo look"
+require_grep "data-workspace-page-actions" apps/web/src/routes/settings.tsx \
+  "the settings page has no notch host for Restore defaults"
 require_grep "data-neo-header-collapsed" apps/web/src/looks/neo.css \
   "the collapsed top bar has no Neo card outline"
 require_grep '"immediate"' apps/web/src/composer-logic.ts \
