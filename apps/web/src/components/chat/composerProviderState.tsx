@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 
 import type { buttonVariants } from "../ui/button";
 import type { DraftId } from "../../composerDraftStore";
+import { applyNeoModelOptionDefaults, type NeoModelDefaultPrefs } from "../../neo/neoModelDefaults";
 import { getProviderModelCapabilities } from "../../providerModels";
 import type { ComposerControlSize } from "./ComposerControl";
 import { shouldRenderTraitsControls, TraitsMenuContent, TraitsPicker } from "./TraitsPicker";
@@ -29,6 +30,8 @@ export type ComposerProviderStateInput = {
   promptInjectionState?: ComposerPromptInjectionState;
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined;
   planModeEnabled: boolean;
+  /** Fork policy for a new chat's context-window and fast-mode defaults. */
+  neoModelDefaults?: NeoModelDefaultPrefs;
 };
 
 export type ComposerPromptInjectionState = "none" | "ultrathink";
@@ -94,11 +97,17 @@ function resolveComposerOptionSelections(
   provider: ProviderDriverKind,
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined,
   planModeEnabled: boolean,
+  neoModelDefaults?: NeoModelDefaultPrefs,
 ): {
   caps: ModelCapabilities;
   selections: ReadonlyArray<ProviderOptionSelection> | undefined;
 } {
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const baseCaps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  // The fork's new-chat defaults bias the descriptors before the implicit
+  // fast-mode selection is derived from them, so both agree.
+  const caps = neoModelDefaults
+    ? applyNeoModelOptionDefaults(baseCaps, neoModelDefaults)
+    : baseCaps;
   return { caps, selections: withImplicitFastModeDefault(caps, modelOptions) };
 }
 
@@ -110,6 +119,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
     modelOptions,
     promptInjectionState = "none",
     planModeEnabled,
+    neoModelDefaults,
   } = input;
   if (provider === "opencode") {
     const normalizedModel = normalizeModelSlug(model, provider);
@@ -132,6 +142,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
     provider,
     modelOptions,
     planModeEnabled,
+    neoModelDefaults,
   );
   const descriptors = getProviderOptionDescriptors({ caps, selections });
   const primarySelectDescriptor = descriptors.find(

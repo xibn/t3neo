@@ -30,6 +30,37 @@ messages while disconnected. Uploads resume when you reconnect. Drafts and queue
 messages survive app restarts. Signing out of T3 Connect keeps that work on your
 device until you sign back into the same account.
 
+## Queued messages
+
+On web and desktop, sending a message while the agent is working on a turn queues it instead of
+interrupting the agent. Queued messages wait until the current turn finishes, then send one after
+another in the order you wrote them. Each queued message starts its own turn, so the agent reads it
+with the finished work in context. Queued messages are stored on the device you sent them from and
+survive a reload; they send while the app is open and connected to the environment. Attachments
+stay uploaded until the message is sent or deleted.
+
+The send button becomes **Queue** while a turn runs and `Enter` queues the draft. The queue appears
+above the composer with each waiting message. Use **Send now** on a message to hand it to the
+running turn immediately, **Send all now** to release the whole queue, or the trash button to delete
+a message. Drag the handle at the front of a message, or focus it and use the arrow keys, to change
+the order. From the composer, open the arrow next to **Queue** and choose **Send now**, or press
+`Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux, to send the current draft into the
+running turn without queueing it.
+
+The pencil button takes a queued message back into the composer so you can change it and send or
+queue it again. If the composer already holds a draft, that draft moves to the back of the queue
+first. Text, pasted images, uploaded images and attached files all come back with the message;
+uploaded images are downloaded again for their thumbnail and upload afresh when you send.
+
+Stopping a turn also pauses its queue, so the next queued message does not start on its own. The
+queue header says so and offers **Resume**. Resume, send a message from the composer, or use
+**Send now** on a queued message to continue; once that turn finishes, the rest of the queue sends
+as before. Editing a queued message, or moving a draft into the queue, leaves a paused queue paused.
+
+If a queued message fails to send, it stays in the queue with the error and a **Retry** action.
+
+On mobile, a message sent while the agent works still goes straight into the running turn.
+
 ## Custom models
 
 On web and desktop, use Settings → Providers → **Models** to add an unlisted model with a custom

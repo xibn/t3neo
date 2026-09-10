@@ -117,9 +117,10 @@ hidden and replaced by a short note; only the appearance mode tiles (system, lig
 
 - **Canvas and text.** Dark appearance: a warm near-black canvas (`#110f0d`), slightly darker
   chrome/sidebar (`#0c0b0a`), warm dark cards (`#171412`), cream text (`#ffedd9`), muted text in
-  warm gray (`#a4958a`). Light appearance: a warm sand canvas (`#ede5da`), darker sand chrome
-  and sidebar (`#e4dbcd`), cream cards (`#f6f0e7`), near-black brown ink (`#17110d`), muted text
-  `#5f5044`; borders at 16% and input borders at 26% of the ink so it reads with real contrast.
+  warm gray (`#b5a698`); borders at 14% and input borders at 16% of the cream. Light appearance:
+  a warm sand canvas (`#e3d9cb`), darker sand chrome (`#dad0c1`) and sidebar (`#d1c6b5`), cream
+  cards (`#ede5da`), near-black brown ink (`#17110d`), muted text `#5f5044`; borders at 20% and
+  input borders at 30% of the ink so it reads with real contrast.
 - **One accent.** Amber orange: `#f2a26e` on dark, `#c8641f` on light. It drives primary buttons,
   the send/queue action, focus rings, switches, selection, and the warning/update roles. No blue
   anywhere, including the sidebar: sidebar tokens (`--sidebar-*`) are set to the same warm
@@ -129,25 +130,29 @@ hidden and replaced by a short note; only the appearance mode tiles (system, lig
   behind the branding. Both sidebar toggles (`SidebarChrome` and `AppSidebarLayout`'s
   `SidebarControl`) pass `!neoLook` into the stage-backdrop resolution, so under Neo they keep the
   plain ghost hover in both sidebar states instead of the lighter white-on-artwork hover.
-- **Flat, bordered surfaces.** No glass blur or translucency. Cards, popups, dialogs, tooltips,
-  toasts, and the composer are solid surfaces with a 1px hairline border and a soft, deep shadow.
-- **Pill shapes.** Buttons, toggles, badges, toolbar controls, menu triggers, sidebar rows, and
-  tooltips are fully rounded. Inputs use a 0.75rem radius; cards and popups 1rem; the composer
-  18px; dialogs 1.25rem.
+- **Bordered frosted surfaces.** Cards, popups, dialogs, tooltips, toasts, and the composer are
+  bordered cards with a 1px hairline border and a soft, deep shadow. The composer, header, and
+  popups frost what lies behind them (`--glass-blur: 14px`, saturation 1.08); the opacity itself
+  follows Settings → Appearance → Glass opacity. No second shadow under a popup: the select's
+  inner glass shell inherits the popup's corner.
+- **Softly squared shapes.** Buttons, toggles, badges, toolbar controls, menu triggers, and
+  sidebar rows share one soft corner (`--control-radius: 0.625rem`); nothing is a pill. Inputs
+  use a 0.75rem radius; cards and popups 1rem (`--radius: 0.875rem`); the composer 18px; dialogs
+  1.25rem.
 - **Typography.** A grotesk sans stack (`"Schibsted Grotesk", "Inter Tight", "Inter",
 "Helvetica Neue", ...`) with slightly negative tracking; headings light (h1 weight 300, h2 400,
   letter-spacing -0.03em); a monospace stack led by `"JetBrains Mono"`. Small section labels are
   uppercase, 0.68rem, semibold, letter-spacing 0.08em.
 - **Chrome.** The sidebar is a solid column with a hairline right edge. The chat header has a
-  hairline bottom border and pill controls with borders. A faint static amber radial glow sits
+  hairline bottom border and bordered controls. A faint static amber radial glow sits
   behind the top of the workspace.
 - **Motion.** Only stepped, low-frequency animation: star twinkle uses `steps()` with long
   intervals and is disabled under `prefers-reduced-motion`. No continuously repainting effects.
 - **Everything else stays functional and familiar**: same layout, same components, same
   interactions. The look must not remove or move features.
-- **Details that matter.** Tooltips are softly rounded (0.85rem), never pills: the sidebar thread
+- **Details that matter.** Tooltips are softly rounded (0.85rem): the sidebar thread
   preview carries several lines. Split buttons (`[data-slot="group"]`: Open, Commit, scripts) are
-  one pill: the group owns border and radius, the segments inside are flat with a hairline
+  one control: the group owns border and radius, the segments inside are flat with a hairline
   separator. The composer send button uses the accent, not the environment stage artwork.
 
 ## Implementation
@@ -220,7 +225,7 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
   traits (context window, fast mode), and Build/Plan and access controls look. `ChatComposer`
   sets `data-neo-agent-controls={agentControlsStyle}` on the footer (`[data-chat-composer-footer]`);
   each control carries upstream's `data-composer-control` (`ComposerControl.tsx`). The CSS block
-  "Agent controls" in `neo/neo.css` gives `topbar` controls the header pill (1px
+  "Agent controls" in `neo/neo.css` gives `topbar` controls the header control (1px
   `var(--contrast-border)`, `var(--control-radius)`, `var(--toolbar-control)` surface, hover
   `var(--toolbar-control-hover)`; an `[data-active]` control such as Plan mode keeps the filled
   accent), hides the hairline separators between them and widens the gap to 0.375rem. `default`
@@ -316,7 +321,7 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
    in CSS). The inset behind it is the darker frame colour (`background-color: var(--sidebar)`)
    and the body is the lighter surface (`var(--background)`), so the frame shows through the
    corner as well. The sidebar
-   column pins `--sidebar` to `--neo-sidebar` (`#0c0b0a` dark, `#dcd2c3` light) on
+   column pins `--sidebar` to `--neo-sidebar` (`#0c0b0a` dark, `#d1c6b5` light) on
    `[data-app-sidebar]` because themes and the dark scheme reassign it at the root; it must never
    be lighter than the content body. The thread list's "Working" status renders in the accent,
    not sky blue.
@@ -459,24 +464,24 @@ systemFamily })`, and `resolveSansFamilyLabel(preference, choices)`. The choices
    `.neo-usage-card`) listing every reported window with a meter, the last turn's tokens and
    cost, and this calendar month's spending per provider plus the total from `useUsage`. It is
    hidden with the usage badges setting.
-3. **Server.** `apps/server/src/orchestration/turnUsage.ts` normalizes provider rate-limit
-   snapshots (`normalizeRateLimitSnapshot`: Claude `rate_limit_info` with utilization 0..1, Codex
-   `primary`/`secondary` windows with `usedPercent`; `usedPercent` rounded to one decimal; every
-   window kept in `windows`, tightest first), `buildTurnUsagePayload` (adds `provider` and
-   `windows` to the payload), and `turnUsageActivity`. `ProviderRuntimeIngestion` tracks the latest
-   rate limits per provider instance (`account.rate-limits.updated`), snapshots them when a turn
-   starts, and appends a `provider.turn.usage` activity (kind constant `TURN_USAGE_ACTIVITY_KIND`)
-   when the turn completes, carrying `usage`, `totalCostUsd`, and the before/after limits.
+3. **Server.** `apps/server/src/orchestration/turnUsage.ts` reads the rate-limit updates the
+   adapters already normalize (`account.rate-limits.updated` carries upstream's
+   `ProviderUsageLimitsUpdate`: `limits.windows` with a stable `id`, `label`, `usedPercent`,
+   optional ISO `resetsAt`; `normalizeRateLimitSnapshot` keeps `usedPercent` to one decimal and
+   every window in `windows`, tightest first; `mergeRateLimitSnapshots` folds a sparse update, such
+   as Claude's one-window `rate_limit_event`, onto the windows the account already reported, keyed
+   by window id), `buildTurnUsagePayload` (adds `provider` and `windows` to the payload), and
+   `turnUsageActivity`. `ProviderRuntimeIngestion` tracks the latest merged snapshot per provider
+   instance, snapshots it when a turn starts, and appends a `provider.turn.usage` activity (kind
+   constant `TURN_USAGE_ACTIVITY_KIND`) when the turn completes, carrying `usage`, `totalCostUsd`,
+   and the before/after limits.
    A turn that started with no baseline (first turn since the server saw the account) adopts the
    first rate-limit report that arrives while it runs as its baseline (keyed by thread:turn in
    `turnRateLimitBaselines`), so a one-request turn reads "<1%" rather than an unknown share. If
    there is still no baseline at completion, `windowDeltaPercent` is the post-turn `usedPercent`
    when that is still under 1 % (the turn's share is bounded by it), else null. The client never leads with the cost while a plan window was reported: an unknown share
    reads **Included · {plan}** and the cost estimate moves into the detail.
-   Codex specifics: `normalizeRateLimitSnapshot` unwraps `rateLimits` up to twice, because the
-   Codex adapter forwards the whole `account/rateLimits/updated` params (themselves
-   `{ rateLimits: snapshot }`) under a `rateLimits` key; and since Codex puts no usage on
-   `turn.completed`, the ingestion sums the per-call `last*` counts of every
+   Codex specifics: since Codex puts no usage on `turn.completed`, the ingestion sums the per-call `last*` counts of every
    `thread.token-usage.updated` event during the turn (`addTurnTokens`, keyed by thread:turn) and
    uses that sum as `usage` when the completion event carries none.
    This is the only server change; it emits an activity through the existing activity path
@@ -588,11 +593,13 @@ item once upstream ships the same fix. Keep each one minimal and behavior-identi
    session/load".
 3. **Cursor plan limit as a rate-limit report.** Cursor never reports usage windows; when the plan
    is exhausted it answers a prompt with "Upgrade your plan to continue". `CursorAcpSupport.ts`
-   exports `isCursorPlanLimitReply(text)` and `cursorPlanLimitRateLimits` (`{ windows: [{ label:
-"Plan Limit", usedPercent: 100 }], status: "rejected" }`); `CursorAdapter` emits an
-   `account.rate-limits.updated` event with that payload when a text reply matches (before the turn
-   completes, so the usage badge reads "Limit Reached"), remembers it on the session context
-   (`planLimitReached`), and withdraws it with `rateLimits: null` on the next real reply. Test in
+   exports `isCursorPlanLimitReply(text)` and `cursorPlanLimitRateLimits` (a
+   `ProviderUsageLimitsUpdate` with one window `{ id: "plan", kind: "other", label: "Plan Limit",
+usedPercent: 100 }`); `CursorAdapter` emits an `account.rate-limits.updated` event with
+   `{ limits }` when a text reply matches (before the turn completes, so the usage badge reads
+   "Limit Reached"), remembers it on the session context (`planLimitReached`), and withdraws it
+   with the same window at `usedPercent: 0` (`cursorPlanLimitClearedRateLimits`) on the next real
+   reply. Test in
    `CursorAdapter.test.ts`: "reports a full plan window when Cursor answers with its upgrade
    notice".
 

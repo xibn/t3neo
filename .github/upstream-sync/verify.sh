@@ -332,6 +332,9 @@ require_files \
   .github/ISSUE_TEMPLATE/neo-bug.yml \
   .github/ISSUE_TEMPLATE/neo-feature.yml
 
+# Fork tests first, then the upstream siblings of files the fork touches:
+# those are how a rename or a new upstream case breaks the release's
+# quality job without any fork test noticing.
 vp test run \
   apps/web/src/messageQueueStore.test.ts \
   apps/web/src/components/ChatView.logic.test.ts \
@@ -345,17 +348,44 @@ vp test run \
   apps/web/src/neo/turnUsage.test.ts \
   apps/web/src/neo/processGroups.test.ts \
   apps/web/src/neo/pets/petActivity.test.ts \
+  apps/web/src/neo/pets/petGalleries.test.ts \
+  apps/web/src/neo/pets/importedPets.test.ts \
+  apps/web/src/neo/pets/spriteSheet.test.ts \
   apps/desktop/src/updates/updateChannels.test.ts \
+  apps/desktop/src/ipc/methods/pet.test.ts \
   apps/server/src/orchestration/turnUsage.test.ts \
   apps/server/src/diagnostics/ProcessOrigins.test.ts \
   apps/server/src/diagnostics/ProcessDiagnostics.test.ts \
+  apps/server/src/diagnostics/ListenerProcesses.test.ts \
   apps/server/src/provider/acp/AcpJsonRpcConnection.test.ts \
   apps/server/src/provider/Layers/CursorAdapter.test.ts \
-  packages/effect-acp/src/protocol.test.ts
+  packages/effect-acp/src/protocol.test.ts \
+  apps/web/src/branding.test.ts \
+  apps/web/src/themeBoot.test.ts \
+  apps/web/src/themePalette.test.ts \
+  apps/web/src/session-logic.test.ts \
+  apps/web/src/lib/attachmentUploadQueue.test.ts \
+  apps/web/src/components/desktopUpdate.logic.test.ts \
+  apps/web/src/components/desktopUpdate.toast.test.tsx \
+  apps/web/src/components/chat/ChatHeader.test.ts \
+  apps/web/src/components/chat/MessagesTimeline.logic.test.ts \
+  apps/web/src/components/settings/SettingsPanels.logic.test.ts \
+  apps/web/src/components/settings/settingsSearch.test.ts \
+  apps/web/src/components/sidebar/SidebarUpdatePill.test.tsx \
+  apps/web/src/neo/pets/AsciiAnimation.test.ts \
+  apps/web/src/neo/pets/WukongPet.test.ts \
+  apps/desktop/src/app/DesktopAppIdentity.test.ts \
+  apps/desktop/src/app/DesktopEnvironment.test.ts \
+  apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.test.ts \
+  apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.activity.test.ts \
+  apps/server/src/provider/Layers/ClaudeAdapter.test.ts \
+  apps/server/src/provider/Layers/CodexSessionRuntime.test.ts \
+  apps/server/src/terminal/Manager.test.ts \
+  scripts/build-desktop-artifact.test.ts
 
 vp run --filter @t3tools/web typecheck
 vp run --filter @t3tools/desktop typecheck
-vp run --filter @t3tools/server typecheck
+vp run --filter t3 typecheck
 vp run --filter @t3tools/contracts typecheck
 
 vp lint --report-unused-disable-directives \

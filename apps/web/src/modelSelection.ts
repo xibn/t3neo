@@ -17,6 +17,7 @@ import {
   resolveSelectableModel,
 } from "@t3tools/shared/model";
 import { getComposerProviderState } from "./components/chat/composerProviderState";
+import { readNeoModelDefaultPrefs } from "./neo/neoModelDefaults";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
@@ -434,6 +435,7 @@ export function resolveAppModelSelectionState(
       models: entry.models,
       modelOptions: selectedEntry ? selection.options : undefined,
       planModeEnabled: settings.planModeEnabled,
+      neoModelDefaults: readNeoModelDefaultPrefs(),
     });
 
     return createModelSelection(entry.instanceId, model, modelOptionsForDispatch);

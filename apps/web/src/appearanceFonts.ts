@@ -16,6 +16,7 @@ import {
   MIN_INTERFACE_FONT_SIZE,
   MIN_PROMPT_FONT_SIZE,
 } from "@t3tools/contracts";
+import type { AppearanceLook } from "./appearanceLook";
 
 export const DEFAULT_SANS_FONT_STACK =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
@@ -26,6 +27,68 @@ export const DEFAULT_CODE_FONT_STACK =
   '"SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace';
 
 export const TYPOGRAPHY_ADVANCED_STORAGE_KEY = "t3code:typography-advanced";
+
+/** The Neo look's interface face, bundled by `main.tsx` so it exists on every machine. */
+export const NEO_SANS_FAMILY = "Schibsted Grotesk";
+
+/**
+ * Explicit choice of the platform UI face. `system-ui` is a CSS keyword, so it
+ * stays valid everywhere; the face it draws with (SF Pro, Segoe UI, ...) is
+ * not CSS-nameable on every platform.
+ */
+export const SYSTEM_SANS_FAMILY = "system-ui";
+
+export interface FontFamilyChoice {
+  /** Persisted preference value; empty means the current look's default. */
+  readonly value: string;
+  /** Name shown in the picker and on the trigger. */
+  readonly family: string;
+  /** Family list the row renders itself in. */
+  readonly css: string;
+  readonly badge: string;
+  readonly badgeTone: "accent" | "muted";
+}
+
+/**
+ * The pinned rows at the top of the interface font picker: the Neo face and
+ * the platform face, always both one click away. Which one an unset
+ * preference means follows the look, so the empty value moves between them.
+ */
+export function resolveSansFontChoices(input: {
+  readonly look: AppearanceLook;
+  readonly systemFamily: string;
+}): readonly FontFamilyChoice[] {
+  const neo = {
+    family: NEO_SANS_FAMILY,
+    css: `"${NEO_SANS_FAMILY}"`,
+    badge: "Neo Default",
+    badgeTone: "accent",
+  } as const;
+  const system = {
+    family: input.systemFamily,
+    css: SYSTEM_SANS_FAMILY,
+    badge: "Default",
+    badgeTone: "muted",
+  } as const;
+  return input.look === "neo"
+    ? [
+        { ...neo, value: "" },
+        { ...system, value: SYSTEM_SANS_FAMILY },
+      ]
+    : [
+        { ...system, value: "" },
+        { ...neo, value: NEO_SANS_FAMILY },
+      ];
+}
+
+/** Display name of a sans preference: pinned choices by name, anything else as typed. */
+export function resolveSansFamilyLabel(
+  preference: string,
+  choices: readonly FontFamilyChoice[],
+): string {
+  const trimmed = preference.trim();
+  return choices.find((choice) => choice.value === trimmed)?.family ?? trimmed;
+}
 
 /**
  * Simple typography treats the terminal as another monospace surface. In

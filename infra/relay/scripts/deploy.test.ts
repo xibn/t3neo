@@ -187,6 +187,8 @@ describe("release workflow tracing config propagation", () => {
       const workflowPath = yield* path.fromFileUrl(
         new URL("../../../.github/workflows/release.yml", import.meta.url),
       );
+      // T3 Neo ships without upstream's release workflow; nothing to check then.
+      if (!(yield* fileSystem.exists(workflowPath))) return;
       const workflow = yield* fileSystem.readFileString(workflowPath);
 
       expect(workflow).not.toContain("client_tracing_token:");

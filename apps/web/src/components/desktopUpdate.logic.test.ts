@@ -14,6 +14,7 @@ import {
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
+import { NEO_REPOSITORY_URL } from "../neo/neoRepository";
 
 const baseState: DesktopUpdateState = {
   enabled: true,
@@ -181,14 +182,12 @@ describe("getDesktopUpdateActionError", () => {
 
 describe("desktop update UI helpers", () => {
   it("builds the stable release URL for a downloaded version", () => {
-    expect(getDesktopUpdateReleaseUrl("0.0.30")).toBe(
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30",
-    );
+    expect(getDesktopUpdateReleaseUrl("0.0.30")).toBe(`${NEO_REPOSITORY_URL}/releases/tag/v0.0.30`);
   });
 
   it("builds the nightly release URL without dropping its version suffix", () => {
     expect(getDesktopUpdateReleaseUrl("0.0.30-nightly.20260728.931")).toBe(
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30-nightly.20260728.931",
+      `${NEO_REPOSITORY_URL}/releases/tag/v0.0.30-nightly.20260728.931`,
     );
   });
 
@@ -198,9 +197,7 @@ describe("desktop update UI helpers", () => {
   });
 
   it("builds the release history URL", () => {
-    expect(getDesktopUpdateReleaseHistoryUrl()).toBe(
-      "https://github.com/pingdotgg/t3code/releases",
-    );
+    expect(getDesktopUpdateReleaseHistoryUrl()).toBe(`${NEO_REPOSITORY_URL}/releases`);
   });
 
   it("toasts only for actionable updater errors", () => {

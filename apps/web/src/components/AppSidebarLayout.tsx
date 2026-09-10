@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { useAppearanceLook } from "../appearanceLook";
+import { NeoStarSky } from "../neo/NeoStarfield";
 import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -74,8 +76,12 @@ function SidebarControl() {
   const { toggleSidebar } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  // Neo replaces the stage artwork with its starfield (see SidebarChrome), so
+  // the toggle keeps its normal ghost hover instead of the white-on-art one.
+  const appearanceLook = useAppearanceLook();
+  const neoLook = appearanceLook === "neo";
   const stageBackdropVariant = useSidebarStageBackdropVariant(
-    environmentIdentificationMode === "artwork",
+    environmentIdentificationMode === "artwork" && !neoLook,
   );
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
 
@@ -103,10 +109,13 @@ function SidebarControl() {
   return (
     // The right-side layout controls carry mr-px (border compensation inside
     // the panel), so the trigger mirrors it: both clusters sit one extra pixel
-    // off their edge and the titlebar reads symmetric.
+    // off their edge and the titlebar reads symmetric. data-sidebar-visible tells
+    // styles whether the cluster sits over the sidebar or over the workspace; the
+    // cluster itself never moves, whichever it is.
     <div
       className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center"
       data-sidebar-control=""
+      data-sidebar-visible={isSidebarVisible ? "true" : "false"}
     >
       <Tooltip>
         <TooltipTrigger
@@ -142,6 +151,9 @@ function ProjectProjectionRetention() {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  const appearanceLook = useAppearanceLook();
+  // Only the star trail depends on this; the look's palette applies via CSS.
+  const neoLook = appearanceLook === "neo";
   const navigate = useNavigate();
   const legacySidebarEnabled = useLegacySidebarEnabled();
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
@@ -205,6 +217,15 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onMenuAction((action) => {
+      // The desktop pet window asks the main window to show a thread.
+      const openThread = /^open-thread:([^:]+):(.+)$/.exec(action);
+      if (openThread) {
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId: openThread[1]!, threadId: openThread[2]! },
+        });
+        return;
+      }
       if (action === "open-settings") {
         const isSettingsRoute = /^\/settings(\/|$)/.test(pathname);
         if (!isSettingsRoute) {
@@ -242,6 +263,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
             onResize: setSidebarWidth,
           }}
         >
+          {neoLook ? <NeoStarSky className="neo-sidebar-trail" variant="sidebar" /> : null}
           {isOnSettings ? (
             <>
               <SidebarChromeHeader isElectron={isElectron} />

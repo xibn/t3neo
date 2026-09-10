@@ -60,6 +60,7 @@ import {
   startNewThreadForProject,
   codexArtifactTemplatePromptToAppend,
   shouldDockDraftHeroForSubmission,
+  shouldQueueComposerSubmission,
   shouldReleaseTimelineAnchorForToolActivity,
   shouldOpenProactivePullRequest,
   shouldRetargetThreadPullRequestPanel,
@@ -1952,5 +1953,135 @@ describe("shouldRefocusComposerOnWindowFocus", () => {
   it("leaves focus inside a dialog or popup alone", () => {
     expect(shouldRefocusComposerOnWindowFocus(element("BUTTON", { within: "dialog" }))).toBe(false);
     expect(shouldRefocusComposerOnWindowFocus(element("BUTTON", { within: "-popup" }))).toBe(false);
+  });
+});
+
+describe("shouldQueueComposerSubmission", () => {
+  const runningSession = {
+    threadId,
+    status: "running" as const,
+    providerName: "codex",
+    runtimeMode: "full-access" as const,
+    activeTurnId: TurnId.make("turn-1"),
+    lastError: null,
+    updatedAt: now,
+  };
+
+  it("queues a plain send while the thread's turn is running", () => {
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "foreground",
+        isServerThread: true,
+        thread: makeThread({ session: runningSession }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(true);
+  });
+
+  it("never queues an immediate send or a draft thread", () => {
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "immediate",
+        isServerThread: true,
+        thread: makeThread({ session: runningSession }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(false);
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "foreground",
+        isServerThread: false,
+        thread: makeThread({ session: runningSession }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps order by queueing behind messages that are already waiting", () => {
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "foreground",
+        isServerThread: true,
+        thread: makeThread({ session: { ...runningSession, status: "ready" } }),
+        queuedCount: 1,
+        now,
+      }),
+    ).toBe(true);
+  });
+
+  it("queues while the last user message still waits for a turn to adopt it", () => {
+    const sentAt = new Date(Date.parse(now) - 1_000).toISOString();
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "foreground",
+        isServerThread: true,
+        thread: makeThread({
+          session: { ...runningSession, status: "ready", activeTurnId: null },
+          latestTurn: null,
+          messages: [
+            {
+              id: MessageId.make("m-1"),
+              role: "user",
+              text: "hi",
+              turnId: null,
+              streaming: false,
+              createdAt: sentAt,
+              updatedAt: sentAt,
+            },
+          ],
+        }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(true);
+  });
+
+  it("queues a draft moved aside for editing even when the thread is idle", () => {
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "queue",
+        isServerThread: true,
+        thread: makeThread({ session: { ...runningSession, status: "ready", activeTurnId: null } }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "queue",
+        isServerThread: false,
+        thread: makeThread({ session: { ...runningSession, status: "ready", activeTurnId: null } }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(false);
+  });
+
+  it("sends directly when the thread is idle", () => {
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "foreground",
+        isServerThread: true,
+        thread: makeThread({ session: { ...runningSession, status: "ready", activeTurnId: null } }),
+        queuedCount: 0,
+        now,
+      }),
+    ).toBe(false);
+  });
+
+  it("never queues when the Neo setting is off, even with a running turn and a waiting queue", () => {
+    expect(
+      shouldQueueComposerSubmission({
+        submissionIntent: "foreground",
+        queueEnabled: false,
+        isServerThread: true,
+        thread: makeThread({ session: runningSession }),
+        queuedCount: 2,
+        now,
+      }),
+    ).toBe(false);
   });
 });

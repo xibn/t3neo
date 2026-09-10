@@ -170,6 +170,14 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   checkForUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_CHECK_CHANNEL),
   downloadUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_DOWNLOAD_CHANNEL),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_INSTALL_CHANNEL),
+  pet: {
+    openWindow: () => ipcRenderer.invoke(IpcChannels.PET_OPEN_WINDOW_CHANNEL),
+    closeWindow: () => ipcRenderer.invoke(IpcChannels.PET_CLOSE_WINDOW_CHANNEL),
+    moveWindow: (delta) => ipcRenderer.invoke(IpcChannels.PET_MOVE_WINDOW_CHANNEL, delta),
+    focusMain: (target) => ipcRenderer.invoke(IpcChannels.PET_FOCUS_MAIN_CHANNEL, target),
+    fetchGallery: (url) => ipcRenderer.invoke(IpcChannels.PET_FETCH_GALLERY_CHANNEL, url),
+    resizeWindow: (size) => ipcRenderer.invoke(IpcChannels.PET_RESIZE_WINDOW_CHANNEL, size),
+  },
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;

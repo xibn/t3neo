@@ -3,14 +3,27 @@
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { cn } from "~/lib/utils";
+import { PopupSideProvider, usePopupTriggerRef, usePublishPopupSide } from "./popupSide";
 
 const PopoverCreateHandle = PopoverPrimitive.createHandle;
 
-const Popover = PopoverPrimitive.Root;
-
-function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trigger.Props) {
+function Popover(props: PopoverPrimitive.Root.Props) {
   return (
-    <PopoverPrimitive.Trigger className={className} data-slot="popover-trigger" {...props}>
+    <PopupSideProvider>
+      <PopoverPrimitive.Root {...props} />
+    </PopupSideProvider>
+  );
+}
+
+function PopoverTrigger({ className, children, ref, ...props }: PopoverPrimitive.Trigger.Props) {
+  const triggerRef = usePopupTriggerRef(ref);
+  return (
+    <PopoverPrimitive.Trigger
+      className={className}
+      data-slot="popover-trigger"
+      ref={triggerRef}
+      {...props}
+    >
       {children}
     </PopoverPrimitive.Trigger>
   );
@@ -36,6 +49,7 @@ function PopoverPopup({
   tooltipStyle?: boolean;
   anchor?: PopoverPrimitive.Positioner.Props["anchor"];
 }) {
+  const positionerRef = usePublishPopupSide(side);
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -44,6 +58,7 @@ function PopoverPopup({
         anchor={anchor}
         className="z-[130] h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-transform data-instant:transition-none"
         data-slot="popover-positioner"
+        ref={positionerRef}
         side={side}
         sideOffset={sideOffset}
       >

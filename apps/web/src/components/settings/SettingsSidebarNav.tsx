@@ -18,7 +18,9 @@ import {
   PanelsTopLeftIcon,
   KeyboardIcon,
   Link2Icon,
+  MoonStarIcon,
   PaletteIcon,
+  PawPrintIcon,
   SearchIcon,
   Settings2Icon,
   XIcon,
@@ -56,6 +58,10 @@ import {
   type SettingsSearchItem,
 } from "./settingsSearch";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
+import { NeoFeatureBadge } from "~/neo/NeoBadge";
+
+/** Sections that exist only in T3 Neo; the nav marks them with the Neo badge. */
+const NEO_SETTINGS_PATHS: ReadonlySet<SettingsPath> = new Set(["/settings/neo", "/settings/pets"]);
 
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
@@ -79,6 +85,8 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/integrations": BlocksIcon,
   "/settings/source-control": GitBranchIcon,
   "/settings/connections": Link2Icon,
+  "/settings/neo": MoonStarIcon,
+  "/settings/pets": PawPrintIcon,
   "/settings/archived": ArchiveIcon,
 };
 
@@ -426,6 +434,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                     >
                       <Icon />
                       <span className="truncate">{item.label}</span>
+                      {NEO_SETTINGS_PATHS.has(item.to) ? (
+                        <NeoFeatureBadge className="ml-auto" />
+                      ) : null}
                     </SidebarMenuButton>
                     {pageSections ? (
                       <SettingsSubmenuCollapse open={isActive}>

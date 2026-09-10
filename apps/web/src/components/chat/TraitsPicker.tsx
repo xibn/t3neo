@@ -30,6 +30,8 @@ import {
 } from "../ui/menu";
 import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";
+import { applyNeoModelOptionDefaults, type NeoModelDefaultPrefs } from "../../neo/neoModelDefaults";
+import { useNeoSettings } from "../../neo/neoSettings";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import {
@@ -141,8 +143,12 @@ function getSelectedTraits(
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
   planModeEnabled: boolean,
+  neoModelDefaults?: NeoModelDefaultPrefs,
 ) {
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const baseCaps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const caps = neoModelDefaults
+    ? applyNeoModelOptionDefaults(baseCaps, neoModelDefaults)
+    : baseCaps;
   const modelIsUnavailable =
     provider === "opencode" &&
     !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider));
@@ -223,6 +229,7 @@ function getTraitsSectionVisibility(input: {
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
   planModeEnabled: boolean;
+  neoModelDefaults?: NeoModelDefaultPrefs;
 }) {
   const selected = getSelectedTraits(
     input.provider,
@@ -232,6 +239,7 @@ function getTraitsSectionVisibility(input: {
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
     input.planModeEnabled,
+    input.neoModelDefaults,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;
@@ -296,6 +304,11 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   planModeEnabled,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
+  const neoSettings = useNeoSettings();
+  const neoModelDefaults: NeoModelDefaultPrefs = {
+    contextWindow: neoSettings.defaultContextWindow,
+    fastMode: neoSettings.defaultFastMode,
+  };
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
   const updateModelOptions = useCallback(
     (nextOptions: ProviderOptions | undefined) => {
@@ -330,6 +343,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     model,
     prompt,
     modelOptions,
+    neoModelDefaults,
     allowPromptInjectedEffort,
     planModeEnabled,
   });
@@ -557,6 +571,11 @@ export const TraitsPicker = memo(function TraitsPicker({
     size?: ComposerControlSize;
     hidden?: boolean;
   }) {
+  const neoSettings = useNeoSettings();
+  const neoModelDefaults: NeoModelDefaultPrefs = {
+    contextWindow: neoSettings.defaultContextWindow,
+    fastMode: neoSettings.defaultFastMode,
+  };
   const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden);
   const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
@@ -565,6 +584,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       model,
       prompt,
       modelOptions,
+      neoModelDefaults,
       allowPromptInjectedEffort,
       planModeEnabled,
     });

@@ -4,6 +4,8 @@ import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/uti
 export type SettingsPath =
   | "/settings/projects"
   | "/settings/general"
+  | "/settings/neo"
+  | "/settings/pets"
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
@@ -49,6 +51,8 @@ export interface SettingsSearchAvailability {
  */
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
+  "/settings/neo": "Neo",
+  "/settings/pets": "Pets",
   "/settings/appearance": "Appearance",
   "/settings/projects": "Projects",
   "/settings/keybindings": "Keybindings",
@@ -89,6 +93,118 @@ export const SETTINGS_SEARCH_ITEMS = [
     // Theme cards live directly under the scheme tiles; the section is the
     // stable scroll destination for both.
     targetId: "appearance",
+  },
+  {
+    id: "appearance-look",
+    title: "Look",
+    to: "/settings/appearance",
+    searchTerms: ["neo default design style layout pill flat warm dark redesign"],
+  },
+  {
+    id: "appearance-chevron-animations",
+    title: "Chevron animations",
+    to: "/settings/appearance",
+    searchTerms: ["chevron arrow rotate flip menu dropdown popover motion animation"],
+  },
+  {
+    id: "appearance-agent-controls",
+    title: "Agent controls",
+    to: "/settings/appearance",
+    searchTerms: [
+      "neo composer model picker context window fast mode runtime pill card top bar style buttons",
+    ],
+  },
+  {
+    id: "neo-download",
+    title: "Download latest T3 Neo",
+    to: "/settings/neo",
+    searchTerms: ["release update install dmg appimage exe"],
+  },
+  {
+    id: "neo-usage-badges",
+    title: "Usage badges",
+    to: "/settings/neo",
+    searchTerms: ["cost tokens limit overage billed percent turn"],
+  },
+  {
+    id: "neo-queue-messages",
+    title: "Queue messages while a turn runs",
+    to: "/settings/neo",
+    searchTerms: ["queue queued send now steer running turn"],
+  },
+  {
+    id: "neo-queue-discard-confirm",
+    title: "Confirm before discarding a queued message",
+    to: "/settings/neo",
+    searchTerms: ["queue discard delete trash confirm popover cancel prompt message"],
+  },
+  {
+    id: "neo-branch-toolbar",
+    title: "Branch manager position",
+    to: "/settings/neo",
+    searchTerms: ["branch manager workspace checkout header composer move position"],
+  },
+  {
+    id: "neo-branch-toolbar-move",
+    title: "Show the branch manager move pill",
+    to: "/settings/neo",
+    searchTerms: ["branch manager move pill button header composer"],
+  },
+  {
+    id: "neo-default-context-window",
+    title: "Default context window",
+    to: "/settings/neo",
+    searchTerms: ["context window biggest smallest model tokens default new chat"],
+  },
+  {
+    id: "neo-default-fast-mode",
+    title: "Default fast mode",
+    to: "/settings/neo",
+    searchTerms: ["fast mode fastest slowest speed model default new chat bolt"],
+  },
+  {
+    id: "neo-header-actions-toggle",
+    title: "Header actions button",
+    to: "/settings/neo",
+    searchTerms: ["header top bar actions collapse fold hide button open commit toggle"],
+  },
+  {
+    id: "neo-header-actions-collapsed",
+    title: "Collapse header actions",
+    to: "/settings/neo",
+    searchTerms: ["header top bar actions collapsed folded slim narrow rounded compact"],
+  },
+  {
+    id: "neo-composer-expanded",
+    title: "Keep the composer expanded",
+    to: "/settings/neo",
+    searchTerms: ["composer input box size lines minimize expand height"],
+  },
+  {
+    id: "neo-pet",
+    title: "Pet",
+    to: "/settings/pets",
+    searchTerms: ["rabbit bunny wukong monkey ascii companion buddy animation"],
+  },
+  {
+    id: "neo-pet-size",
+    title: "Pet size",
+    to: "/settings/pets",
+    searchTerms: ["pet scale position drag reset"],
+  },
+  {
+    id: "neo-codex-pets",
+    title: "Codex pets",
+    to: "/settings/pets",
+    searchTerms: [
+      "codex pet gallery import download sprite community codexpet openpets browse search",
+    ],
+  },
+  {
+    id: "neo-ascii-pet-color",
+    title: "ASCII pet color",
+    to: "/settings/pets",
+    searchTerms: ["ascii pet text font color glyph orange amber wukong system light dark"],
   },
   {
     // Prefixed because the slider control already owns the `appearance-contrast` id.

@@ -7,6 +7,7 @@ import * as React from "react";
 import { cn } from "~/lib/utils";
 import { Input } from "~/components/ui/input";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { PopupSideProvider, usePopupTriggerRef, usePublishPopupSide } from "./popupSide";
 
 const ComboboxContext = React.createContext<{
   chipsRef: React.RefObject<Element | null> | null;
@@ -23,7 +24,9 @@ function Combobox<Value, Multiple extends boolean | undefined = false>(
   const value = React.useMemo(() => ({ chipsRef, multiple: !!props.multiple }), [props.multiple]);
   return (
     <ComboboxContext value={value}>
-      <ComboboxPrimitive.Root {...props} />
+      <PopupSideProvider>
+        <ComboboxPrimitive.Root {...props} />
+      </PopupSideProvider>
     </ComboboxContext>
   );
 }
@@ -151,9 +154,15 @@ function ComboboxSearchInput(props: React.ComponentProps<typeof ComboboxInput>) 
   );
 }
 
-function ComboboxTrigger({ className, children, ...props }: ComboboxPrimitive.Trigger.Props) {
+function ComboboxTrigger({ className, children, ref, ...props }: ComboboxPrimitive.Trigger.Props) {
+  const triggerRef = usePopupTriggerRef(ref);
   return (
-    <ComboboxPrimitive.Trigger className={className} data-slot="combobox-trigger" {...props}>
+    <ComboboxPrimitive.Trigger
+      className={className}
+      data-slot="combobox-trigger"
+      ref={triggerRef}
+      {...props}
+    >
       {children}
     </ComboboxPrimitive.Trigger>
   );
@@ -177,6 +186,7 @@ function ComboboxPopup({
 }) {
   const { chipsRef } = React.use(ComboboxContext);
   const anchor = anchorProp ?? chipsRef;
+  const positionerRef = usePublishPopupSide(side);
 
   return (
     <ComboboxPrimitive.Portal>
@@ -186,6 +196,7 @@ function ComboboxPopup({
         anchor={anchor}
         className="z-[130] select-none"
         data-slot="combobox-positioner"
+        ref={positionerRef}
         side={side}
         sideOffset={sideOffset}
       >

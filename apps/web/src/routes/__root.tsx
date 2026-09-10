@@ -27,6 +27,9 @@ import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
 import { useEnvironmentThemeSync } from "../hooks/useEnvironmentTheme";
+import { useMessageQueueDrain } from "../hooks/useMessageQueueDrain";
+import { usePetWindowSync } from "../neo/pets/usePetWindowSync";
+import { applyAsciiPetColor, useNeoSettings } from "../neo/neoSettings";
 import { Button } from "../components/ui/button";
 import {
   AnchoredToastProvider,
@@ -37,6 +40,8 @@ import {
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { applyAppearanceContrast } from "~/appearanceContrast";
+import { applyAppearanceLook, useAppearanceLook } from "~/appearanceLook";
+import { applyChevronAnimations, useChevronAnimations } from "~/chevronAnimations";
 import { useClientSettings } from "../hooks/useSettings";
 import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
 import {
@@ -96,6 +101,7 @@ export const Route = createRootRoute({
 
 function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
+  const isPetWindowRoute = pathname === "/pet";
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
   const returningFromWelcomeRef = useRef(pathname === "/welcome");
@@ -105,6 +111,9 @@ function RootRouteView() {
       returningFromWelcomeRef.current = true;
     }
   }, [pathname]);
+
+  // The pet never renders inside the app; on desktop it gets its own window.
+  usePetWindowSync(primaryEnvironmentAuthenticated && !isPetWindowRoute);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -119,6 +128,16 @@ function RootRouteView() {
     return (
       <>
         <DocumentTitleSync />
+        <Outlet />
+      </>
+    );
+  }
+
+  // The detached desktop pet window renders only the pet, without app chrome.
+  if (isPetWindowRoute) {
+    return (
+      <>
+        <AsciiPetColorSync />
         <Outlet />
       </>
     );
@@ -204,6 +223,7 @@ function RootRouteView() {
 /** Follows the palette the primary environment's machine publishes, if any. */
 function EnvironmentThemeSync() {
   useEnvironmentThemeSync();
+  useMessageQueueDrain();
   // Ordered after the palette sync so a first-run client adopting the
   // environment's own theme finds it already in the library.
   useDefaultThemeAdoption();
@@ -217,6 +237,25 @@ function ContrastAppearanceSync() {
     applyAppearanceContrast(document.documentElement, appearanceContrast);
   }, [appearanceContrast]);
 
+  const appearanceLook = useAppearanceLook();
+  useEffect(() => {
+    applyAppearanceLook(document.documentElement, appearanceLook);
+  }, [appearanceLook]);
+
+  const chevronAnimations = useChevronAnimations();
+  useEffect(() => {
+    applyChevronAnimations(document.documentElement, chevronAnimations);
+  }, [chevronAnimations]);
+
+  return <AsciiPetColorSync />;
+}
+
+/** Mounted in the app shell and in the detached pet window: both draw ASCII pets. */
+function AsciiPetColorSync() {
+  const asciiPetColor = useNeoSettings().asciiPetColor;
+  useEffect(() => {
+    applyAsciiPetColor(document.documentElement, asciiPetColor);
+  }, [asciiPetColor]);
   return null;
 }
 

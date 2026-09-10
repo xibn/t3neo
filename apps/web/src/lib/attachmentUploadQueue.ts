@@ -5,6 +5,7 @@ import {
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
+import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
 import {
   deletePendingAttachmentUpload,
   runAttachmentUploadCycle,
@@ -605,5 +606,76 @@ export function releaseDraftAttachments(
 ): void {
   for (const attachment of attachments) {
     releaseDraftAttachment(attachment);
+  }
+}
+
+/**
+ * Hands a draft's finished uploads to a queued message. The client forgets
+ * them so the composer clears, but the server copies stay put: the queue
+ * sends them later, and only deleting the message unsent frees them
+ * (`releaseQueuedAttachmentUploads`). Releasing them here, as a direct send
+ * does once its turn adopted them, left the queue pointing at deleted files.
+ */
+export function handOffDraftAttachments(
+  attachments: ReadonlyArray<ComposerImageAttachment | ComposerFileAttachment>,
+): void {
+  for (const attachment of attachments) {
+    // The finished job stays registered under the draft's key otherwise, and
+    // any later release of that key (the draft clearing, a capability flap)
+    // would delete the server copy the queued message still points at.
+    const job = jobsByImageId.get(attachment.id);
+    if (job) {
+      jobsByImageId.delete(attachment.id);
+      const queuedIndex = queue.indexOf(job);
+      if (queuedIndex !== -1) queue.splice(queuedIndex, 1);
+      job.resolveSettled();
+    }
+    clearUploadState(attachment.id);
+  }
+}
+
+/**
+ * Downloads a pending upload's bytes again, for putting a queued image back
+ * into the composer. Null when the server cannot be asked or the upload is
+ * gone; the caller then tells the user to attach the image again.
+ */
+export async function fetchPendingAttachmentFile(input: {
+  readonly environmentId: EnvironmentId;
+  readonly attachmentId: string;
+  readonly name: string;
+  readonly mimeType: string;
+}): Promise<File | null> {
+  const connection = readPreparedConnection(input.environmentId);
+  if (!connection) return null;
+  const result = await executeAtomQuery(
+    appAtomRegistry,
+    assetEnvironment.createUrl({
+      environmentId: input.environmentId,
+      input: { resource: { _tag: "attachment", attachmentId: input.attachmentId } },
+    }),
+    { reportFailure: false, reportDefect: false, refresh: true },
+  );
+  if (result._tag !== "Success") return null;
+  const url = resolveAssetUrl(connection.httpBaseUrl, result.value.relativeUrl);
+  if (!url) return null;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    if (blob.size === 0) return null;
+    return new File([blob], input.name, { type: input.mimeType });
+  } catch {
+    return null;
+  }
+}
+
+/** Frees the server copies a queued message carried, once it is deleted unsent. */
+export function releaseQueuedAttachmentUploads(
+  environmentId: EnvironmentId,
+  attachments: ReadonlyArray<{ readonly id: string } | { readonly dataUrl: string }>,
+): void {
+  for (const attachment of attachments) {
+    // Inline images ride along as data URLs and have nothing on the server.
+    if ("id" in attachment) deletePendingUpload(environmentId, attachment.id);
   }
 }

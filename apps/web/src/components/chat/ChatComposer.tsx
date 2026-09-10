@@ -123,10 +123,12 @@ import {
   shouldHandleComposerAttachmentPaste,
 } from "./composerAttachmentFiles";
 import {
+  fetchPendingAttachmentFile,
   readAttachmentUpload,
   releaseAttachmentUpload,
   releaseDraftAttachment,
   releasePersistedAttachmentUpload,
+  releaseQueuedAttachmentUploads,
   retryAttachmentUpload,
   startAttachmentUpload,
   useAttachmentUploadStore,
@@ -179,6 +181,18 @@ import {
   ComposerControlSeparator,
   ComposerSelectControl,
 } from "./ComposerControl";
+import { ComposerQueuedMessages } from "./ComposerQueuedMessages";
+import { ComposerUsageBadge } from "~/neo/ComposerUsageBadge";
+import { useNeoSettings } from "~/neo/neoSettings";
+import type { TurnUsage } from "~/neo/turnUsage";
+import {
+  type QueuedAttachment,
+  type QueuedThreadMessage,
+  useMessageQueueStore,
+  useQueuedThreadMessages,
+  useQueuedThreadPaused,
+} from "~/messageQueueStore";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import {
   searchSlashCommandItems,
@@ -936,6 +950,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   hidden?: boolean;
   onToggleInteractionMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
+  latestTurnUsage: TurnUsage | null;
+  usagePlanLabel: string | null;
+  showUsageBadge: boolean;
 }) {
   const size = props.size ?? "sm";
   const [open, setOpen] = useComposerMenuState(props.hidden);
@@ -962,6 +979,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
                     ? undefined
                     : "text-secondary-label hover:text-foreground",
               )}
+              data-active={props.interactionMode === "plan" ? "" : undefined}
               type="button"
               onClick={props.onToggleInteractionMode}
               aria-label={interactionModeTooltip}
@@ -1013,7 +1031,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
             <ComposerControlIcon icon={RuntimeModeIcon} size={size} />
             <SelectValue>{runtimeModeOption.label}</SelectValue>
           </TooltipTrigger>
-          <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
+          <SelectPopup alignItemWithTrigger={false} side="top" {...composerFloatingLayerProps}>
             {runtimeModeOptions.map((mode) => {
               const option = runtimeModeConfig[mode];
               const OptionIcon = option.icon;
@@ -1039,6 +1057,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
       </Tooltip>
 
       {interactionModeToggle}
+      {props.showUsageBadge ? (
+        <ComposerUsageBadge usage={props.latestTurnUsage} planLabel={props.usagePlanLabel} />
+      ) : null}
     </>
   );
 });
@@ -1064,10 +1085,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isEnvironmentUnavailable: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
-  showSendWhileRunning?: boolean;
+  queueMessages: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  onSendNow: () => void;
   onCompactContext?: (() => void) | undefined;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -1096,10 +1118,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
-        showSendWhileRunning={props.showSendWhileRunning ?? false}
+        queueMessages={props.queueMessages}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
         onImplementPlanInNewThread={props.onImplementPlanInNewThread}
+        onSendNow={props.onSendNow}
       />
     </>
   );
@@ -1191,6 +1214,14 @@ export interface ChatComposerProps {
   phase: SessionPhase;
   isConnecting: boolean;
   isSendBusy: boolean;
+  /** Settings → Neo: queue behind a running turn (true) or steer it like upstream (false). */
+  queueMessages: boolean;
+  /** Newest usage report in this thread, for the live usage badge. */
+  latestTurnUsage: TurnUsage | null;
+  usagePlanLabel: string | null;
+  showUsageBadge: boolean;
+  /** Keep the editor open at eight lines. */
+  composerExpanded: boolean;
   sendDisabledReason: string | null;
   isPreparingWorktree: boolean;
   bannerItems: readonly ComposerBannerStackItem[];
@@ -1277,7 +1308,10 @@ export interface ChatComposerProps {
   onPageScrollRelease: () => void;
 
   // Callbacks
-  onSend: (e?: { preventDefault: () => void }, intent?: ComposerSubmissionIntent) => void;
+  onSend: (
+    e?: { preventDefault: () => void },
+    intent?: ComposerSubmissionIntent,
+  ) => void | Promise<void>;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
@@ -1333,6 +1367,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     forceExpandedOnMobile,
     projectSelectionRequired,
     phase,
+    queueMessages,
+    latestTurnUsage,
+    usagePlanLabel,
+    composerExpanded,
     isConnecting,
     isSendBusy,
     sendDisabledReason: externalSendDisabledReason,
@@ -1720,6 +1758,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => getComposerPromptInjectionState(prompt),
     [prompt],
   );
+  const neoSettings = useNeoSettings();
+  const neoModelDefaults = useMemo(
+    () => ({
+      contextWindow: neoSettings.defaultContextWindow,
+      fastMode: neoSettings.defaultFastMode,
+    }),
+    [neoSettings.defaultContextWindow, neoSettings.defaultFastMode],
+  );
   const composerProviderState = useMemo(
     () =>
       getComposerProviderState({
@@ -1729,10 +1775,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         promptInjectionState: composerPromptInjectionState,
         modelOptions: composerModelOptions?.[selectedInstanceId],
         planModeEnabled: settings.planModeEnabled,
+        neoModelDefaults,
       }),
     [
       composerModelOptions,
       composerPromptInjectionState,
+      neoModelDefaults,
       selectedInstanceId,
       selectedModel,
       selectedProvider,
@@ -1841,6 +1889,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerFooterControlsRef = useRef<HTMLDivElement>(null);
+  // "Keep the composer expanded": the editor grows with its text (a wrapped
+  // line or a newline) and holds the tallest height reached until the draft is
+  // empty, so deleting lines or leaving focus never shrinks the writing area.
+  // The held height is a CSS variable read by looks/neo.css, measured after
+  // each draft change once Lexical has laid the text out.
+  const heldEditorHeightRef = useRef(0);
+  useEffect(() => {
+    const composerForm = composerFormRef.current;
+    if (!composerForm) return;
+    if (!composerExpanded || prompt.length === 0) {
+      heldEditorHeightRef.current = 0;
+      composerForm.style.removeProperty("--neo-composer-held-height");
+      return;
+    }
+    const editor = composerForm.querySelector<HTMLElement>('[data-testid="composer-editor"]');
+    if (!editor) return;
+    const next = Math.max(heldEditorHeightRef.current, editor.scrollHeight);
+    if (next === heldEditorHeightRef.current) return;
+    heldEditorHeightRef.current = next;
+    composerForm.style.setProperty("--neo-composer-held-height", `${next}px`);
+  }, [composerExpanded, prompt]);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
   const providerInputRejectedRef = useRef(false);
   const composerSelectLockRef = useRef(false);
@@ -2052,6 +2121,169 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
+  const routeThreadKey = scopedThreadKey(routeThreadRef);
+  const queuedMessages = useQueuedThreadMessages(routeThreadKey);
+  const queuePaused = useQueuedThreadPaused(routeThreadKey);
+  const markQueuedMessageSendNow = useMessageQueueStore((state) => state.markSendNow);
+  const markQueuedThreadSendNow = useMessageQueueStore((state) => state.markThreadSendNow);
+  const discardQueuedMessage = useMessageQueueStore((state) => state.remove);
+  const deleteQueuedMessage = useCallback(
+    (messageId: QueuedThreadMessage["id"]) => {
+      const removed = discardQueuedMessage(messageId);
+      // Unsent, the message's uploads have no turn to adopt them; free the server copies.
+      if (removed) releaseQueuedAttachmentUploads(removed.environmentId, removed.attachments);
+    },
+    [discardQueuedMessage],
+  );
+  const reorderQueuedMessages = useMessageQueueStore((state) => state.reorderThread);
+  const resumeQueuedMessages = useMessageQueueStore((state) => state.resumeThread);
+  const sendQueuedThreadNow = useCallback(() => {
+    markQueuedThreadSendNow(routeThreadKey);
+  }, [markQueuedThreadSendNow, routeThreadKey]);
+  const reorderQueuedThread = useCallback(
+    (orderedIds: ReadonlyArray<QueuedThreadMessage["id"]>) => {
+      reorderQueuedMessages(routeThreadKey, orderedIds);
+    },
+    [reorderQueuedMessages, routeThreadKey],
+  );
+  const resumeQueuedThread = useCallback(() => {
+    resumeQueuedMessages(routeThreadKey);
+  }, [resumeQueuedMessages, routeThreadKey]);
+  /**
+   * Edit takes a queued message back into the composer. A draft already there
+   * moves to the back of the queue first, through the ordinary queue path: that
+   * path never resumes a paused queue, so a stopped thread stays stopped even
+   * when the edited message was the only one waiting.
+   */
+  const editQueuedMessage = useCallback(
+    async (messageId: QueuedThreadMessage["id"]) => {
+      if (composerSendState.hasSendableContent) {
+        await onSend(undefined, "queue");
+        if (
+          promptRef.current.length > 0 ||
+          composerImagesRef.current.length > 0 ||
+          composerFilesRef.current.length > 0
+        ) {
+          toastManager.add({
+            type: "warning",
+            title: "Could not move the draft to the queue",
+            description: "Send or clear the draft, then edit the queued message.",
+            data: { hideCopyButton: true },
+          });
+          return;
+        }
+      }
+      const message = discardQueuedMessage(messageId);
+      if (!message) return;
+      promptRef.current = message.text;
+      setComposerDraftPrompt(composerDraftTarget, message.text);
+      setComposerCursor(collapseExpandedComposerCursor(message.text, message.text.length));
+      setComposerTrigger(null);
+
+      const inlineImages: Array<{
+        id: string;
+        name: string;
+        mimeType: string;
+        sizeBytes: number;
+        dataUrl: string;
+      }> = [];
+      const uploadedFiles: ComposerFileAttachment[] = [];
+      const uploadedImages: Array<Extract<QueuedAttachment, { id: string }>> = [];
+      for (const attachment of message.attachments) {
+        if ("dataUrl" in attachment) {
+          inlineImages.push({ ...attachment, id: randomUUID() });
+        } else if (attachment.type === "image") {
+          uploadedImages.push(attachment);
+        } else if (attachment.type === "file") {
+          uploadedFiles.push({
+            type: "file",
+            id: randomUUID(),
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+            file: null,
+            uploadedAttachmentId: attachment.id,
+            uploadEnvironmentId: message.environmentId,
+          });
+        } else {
+          // Unknown attachment types have no way back into the composer.
+          releasePersistedAttachmentUpload({
+            id: attachment.id,
+            environmentId: message.environmentId,
+            attachmentId: attachment.id,
+          });
+        }
+      }
+      if (inlineImages.length > 0) {
+        addComposerDraftImages(composerDraftTarget, hydrateImagesFromPersisted(inlineImages));
+      }
+      if (uploadedFiles.length > 0) {
+        addComposerDraftFiles(composerDraftTarget, uploadedFiles);
+      }
+      window.requestAnimationFrame(() => {
+        composerEditorRef.current?.focusAtEnd();
+      });
+
+      // An uploaded image is a server-side reference, and the composer needs
+      // the bytes for its thumbnail: download them again, then free the
+      // server copy. The image uploads afresh when the draft is sent.
+      if (uploadedImages.length === 0) return;
+      const restoreTarget = composerDraftTarget;
+      const restored = await Promise.all(
+        uploadedImages.map(async (attachment) => {
+          const file = await fetchPendingAttachmentFile({
+            environmentId: message.environmentId,
+            attachmentId: attachment.id,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+          });
+          releasePersistedAttachmentUpload({
+            id: attachment.id,
+            environmentId: message.environmentId,
+            attachmentId: attachment.id,
+          });
+          return { attachment, file };
+        }),
+      );
+      const images: ComposerImageAttachment[] = [];
+      const lostImageNames: string[] = [];
+      for (const { attachment, file } of restored) {
+        if (!file) {
+          lostImageNames.push(attachment.name);
+          continue;
+        }
+        images.push({
+          type: "image",
+          id: randomUUID(),
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          sizeBytes: file.size,
+          previewUrl: URL.createObjectURL(file),
+          file,
+        });
+      }
+      if (images.length > 0) addComposerDraftImages(restoreTarget, images);
+      if (lostImageNames.length > 0) {
+        toastManager.add({
+          type: "warning",
+          title: "Some attachments were not restored",
+          description: `${lostImageNames.join(", ")}: the uploads are no longer on the server. Attach them again.`,
+        });
+      }
+    },
+    [
+      addComposerDraftFiles,
+      addComposerDraftImages,
+      composerDraftTarget,
+      composerFilesRef,
+      composerImagesRef,
+      composerSendState.hasSendableContent,
+      discardQueuedMessage,
+      onSend,
+      promptRef,
+      setComposerDraftPrompt,
+    ],
+  );
   const showComposerTopDrawer =
     isComposerApprovalState ||
     pendingUserInputs.length > 0 ||
@@ -3115,6 +3347,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             shiftKey: event.shiftKey,
             modifierKey: event.metaKey || event.ctrlKey,
             isDraftThread: routeKind === "draft",
+            isRunning: phase === "running" && queueMessages,
           })
         : null;
     if (submissionIntent) {
@@ -3944,6 +4177,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           hidden={composerControlsHidden || restingHiddenBlockCount > 0}
           onToggleInteractionMode={toggleInteractionMode}
           onRuntimeModeChange={handleRuntimeModeChange}
+          latestTurnUsage={latestTurnUsage}
+          usagePlanLabel={usagePlanLabel}
+          showUsageBadge={props.showUsageBadge}
         />
       ),
     },
@@ -4462,6 +4698,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const handleImplementPlanInNewThreadPrimaryAction = useCallback(() => {
     void onImplementPlanInNewThread();
   }, [onImplementPlanInNewThread]);
+  const handleSendNowPrimaryAction = useCallback(() => {
+    submitComposer(undefined, "immediate");
+  }, [submitComposer]);
+
   // The phone composer collapses when the editor loses focus. Desktop only
   // rests on a timeline scroll, so losing focus there changes nothing.
   const scheduleComposerCollapseCheck = useCallback(() => {
@@ -4700,6 +4940,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   // Render
   // ------------------------------------------------------------------
+  // Neo: the composer opens to eight lines once there is text; empty it stays compact.
   return (
     <form
       ref={composerFormRef}
@@ -4765,6 +5006,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }}
       className="mx-auto w-full min-w-0 max-w-3xl"
       data-chat-composer-form="true"
+      data-neo-composer-expanded={composerExpanded && prompt.length > 0 ? "" : undefined}
     >
       {composerControlsInStrip && restingControlsHost
         ? createPortal(
@@ -4799,6 +5041,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   inlineTasksBadge
                 )}
               </ComposerBanner.Root>
+            </ComposerBanner.Attachment>
+          ) : null}
+          {queuedMessages.length > 0 ? (
+            <ComposerBanner.Attachment>
+              <ComposerQueuedMessages
+                messages={queuedMessages}
+                threadBusy={phase === "running"}
+                paused={queuePaused}
+                onSendNow={markQueuedMessageSendNow}
+                onSendAllNow={sendQueuedThreadNow}
+                onEdit={editQueuedMessage}
+                onDiscard={deleteQueuedMessage}
+                onReorder={reorderQueuedThread}
+                onResume={resumeQueuedThread}
+              />
             </ComposerBanner.Attachment>
           ) : null}
           {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
@@ -5495,6 +5752,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               <div
                 data-chat-composer-footer="true"
                 data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
+                data-neo-agent-controls={neoSettings.agentControlsStyle}
                 className={cn(
                   "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:px-4 sm:pb-4",
                   pendingUserInputs.length > 0 && "pt-2",
@@ -5581,10 +5839,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     isPreparingWorktree={isPreparingWorktree}
                     hasSendableContent={composerSendState.hasSendableContent}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
-                    showSendWhileRunning={isMobileViewport}
+                    queueMessages={queueMessages}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryAction}
                     onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                    onSendNow={handleSendNowPrimaryAction}
                     compactDisabled={
                       compactDisabled || noProviderAvailable || isSendBusy || isConnecting
                     }

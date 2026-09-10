@@ -12,6 +12,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
+import { LayersArrowDownIcon, LayersArrowUpIcon } from "./Icons";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
 import {
   type EnvMode,
@@ -47,6 +48,10 @@ import { resolveRestingComposerControlsNaturalWidth } from "./composerFooterLayo
 import { cn } from "~/lib/utils";
 
 interface BranchToolbarProps {
+  /** T3 Neo: where this toolbar is docked, which decides where the move pill goes. */
+  placement?: "composer" | "header";
+  /** T3 Neo: move the toolbar to the other dock; absent hides the move pill. */
+  onMovePlacement?: () => void;
   environmentId: EnvironmentId;
   threadId: ThreadId;
   showGitControls: boolean;
@@ -438,6 +443,8 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
 }
 
 export const BranchToolbar = memo(function BranchToolbar({
+  placement = "composer",
+  onMovePlacement,
   environmentId,
   threadId,
   showGitControls,
@@ -532,6 +539,28 @@ export const BranchToolbar = memo(function BranchToolbar({
 
   if (!hasActiveThread || !activeProject) return null;
 
+  // The move pill: below the composer it lifts the toolbar into the header;
+  // in the header it lives inside the branch popup and sends it back down.
+  const movePill = onMovePlacement ? (
+    <button
+      type="button"
+      className="neo-branch-move"
+      data-composer-context-control
+      aria-label={
+        placement === "header"
+          ? "Move the branch manager back below the composer"
+          : "Move the branch manager to the top bar"
+      }
+      onClick={onMovePlacement}
+    >
+      {placement === "header" ? (
+        <LayersArrowDownIcon className="size-3.5" />
+      ) : (
+        <LayersArrowUpIcon className="size-3.5" />
+      )}
+    </button>
+  ) : null;
+
   return (
     <ComposerSurface.ContextStrip
       ref={setStripElement}
@@ -601,6 +630,7 @@ export const BranchToolbar = memo(function BranchToolbar({
               onUsePreviousWorktree={onUsePreviousWorktree}
             />
           ) : null}
+          {placement === "composer" ? movePill : null}
         </div>
       ) : null}
 
@@ -630,6 +660,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           onStartFromOriginChange={onStartFromOriginChange}
           {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
           {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+          {...(placement === "header" && movePill ? { popupFooter: movePill } : {})}
         />
       ) : null}
     </ComposerSurface.ContextStrip>

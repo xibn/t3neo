@@ -1,6 +1,7 @@
 import {
   type CursorSettings,
   type ProviderOptionSelection,
+  type ProviderUsageLimitsUpdate,
   type RuntimeMode,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
@@ -136,3 +137,21 @@ export function applyCursorAcpModelSelection<E>(input: {
     }
   });
 }
+
+/**
+ * Cursor never reports usage windows. When the plan is exhausted the agent
+ * answers a prompt with this text instead of an error, so it is the only
+ * signal the usage badge can turn into "Limit Reached".
+ */
+export function isCursorPlanLimitReply(text: string): boolean {
+  return /^\s*upgrade your plan to continue\b/i.test(text);
+}
+
+/** The exhausted plan as a rate-limit report, in the shape `normalizeRateLimitSnapshot` reads. */
+export const cursorPlanLimitRateLimits: ProviderUsageLimitsUpdate = {
+  windows: [{ id: "plan", kind: "other", label: "Plan Limit", usedPercent: 100 }],
+};
+/** Sent on the next real reply: the same window back at zero withdraws the limit. */
+export const cursorPlanLimitClearedRateLimits: ProviderUsageLimitsUpdate = {
+  windows: [{ id: "plan", kind: "other", label: "Plan Limit", usedPercent: 0 }],
+};

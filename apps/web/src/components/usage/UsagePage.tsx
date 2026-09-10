@@ -226,7 +226,10 @@ export function UsagePage() {
           {windowLabel}
         </span>
       ) : null}
-      <div className="ms-auto hidden min-w-0 items-center justify-end gap-2 xl:flex">
+      <div
+        className="ms-auto hidden min-w-0 items-center justify-end gap-2 xl:flex"
+        data-workspace-page-actions
+      >
         <ToggleGroup
           aria-label="Usage metric"
           variant="segmented"
@@ -271,7 +274,10 @@ export function UsagePage() {
           <RefreshIcon className="size-3.5" refreshing={isRefreshing} />
         </Button>
       </div>
-      <div className="col-span-2 ms-auto flex min-w-0 items-center justify-end gap-1 xl:hidden">
+      <div
+        className="col-span-2 ms-auto flex min-w-0 items-center justify-end gap-1 xl:hidden"
+        data-workspace-page-actions
+      >
         <Select
           value={metric}
           onValueChange={(value) => {

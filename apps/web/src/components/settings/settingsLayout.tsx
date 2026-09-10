@@ -160,6 +160,7 @@ export function SettingsSection({
   title,
   hideTitle = false,
   icon,
+  badge,
   headerAction,
   variant = "grouped",
   children,
@@ -169,6 +170,8 @@ export function SettingsSection({
   title: string;
   hideTitle?: boolean;
   icon?: ReactNode;
+  /** Rendered after the title, e.g. the Neo feature badge. */
+  badge?: ReactNode;
   headerAction?: ReactNode;
   variant?: "grouped" | "plain";
   children: ReactNode;
@@ -193,6 +196,7 @@ export function SettingsSection({
             <h2 className="flex min-h-7 items-center gap-2 text-sm font-normal tracking-[-0.005em] text-foreground/70">
               {icon}
               {title}
+              {badge}
             </h2>
           </div>
           <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>

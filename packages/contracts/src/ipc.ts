@@ -1132,6 +1132,29 @@ export interface DesktopBridge {
    */
   openSystemSettings?: (pane: SystemSettingsPane) => Promise<boolean>;
   /**
+   * T3 Neo pet window: a transparent always-on-top window that shows the
+   * pet over other apps. Optional: only desktop builds of the fork have it.
+   */
+  pet?: {
+    openWindow: () => Promise<void>;
+    closeWindow: () => Promise<void>;
+    /** Nudge the pet window by a screen-pixel delta while the user drags the pet. */
+    moveWindow: (delta: { dx: number; dy: number }) => Promise<void>;
+    /** Fit the pet window to its content; it keeps its bottom edge and centre. */
+    resizeWindow: (size: { width: number; height: number }) => Promise<void>;
+    /** Bring the main window forward, optionally on a thread. */
+    focusMain: (target: { environmentId: string; threadId: string } | null) => Promise<void>;
+    /**
+     * GET a pet gallery URL from the main process, which sends no Origin
+     * header. Only the known gallery hosts are allowed; anything else rejects.
+     */
+    fetchGallery: (url: string) => Promise<{
+      status: number;
+      contentType: string | null;
+      body: Uint8Array;
+    }>;
+  };
+  /**
    * Probe this desktop machine for installed remote-capable editor CLIs
    * (used for remote open-in-editor deep links). Optional: older desktop
    * builds lack it; callers fall back to VS Code only.

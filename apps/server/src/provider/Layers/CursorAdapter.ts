@@ -66,7 +66,13 @@ import {
   parsePermissionRequest,
 } from "../acp/AcpRuntimeModel.ts";
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging.ts";
-import { applyCursorAcpModelSelection, makeCursorAcpRuntime } from "../acp/CursorAcpSupport.ts";
+import {
+  applyCursorAcpModelSelection,
+  cursorPlanLimitClearedRateLimits,
+  cursorPlanLimitRateLimits,
+  isCursorPlanLimitReply,
+  makeCursorAcpRuntime,
+} from "../acp/CursorAcpSupport.ts";
 import { CursorTransportFailure } from "../acp/CursorTransportFailure.ts";
 import {
   CursorAskQuestionRequest,
@@ -147,6 +153,8 @@ interface CursorSessionContext {
   promptsInFlight: number;
   assistantReply: CursorTransportFailure;
   stopped: boolean;
+  /** The last reply was Cursor's upgrade notice; the next real reply withdraws it. */
+  planLimitReached?: boolean;
 }
 
 function settlePendingApprovalsAsCancelled(
@@ -543,6 +551,7 @@ export function makeCursorAdapter(
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeCursorAcpRuntime({
             cursorSettings: effectiveCursorSettings,
+            origin: { kind: "provider", provider: "cursor", threadId: input.threadId },
             ...(options?.environment ? { environment: options.environment } : {}),
             childProcessSpawner,
             cwd,
@@ -880,6 +889,29 @@ export function makeCursorAdapter(
                         rawPayload: event.rawPayload,
                       }),
                     );
+                    // Cursor's only limit signal is this reply: report it as a
+                    // full window, and withdraw it on the next real answer.
+                    if (isCursorPlanLimitReply(event.text)) {
+                      ctx.planLimitReached = true;
+                      yield* offerRuntimeEvent({
+                        type: "account.rate-limits.updated",
+                        ...(yield* makeEventStamp()),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        ...(ctx.activeTurnId ? { turnId: ctx.activeTurnId } : {}),
+                        payload: { limits: cursorPlanLimitRateLimits },
+                      });
+                    } else if (ctx.planLimitReached) {
+                      ctx.planLimitReached = false;
+                      yield* offerRuntimeEvent({
+                        type: "account.rate-limits.updated",
+                        ...(yield* makeEventStamp()),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        ...(ctx.activeTurnId ? { turnId: ctx.activeTurnId } : {}),
+                        payload: { limits: cursorPlanLimitClearedRateLimits },
+                      });
+                    }
                     return;
                 }
               }),
