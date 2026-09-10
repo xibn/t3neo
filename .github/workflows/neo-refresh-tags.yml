@@ -1,0 +1,50 @@
+name: Neo Refresh Upstream Tags
+
+# Keeps the "Run workflow" dropdowns of Upstream Sync (stable upstream
+# releases) and Neo Nightly (upstream nightlies) filled: GitHub cannot populate
+# choice inputs dynamically, so this rewrites both lists and commits them.
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neo-refresh-tags
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: Refresh tag choices
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Workflow files need a PAT with the workflows scope to push.
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          sparse-checkout: |
+            /.github/
+          sparse-checkout-cone-mode: false
+
+      - name: Rewrite choices
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/upstream-sync/refresh-upstream-tags.sh
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "t3neo[bot]"
+          git config user.email "t3neo@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Choices unchanged."
+            exit 0
+          fi
+          git add .github/workflows/upstream-sync.yml .github/workflows/neo-nightly.yml
+          git commit -m "chore(ci): refresh upstream tag choices"
+          git push origin HEAD:main

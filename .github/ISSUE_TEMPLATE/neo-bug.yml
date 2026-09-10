@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in T3 Neo is broken. Claude Code picks the issue up and ships a patch release.
+title: "[Bug]: "
+labels:
+  - bug
+  - neo:fix
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bugs filed here are handled automatically: Claude Code reproduces the report on the
+        matching release branch, fixes it, reviews and approves its own change in two extra
+        passes, and publishes a patch release. Progress shows up as comments and `neo:*` labels.
+        If the same bug exists in upstream T3 Code, file it there instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: T3 Neo version
+      description: From Settings, the pill above every tab, e.g. `v0.0.37-neo.0`.
+      placeholder: v0.0.37-neo.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+        - Web (npx t3 / app.t3.codes)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you did, what you expected, what happened instead. Screenshots help.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Automation
+      options:
+        - label: Let Claude Code fix this automatically and publish a patch release.
+          required: false

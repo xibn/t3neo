@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Feature request
-    url: https://github.com/pingdotgg/t3code/discussions/categories/ideas
-    about: Suggest an improvement or new capability in Discussions.
+  - name: Upstream T3 Code
+    url: https://github.com/pingdotgg/t3code/issues
+    about: Problems that also exist in upstream T3 Code belong upstream. T3 Neo tracks every stable release.
