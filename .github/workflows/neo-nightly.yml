@@ -19,6 +19,10 @@ on:
         type: choice
         options:
           - latest
+          - v0.0.41-nightly.20260912.1576
+          - v0.0.41-nightly.20260911.1564
+          - v0.0.41-nightly.20260911.1551
+          - v0.0.41-nightly.20260911.1547
           - v0.0.41-nightly.20260911.1533
           - v0.0.41-nightly.20260911.1520
           - v0.0.41-nightly.20260910.1507
@@ -55,10 +59,6 @@ on:
           - v0.0.39-nightly.20260904.1277
           - v0.0.39-nightly.20260904.1276
           - v0.0.39-nightly.20260904.1275
-          - v0.0.39-nightly.20260904.1274
-          - v0.0.39-nightly.20260903.1273
-          - v0.0.39-nightly.20260903.1272
-          - v0.0.39-nightly.20260903.1270
       upstream_tag_custom:
         description: "Any other upstream nightly tag, e.g. v0.0.39-nightly.20260904.1280 (overrides the list)"
         required: false
