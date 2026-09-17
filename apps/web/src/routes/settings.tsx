@@ -15,6 +15,7 @@ import { SettingsBreadcrumb } from "../components/settings/SettingsBreadcrumb";
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
 import { isElectron } from "../env";
+import { NeoVersionCard } from "../neo/NeoVersionCard";
 import {
   SettingsScopeProvider,
   useSettingsScope,
@@ -52,6 +53,9 @@ const DEVICE_ONLY_PATHS = new Set([
   "/settings/appearance",
   "/settings/snap-shot",
   "/settings/connections",
+  // T3 Neo: both tabs are stored per client (localStorage).
+  "/settings/neo",
+  "/settings/pets",
 ]);
 
 function SettingsScopeBoundary({ pathname, children }: { pathname: string; children: ReactNode }) {
@@ -166,7 +170,7 @@ function SettingsContentLayout() {
               }
             />
             {location.pathname === "/settings/general" ? (
-              <div className="ms-auto flex shrink-0 items-center">
+              <div className="ms-auto flex shrink-0 items-center" data-workspace-page-actions>
                 <RestoreDeviceDefaultsButton
                   onRestored={() => setRestoreSignal((value) => value + 1)}
                 />
@@ -179,6 +183,15 @@ function SettingsContentLayout() {
           key={`${JSON.stringify(search)}:${restoreSignal}`}
           className="min-h-0 flex flex-1 flex-col"
         >
+          {/* Same scroller gutters, page container and row inset as the tabs below, so the
+              card's edges line up with the settings text rather than the row backgrounds. */}
+          <div className="scrollbar-gutter-both shrink-0 overflow-y-auto">
+            <div className="mx-auto w-full max-w-4xl px-5 pt-4 sm:px-6">
+              <div className="px-3 sm:px-4">
+                <NeoVersionCard />
+              </div>
+            </div>
+          </div>
           <SettingsScopeBoundary pathname={location.pathname}>
             <Outlet />
           </SettingsScopeBoundary>

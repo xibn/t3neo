@@ -1,8 +1,11 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
+import { NEO_PRODUCT_NAME, NEO_REPOSITORY_URL } from "../neo/neoRepository";
+
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
-const DESKTOP_RELEASE_HISTORY_URL = "https://github.com/pingdotgg/t3code/releases";
+// Release notes come from this fork's releases, which the updater also installs from.
+const DESKTOP_RELEASE_HISTORY_URL = `${NEO_REPOSITORY_URL}/releases`;
 const DESKTOP_RELEASE_TAG_URL = `${DESKTOP_RELEASE_HISTORY_URL}/tag`;
 
 /**
@@ -62,12 +65,12 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 
   const action = resolveDesktopUpdateButtonAction(state);
   if (action === "download") {
-    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.";
+    return `This Mac has Apple Silicon, but ${NEO_PRODUCT_NAME} is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.`;
   }
   if (action === "install") {
-    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.";
+    return `This Mac has Apple Silicon, but ${NEO_PRODUCT_NAME} is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.`;
   }
-  return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.";
+  return `This Mac has Apple Silicon, but ${NEO_PRODUCT_NAME} is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.`;
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {

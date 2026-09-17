@@ -1,3 +1,45 @@
+# T3 Neo
+
+<p>
+  <a href="https://xibn.github.io/t3neo/"><img src="assets/neo/download-button.svg" alt="Download T3 Neo for your OS" width="340" height="56"></a>
+</p>
+
+A fork of [T3 Code](https://github.com/pingdotgg/t3code) that follows every stable upstream release and adds:
+
+- **Message queue.** Messages sent while a turn runs wait their turn and start their own afterwards. Send now steers instead. Edit, reorder, discard and retry queued messages; attachments stay uploaded until sent.
+- **Usage badges.** Every finished turn shows its share of your plan window or its billed cost. The composer pill shows the tightest limit and opens plan, last turn and month-to-date.
+- **Pets.** A companion in its own floating window that mirrors your agents: running, needs input, blocked, ready. Import any pet from the four Codex pet galleries, or pick Wukong the ASCII monkey, Hoppy the rabbit or the still Lunar badge.
+- **Neo look.** Warm amber palette, flat bordered surfaces, soft corners, a star sky over sidebar and top bar. On by default; the standard look stays selectable.
+- **Processes.** One dialog lists everything your agents and terminals run, including dev servers that outlived their shell, with Stop and Kill.
+- **Collapsible header.** One button folds the header actions into a slim bar with a rounded workspace card below. The branch manager can move into the header too.
+- **Neo settings.** Toggles for all of the above, in-place desktop updates, default context window and fast mode, chevron animations, ASCII pet color, and more.
+
+## Screenshots
+
+<img src="assets/neo/screenshots/header-collapsed.jpg" alt="A chat in the Neo look: the header folded to a slim starry strip, the workspace a rounded card with the panel toggles in its top-right notch" width="100%">
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/neo/screenshots/chat.jpg" alt="The same chat with the header unfolded: breadcrumb, Add action, Open, Initialize Git and the usage pill in the composer" width="100%"></td>
+    <td width="50%"><img src="assets/neo/screenshots/chat-focus.jpg" alt="Header folded and sidebar hidden: only the card remains, with a notch on each top corner" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/neo/screenshots/settings-pets.jpg" alt="Settings → Pets with the four built-in pet cards and the Codex pets gallery below" width="100%"></td>
+    <td><img src="assets/neo/screenshots/processes.jpg" alt="The Processes dialog listing dev servers and helper processes with Stop and Kill" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/neo/screenshots/usage.jpg" alt="The Usage page: cost per provider, the daily cost chart and the model breakdown" width="100%"></td>
+    <td><img src="assets/neo/screenshots/settings-neo.jpg" alt="Settings → Neo with updates, usage badges, the message queue and new chat defaults" width="100%"></td>
+  </tr>
+</table>
+
+<details>
+<summary>Appearance settings</summary>
+<img src="assets/neo/screenshots/settings-appearance.jpg" alt="Settings → Appearance with the color scheme tiles, the Look select and the Neo-only switches" width="100%">
+</details>
+
+---
+
 # T3 Code
 
 T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).

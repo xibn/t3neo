@@ -292,6 +292,16 @@ import {
   useComposerDraftStore,
   DraftId,
 } from "../composerDraftStore";
+import { useMessageQueueStore } from "../messageQueueStore";
+import { useNeoSettings, useUpdateNeoSettings } from "../neo/neoSettings";
+import {
+  latestTurnUsage as latestTurnUsageFrom,
+  turnUsageByTurnId as turnUsageByTurnIdFrom,
+  type TurnUsage,
+} from "../neo/turnUsage";
+import { useUsagePlanLabel } from "../neo/usagePlan";
+
+const EMPTY_TURN_USAGE: ReadonlyMap<TurnId, TurnUsage> = new Map();
 import {
   formatTerminalContextLabel,
   type TerminalContextDraft,
@@ -418,6 +428,7 @@ import {
   hasServerAcknowledgedLocalDispatch,
   isBranchMismatchDismissedForSession,
   shouldDockDraftHeroForSubmission,
+  shouldQueueComposerSubmission,
   shouldReleaseTimelineAnchorForToolActivity,
   shouldShowBranchMismatchBanner,
   shouldShowPlanFollowUpPrompt,
@@ -471,6 +482,7 @@ import { useComposerHandleContext } from "../composerHandleContext";
 import {
   awaitAttachmentUploads,
   getUploadedAttachments,
+  handOffDraftAttachments,
   releaseDraftAttachments,
   startAttachmentUpload,
 } from "../lib/attachmentUploadQueue";
@@ -2852,6 +2864,17 @@ export default function ChatView(props: ChatViewProps) {
     conversationProviderStatus.supportsConversationRollback !== false;
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
+  const neoSettings = useNeoSettings();
+  const updateNeoSettings = useUpdateNeoSettings();
+  const turnUsageByTurnId = useMemo(
+    () => (neoSettings.usageBadges ? turnUsageByTurnIdFrom(threadActivities) : EMPTY_TURN_USAGE),
+    [neoSettings.usageBadges, threadActivities],
+  );
+  const latestTurnUsage = useMemo(
+    () => (neoSettings.usageBadges ? latestTurnUsageFrom(threadActivities) : null),
+    [neoSettings.usageBadges, threadActivities],
+  );
+  const usagePlanLabel = useUsagePlanLabel(activeThread?.session?.providerInstanceId ?? null);
   const latestCheckpointCompletedAt = activeThread?.checkpoints.at(-1)?.completedAt ?? null;
   const workspaceMutationId = useMemo(() => {
     const activityId = latestWorkspaceMutationId(threadActivities);
@@ -3913,13 +3936,13 @@ export default function ChatView(props: ChatViewProps) {
     [activeServerThread, draftId, routeThreadKey, routeThreadRef],
   );
 
-  const interruptContextRef = useRef({ activeThread, phase, setThreadError });
-  interruptContextRef.current = { activeThread, phase, setThreadError };
+  const interruptContextRef = useRef({ activeThread, activeThreadKey, phase, setThreadError });
+  interruptContextRef.current = { activeThread, activeThreadKey, phase, setThreadError };
   const restoreQueuedMessagesRef = useRef<(messages: ReadonlyArray<QueuedComposerMessage>) => void>(
     () => {},
   );
   const onInterrupt = useCallback(async () => {
-    const { activeThread, phase, setThreadError } = interruptContextRef.current;
+    const { activeThread, activeThreadKey, phase, setThreadError } = interruptContextRef.current;
     const input = buildRunningThreadTurnInterruptInput(activeThread, phase);
     if (!input || !activeThread) return;
     restoreQueuedMessagesRef.current(
@@ -3927,10 +3950,16 @@ export default function ChatView(props: ChatViewProps) {
         .getState()
         .drain(scopedThreadKey(scopeThreadRef(activeThread.environmentId, activeThread.id))),
     );
+    // Stopping also parks the queue: the user gets to say what happens next
+    // instead of the next queued message starting right away.
+    if (activeThreadKey) useMessageQueueStore.getState().pauseThread(activeThreadKey);
     const result = await interruptThreadTurn({
       environmentId: activeThread.environmentId,
       input,
     });
+    if (result._tag === "Failure" && activeThreadKey) {
+      useMessageQueueStore.getState().resumeThread(activeThreadKey);
+    }
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       setThreadError(
@@ -6154,6 +6183,9 @@ export default function ChatView(props: ChatViewProps) {
   const handleStopBackgroundWork = useCallback(async () => {
     if (!activeThread) return;
     setIsStoppingBackgroundWork(true);
+    // Stopping also parks the queue: the user gets to say what happens next
+    // instead of the next queued message starting right away.
+    if (activeThreadKey) useMessageQueueStore.getState().pauseThread(activeThreadKey);
     const result = await interruptThreadTurn({
       environmentId,
       input: buildThreadTurnInterruptInput(activeThread),
@@ -6163,6 +6195,7 @@ export default function ChatView(props: ChatViewProps) {
       // never reached the server, so liveness would hold "Stopping..."
       // forever. Only real failures toast.
       setIsStoppingBackgroundWork(false);
+      if (activeThreadKey) useMessageQueueStore.getState().resumeThread(activeThreadKey);
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         setThreadError(
@@ -6171,7 +6204,7 @@ export default function ChatView(props: ChatViewProps) {
         );
       }
     }
-  }, [activeThread, environmentId, interruptThreadTurn, setThreadError]);
+  }, [activeThread, activeThreadKey, environmentId, interruptThreadTurn, setThreadError]);
   const backgroundLivenessBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (activeBackgroundLiveness === null || !activeThread) {
       return null;
@@ -7514,7 +7547,10 @@ export default function ChatView(props: ChatViewProps) {
       !directAnnotation &&
       phase === "running" &&
       activeThreadKey &&
-      settings.followUpBehavior === "queue"
+      settings.followUpBehavior === "queue" &&
+      // T3 Neo: while its own queue is on, the Neo queue (below, after the
+      // uploads) takes the message instead; "Send now" steers straight away.
+      !neoSettings.queueMessages
     ) {
       if (composerRef.current?.validateProviderInput(promptForSend) === false) {
         return;
@@ -7695,6 +7731,85 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
 
+    const buildTurnAttachments = () =>
+      Promise.all(
+        composerAttachmentsSnapshot.map(async (attachment) => {
+          if (turnUsesAttachmentUploads) {
+            const uploaded = getUploadedAttachments({ environmentId, images: [attachment] })?.[0];
+            if (!uploaded) {
+              throw new Error(`Attachment '${attachment.name}' did not finish uploading.`);
+            }
+            return uploaded;
+          }
+          if (attachment.type !== "image") {
+            throw new Error("This server does not support file attachments.");
+          }
+          return {
+            type: "image" as const,
+            id: attachment.id,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+            dataUrl: await readFileAsDataUrl(attachment.file),
+            ...(attachment.source ? { source: attachment.source } : {}),
+          };
+        }),
+      );
+
+    // A busy thread queues the message client-side; the drain sends it once
+    // the running turn finishes (or right away after "Send now").
+    if (
+      !queuedMessage &&
+      !directAnnotation &&
+      shouldQueueComposerSubmission({
+        submissionIntent,
+        queueEnabled: neoSettings.queueMessages,
+        isServerThread,
+        thread: activeThread,
+        queuedCount: (useMessageQueueStore.getState().byThread[routeThreadKey] ?? []).length,
+        now: new Date().toISOString(),
+      })
+    ) {
+      const queuedAttachmentsResult = await settlePromise(buildTurnAttachments);
+      if (queuedAttachmentsResult._tag === "Failure") {
+        sendInFlightRef.current = false;
+        setThreadError(
+          threadIdForSend,
+          chatActionErrorMessage(squashAtomCommandFailure(queuedAttachmentsResult)),
+        );
+        return;
+      }
+      const { durable } = useMessageQueueStore.getState().enqueue({
+        id: newMessageId(),
+        environmentId,
+        threadId: threadIdForSend,
+        text: outgoingMessageText,
+        attachments: queuedAttachmentsResult.value,
+        ...(ctxSelectedModel ? { modelSelection: ctxSelectedModelSelection } : {}),
+        runtimeMode,
+        interactionMode,
+        createdAt: new Date().toISOString(),
+      });
+      if (turnUsesAttachmentUploads) {
+        handOffDraftAttachments(composerAttachmentsSnapshot);
+      }
+      setThreadError(threadIdForSend, null);
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      if (!durable) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "warning",
+            title: "Queued message will not survive a reload",
+            description: "Browser storage is full or unavailable; keep this tab open.",
+          }),
+        );
+      }
+      sendInFlightRef.current = false;
+      return;
+    }
+
     const resolvedSubmissionIntent =
       submissionIntent === "background" && isLocalDraftThread ? "background" : "foreground";
     if (
@@ -7737,29 +7852,7 @@ export default function ChatView(props: ChatViewProps) {
 
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
-    const turnAttachmentsPromise = Promise.all(
-      composerAttachmentsSnapshot.map(async (attachment) => {
-        if (turnUsesAttachmentUploads) {
-          const uploaded = getUploadedAttachments({ environmentId, images: [attachment] })?.[0];
-          if (!uploaded) {
-            throw new Error(`Attachment '${attachment.name}' did not finish uploading.`);
-          }
-          return uploaded;
-        }
-        if (attachment.type !== "image") {
-          throw new Error("This server does not support file attachments.");
-        }
-        return {
-          type: "image" as const,
-          id: attachment.id,
-          name: attachment.name,
-          mimeType: attachment.mimeType,
-          sizeBytes: attachment.sizeBytes,
-          dataUrl: await readFileAsDataUrl(attachment.file),
-          ...(attachment.source ? { source: attachment.source } : {}),
-        };
-      }),
-    );
+    const turnAttachmentsPromise = buildTurnAttachments();
     const optimisticAttachments = composerAttachmentsSnapshot.map((attachment) =>
       attachment.type === "image"
         ? {
@@ -8166,7 +8259,11 @@ export default function ChatView(props: ChatViewProps) {
       }
     }
     sendInFlightRef.current = false;
-    if (!turnStartSucceeded) {
+    if (turnStartSucceeded) {
+      // A direct send after a stop hands control back to the queue: it picks
+      // up again once this turn finishes.
+      useMessageQueueStore.getState().resumeThread(routeThreadKey);
+    } else {
       setDockedDraftHeroThreadKey((currentThreadKey) =>
         currentThreadKey === activeThreadKey ? null : currentThreadKey,
       );
@@ -9318,8 +9415,65 @@ export default function ChatView(props: ChatViewProps) {
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
   });
 
+  // T3 Neo: the branch manager is built once and docked either under the
+  // composer or in the chat header (Settings → Neo), with a pill to move it.
+  const branchToolbarNode = mountComposerContextStrip ? (
+    <BranchToolbar
+      ref={branchToolbarRef}
+      placement={neoSettings.branchToolbarPosition}
+      {...(neoSettings.branchToolbarMoveButton
+        ? {
+            onMovePlacement: () =>
+              updateNeoSettings({
+                branchToolbarPosition:
+                  neoSettings.branchToolbarPosition === "header" ? "composer" : "header",
+              }),
+          }
+        : {})}
+      environmentId={activeThread.environmentId}
+      threadId={activeThread.id}
+      showGitControls={isGitRepo}
+      {...(routeKind === "draft" && draftId ? { draftId } : {})}
+      onEnvModeChange={onEnvModeChange}
+      startFromOrigin={startFromOrigin}
+      onStartFromOriginChange={onStartFromOriginChange}
+      {...(canOverrideServerThreadEnvMode ? { effectiveEnvModeOverride: envMode } : {})}
+      {...(canOverrideServerThreadEnvMode
+        ? {
+            activeThreadBranchOverride: activeThreadBranch,
+            onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
+          }
+        : {})}
+      envLocked={envLocked}
+      onComposerFocusRequest={scheduleComposerFocus}
+      {...(canCheckoutPullRequestIntoThread
+        ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+        : {})}
+      {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+      autoEnvironmentLabel={autoEnvironmentLabel}
+      onAutoEnvironment={
+        draftId &&
+        !envLocked &&
+        hasMultipleEnvironments &&
+        loadBalancingSettings.loadBalancingEnabled
+          ? onAutoEnvironment
+          : undefined
+      }
+      availableEnvironments={logicalProjectEnvironments}
+      // The resting composer parks its controls in the strip only while the
+      // toolbar sits under the composer; in the header there is nothing to rest on.
+      {...(neoSettings.branchToolbarPosition === "composer"
+        ? { composerControlsHostRef: setRestingComposerControlsHost }
+        : {})}
+      contextStripVisible={showComposerContextStrip}
+    />
+  ) : null;
+
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+    <div
+      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+      data-chat-stage
+    >
       <Dialog
         open={
           deviceSetupThread !== null &&
@@ -9354,6 +9508,7 @@ export default function ChatView(props: ChatViewProps) {
         {/* Top bar */}
         <WorkspacePageHeader
           data-chat-header
+          data-neo-header-collapsed={neoSettings.headerActionsCollapsed ? "" : undefined}
           electron={isElectron}
           reserveNativeControls={reserveTitleBarControlInset && !inlineRightPanelOwnsTitleBar}
           className="relative bg-background"
@@ -9375,7 +9530,17 @@ export default function ChatView(props: ChatViewProps) {
             activeThreadTitle={activeThread.title}
             isServerThread={isServerThread}
             activeProject={activeProject}
+            actionsToggle={neoSettings.headerActionsToggle}
+            actionsCollapsed={neoSettings.headerActionsCollapsed}
+            onToggleActionsCollapsed={() =>
+              updateNeoSettings({ headerActionsCollapsed: !neoSettings.headerActionsCollapsed })
+            }
             openInCwd={gitCwd}
+            extraActions={
+              neoSettings.branchToolbarPosition === "header" ? (
+                <div className="neo-branch-toolbar-header">{branchToolbarNode}</div>
+              ) : null
+            }
             activeProjectScripts={activeProjectScripts}
             preferredScriptId={
               activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
@@ -9396,7 +9561,7 @@ export default function ChatView(props: ChatViewProps) {
         </WorkspacePageHeader>
 
         {/* Main content area with optional plan sidebar */}
-        <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1" data-chat-workspace>
           {/* Chat column */}
           <div
             className="relative flex min-h-0 min-w-0 flex-1 flex-col"
@@ -9458,6 +9623,10 @@ export default function ChatView(props: ChatViewProps) {
                 onCancelWorktreeSetup={onCancelWorktreeSetup}
                 {...(draftId ? { onWorktreeSetupWorkLocally } : {})}
                 {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
+                turnUsageByTurnId={
+                  paintOnlyDisplayedTimeline ? EMPTY_TURN_USAGE : turnUsageByTurnId
+                }
+                turnUsagePlanLabel={usagePlanLabel}
                 listRef={legendListRef}
                 timelineEntries={displayedTimeline.entries}
                 latestTurn={paintOnlyDisplayedTimeline ? null : activeLatestTurn}
@@ -9594,7 +9763,13 @@ export default function ChatView(props: ChatViewProps) {
                         : undefined
                     }
                   >
-                    <ComposerSurface.Shell contextStrip={showComposerContextStrip}>
+                    {/* The strip continues the outline below the composer, so the shell only
+                        opens the seam for it while the branch manager actually sits there. */}
+                    <ComposerSurface.Shell
+                      contextStrip={
+                        showComposerContextStrip && neoSettings.branchToolbarPosition === "composer"
+                      }
+                    >
                       <ComposerSurface.Host>
                         <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
                           <ChatComposer
@@ -9621,6 +9796,11 @@ export default function ChatView(props: ChatViewProps) {
                             isConnecting={isConnecting}
                             isSendBusy={isSendBusy}
                             isRevertingCheckpoint={isRevertingCheckpoint}
+                            queueMessages={neoSettings.queueMessages}
+                            latestTurnUsage={latestTurnUsage}
+                            usagePlanLabel={usagePlanLabel}
+                            showUsageBadge={neoSettings.usageBadges}
+                            composerExpanded={neoSettings.composerExpanded}
                             sendDisabledReason={
                               isRevertingCheckpoint
                                 ? "Rewinding conversation"
@@ -9732,48 +9912,9 @@ export default function ChatView(props: ChatViewProps) {
                           data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                           className="relative z-0"
                         >
-                          {mountComposerContextStrip && (
-                            <div className="pointer-events-auto">
-                              <BranchToolbar
-                                ref={branchToolbarRef}
-                                environmentId={activeThread.environmentId}
-                                threadId={activeThread.id}
-                                showGitControls={isGitRepo}
-                                {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                onEnvModeChange={onEnvModeChange}
-                                startFromOrigin={startFromOrigin}
-                                onStartFromOriginChange={onStartFromOriginChange}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? { effectiveEnvModeOverride: envMode }
-                                  : {})}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? {
-                                      activeThreadBranchOverride: activeThreadBranch,
-                                      onActiveThreadBranchOverrideChange:
-                                        setPendingServerThreadBranch,
-                                    }
-                                  : {})}
-                                envLocked={envLocked}
-                                onComposerFocusRequest={scheduleComposerFocus}
-                                {...(canCheckoutPullRequestIntoThread
-                                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-                                  : {})}
-                                {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
-                                autoEnvironmentLabel={autoEnvironmentLabel}
-                                onAutoEnvironment={
-                                  draftId &&
-                                  !envLocked &&
-                                  hasMultipleEnvironments &&
-                                  loadBalancingSettings.loadBalancingEnabled
-                                    ? onAutoEnvironment
-                                    : undefined
-                                }
-                                availableEnvironments={logicalProjectEnvironments}
-                                composerControlsHostRef={setRestingComposerControlsHost}
-                                contextStripVisible={showComposerContextStrip}
-                              />
-                            </div>
-                          )}
+                          {neoSettings.branchToolbarPosition === "composer" ? (
+                            <div className="pointer-events-auto">{branchToolbarNode}</div>
+                          ) : null}
                         </div>
                       </div>
                     </ComposerSurface.Shell>

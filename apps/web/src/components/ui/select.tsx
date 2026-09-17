@@ -8,8 +8,17 @@ import { ChevronDownIcon, ChevronsUpDownIcon, ChevronUpIcon } from "lucide-react
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
+import { PopupSideProvider, usePopupTriggerRef, usePublishPopupSide } from "./popupSide";
 
-const Select = SelectPrimitive.Root;
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectPrimitive.Root.Props<Value, Multiple>,
+) {
+  return (
+    <PopupSideProvider>
+      <SelectPrimitive.Root {...props} />
+    </PopupSideProvider>
+  );
+}
 
 const selectTriggerVariants = cva(
   "relative inline-flex cursor-pointer select-none items-center justify-between gap-2 border rounded-lg text-left text-base outline-none transition-[color,box-shadow,background-color] data-disabled:pointer-events-none data-disabled:opacity-64 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
@@ -78,13 +87,16 @@ function SelectTrigger({
   variant = "default",
   children,
   icon,
+  ref,
   ...props
 }: SelectPrimitive.Trigger.Props &
   VariantProps<typeof selectTriggerVariants> & { icon?: React.ReactNode }) {
+  const triggerRef = usePopupTriggerRef(ref);
   return (
     <SelectPrimitive.Trigger
       className={cn(selectTriggerVariants({ size, variant }), className)}
       data-slot="select-trigger"
+      ref={triggerRef}
       {...props}
     >
       {children}
@@ -127,6 +139,7 @@ function SelectPopup({
   matchTriggerWidth?: boolean;
   anchor?: SelectPrimitive.Positioner.Props["anchor"];
 }) {
+  const positionerRef = usePublishPopupSide(side);
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -136,6 +149,7 @@ function SelectPopup({
         anchor={anchor}
         className="z-[130] select-none"
         data-slot="select-positioner"
+        ref={positionerRef}
         side={side}
         sideOffset={sideOffset}
       >

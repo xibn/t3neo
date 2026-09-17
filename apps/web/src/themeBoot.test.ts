@@ -38,11 +38,19 @@ type BootResult = {
   metaContent: string | null;
 };
 
+const APPEARANCE_LOOK_STORAGE_KEY = "t3code:appearance-look";
+
 function runBootScript(options: {
   storage?: Record<string, string>;
   storageThrows?: boolean;
   prefersDark: boolean;
+  /** Neo is the stored default; theme cases opt into the standard look. */
+  look?: "neo" | "default";
 }): BootResult {
+  const storage: Record<string, string> = {
+    [APPEARANCE_LOOK_STORAGE_KEY]: options.look ?? "default",
+    ...options.storage,
+  };
   const classes = new Set<string>();
   const bootVariables: Record<string, string> = {};
   const meta = {
@@ -78,7 +86,7 @@ function runBootScript(options: {
     localStorage: {
       getItem: (key: string): string | null => {
         if (options.storageThrows) throw new Error("storage blocked");
-        return options.storage?.[key] ?? null;
+        return storage[key] ?? null;
       },
     },
     matchMedia: () => ({ matches: options.prefersDark }),
@@ -495,6 +503,30 @@ describe("index.html boot script", () => {
     expect(boot.themeSelected).toBeUndefined();
     expect(boot.backgroundColor).toBe("#ffffff");
     expect(boot.metaContent).toBe("#ffffff");
+  });
+
+  it("keeps a stored theme off the document while the Neo look is on", () => {
+    const dark = runBootScript({
+      storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      prefersDark: true,
+      look: "neo",
+    });
+    expect(dark.themeId).toBeUndefined();
+    expect(dark.themeSelected).toBe("true");
+    expect(dark.isDark).toBe(true);
+    expect(dark.backgroundColor).toBe("#0c0b0a");
+    expect(dark.bootVariables["--boot-background"]).toBe("#110f0d");
+    expect(dark.metaContent).toBe("#0c0b0a");
+
+    const light = runBootScript({
+      storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_APPEARANCE_MODE_STORAGE_KEY]: "light" },
+      prefersDark: true,
+      look: "neo",
+    });
+    expect(light.themeId).toBeUndefined();
+    expect(light.isDark).toBe(false);
+    expect(light.backgroundColor).toBe("#dad0c1");
+    expect(light.bootVariables["--boot-accent"]).toBe("#c8641f");
   });
 
   it("leaves unknown preferences unthemed so the runtime default applies", () => {

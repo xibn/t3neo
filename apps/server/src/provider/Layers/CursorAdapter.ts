@@ -66,7 +66,13 @@ import {
   parsePermissionRequest,
 } from "../acp/AcpRuntimeModel.ts";
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging.ts";
-import { applyCursorAcpModelSelection, makeCursorAcpRuntime } from "../acp/CursorAcpSupport.ts";
+import {
+  applyCursorAcpModelSelection,
+  cursorPlanLimitClearedRateLimits,
+  cursorPlanLimitRateLimits,
+  isCursorPlanLimitReply,
+  makeCursorAcpRuntime,
+} from "../acp/CursorAcpSupport.ts";
 import { CursorTransportFailure } from "../acp/CursorTransportFailure.ts";
 import {
   CursorAskQuestionRequest,
@@ -147,7 +153,16 @@ interface CursorSessionContext {
   promptsInFlight: number;
   assistantReply: CursorTransportFailure;
   stopped: boolean;
+  /** A reported plan limit stands until a later turn produces a real reply. */
+  planLimitReached?: boolean;
+  /** The current turn's reply text so far, only as much as the notice check needs. */
+  turnReplyText: string;
+  /** This turn already reported the plan limit; later chunks must not repeat or withdraw it. */
+  turnReportedPlanLimit: boolean;
 }
+
+/** Cursor's upgrade notice is short; the check anchors at the reply's start, so this is plenty. */
+const TURN_REPLY_TEXT_LIMIT = 256;
 
 function settlePendingApprovalsAsCancelled(
   pendingApprovals: ReadonlyMap<ApprovalRequestId, PendingApproval>,
@@ -543,6 +558,7 @@ export function makeCursorAdapter(
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeCursorAcpRuntime({
             cursorSettings: effectiveCursorSettings,
+            origin: { kind: "provider", provider: "cursor", threadId: input.threadId },
             ...(options?.environment || mcpSession?.agentDeviceEnvironment
               ? {
                   environment: McpProviderSession.withAgentDeviceEnvironment(
@@ -799,6 +815,8 @@ export function makeCursorAdapter(
             promptsInFlight: 0,
             assistantReply: new CursorTransportFailure(),
             stopped: false,
+            turnReplyText: "",
+            turnReportedPlanLimit: false,
           };
 
           const nf = yield* Stream.runDrain(
@@ -887,6 +905,29 @@ export function makeCursorAdapter(
                         rawPayload: event.rawPayload,
                       }),
                     );
+                    // Cursor's only limit signal is this reply: report it as a
+                    // full window as soon as the accumulated text reads as the
+                    // notice (it may arrive in pieces), before the turn settles
+                    // so the usage badge sees it. A real reply withdraws it
+                    // when its turn completes, never a later chunk of this one.
+                    if (ctx.turnReplyText.length < TURN_REPLY_TEXT_LIMIT) {
+                      ctx.turnReplyText = (ctx.turnReplyText + event.text).slice(
+                        0,
+                        TURN_REPLY_TEXT_LIMIT,
+                      );
+                    }
+                    if (!ctx.turnReportedPlanLimit && isCursorPlanLimitReply(ctx.turnReplyText)) {
+                      ctx.turnReportedPlanLimit = true;
+                      ctx.planLimitReached = true;
+                      yield* offerRuntimeEvent({
+                        type: "account.rate-limits.updated",
+                        ...(yield* makeEventStamp()),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        ...(ctx.activeTurnId ? { turnId: ctx.activeTurnId } : {}),
+                        payload: { limits: cursorPlanLimitRateLimits },
+                      });
+                    }
                     return;
                 }
               }),
@@ -970,6 +1011,8 @@ export function makeCursorAdapter(
           if (steeringTurnId === undefined) {
             ctx.lastPlanFingerprint = undefined;
             ctx.assistantReply = new CursorTransportFailure();
+            ctx.turnReplyText = "";
+            ctx.turnReportedPlanLimit = false;
           }
           ctx.session = {
             ...ctx.session,
@@ -1102,6 +1145,23 @@ export function makeCursorAdapter(
           // superseded prompt resolving (usually cancelled) while another is
           // in flight or pending must leave the merged turn running.
           if (ctx.promptsInFlight === 1) {
+            // A turn that answered with something other than the upgrade
+            // notice shows the plan is usable again: withdraw the window.
+            if (
+              ctx.planLimitReached &&
+              !ctx.turnReportedPlanLimit &&
+              ctx.turnReplyText.trim().length > 0
+            ) {
+              ctx.planLimitReached = false;
+              yield* offerRuntimeEvent({
+                type: "account.rate-limits.updated",
+                ...(yield* makeEventStamp()),
+                provider: PROVIDER,
+                threadId: input.threadId,
+                turnId,
+                payload: { limits: cursorPlanLimitClearedRateLimits },
+              });
+            }
             yield* offerRuntimeEvent({
               type: "turn.completed",
               ...(yield* makeEventStamp()),

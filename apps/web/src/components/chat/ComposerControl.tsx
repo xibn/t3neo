@@ -35,6 +35,7 @@ export function ComposerControl({
         size === "xs" ? restingComposerControlClassName : expandedComposerControlClassName,
         className,
       )}
+      data-composer-control
       size={size}
       variant={variant}
       {...props}
@@ -116,6 +117,7 @@ export function ComposerSelectControl({
         size === "xs" ? restingComposerControlClassName : expandedComposerControlClassName,
         className,
       )}
+      data-composer-control
       icon={<ComposerControlChevron size={size} />}
       size={size}
       variant={variant}

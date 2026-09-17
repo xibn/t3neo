@@ -67,6 +67,14 @@ import {
   setSnapShotAnimationDestination,
   setSnapShotShortcutSuppressed,
 } from "./methods/snapShot.ts";
+import {
+  closePetWindow,
+  fetchPetGallery,
+  focusMainFromPet,
+  movePetWindow,
+  openPetWindow,
+  resizePetWindow,
+} from "./methods/pet.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
@@ -140,6 +148,12 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(downloadUpdate);
   yield* ipc.handle(installUpdate);
   yield* ipc.handle(checkForUpdate);
+  yield* ipc.handle(openPetWindow);
+  yield* ipc.handle(closePetWindow);
+  yield* ipc.handle(movePetWindow);
+  yield* ipc.handle(focusMainFromPet);
+  yield* ipc.handle(fetchPetGallery);
+  yield* ipc.handle(resizePetWindow);
   for (const previewMethod of PreviewIpc.methods) {
     yield* ipc.handle(previewMethod);
   }

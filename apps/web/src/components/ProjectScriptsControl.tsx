@@ -163,7 +163,7 @@ export default function ProjectScriptsControl({
                 <Button
                   size="xs"
                   variant="outline"
-                  className="w-7 px-0 sm:w-6 @3xl/header-actions:w-auto! @3xl/header-actions:px-[calc(--spacing(2)-1px)]"
+                  className="w-7 px-0 sm:w-6 @2xl/header-actions:w-auto! @2xl/header-actions:px-[calc(--spacing(2)-1px)]"
                   aria-label={`Run ${primaryScript.name}`}
                   // The tooltip wrapper replaces data-slot="button", so themed
                   // toolbar styling needs its own hook.
@@ -173,13 +173,13 @@ export default function ProjectScriptsControl({
               }
             >
               <ScriptIcon icon={primaryScript.icon} />
-              <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
+              <span className="sr-only @2xl/header-actions:not-sr-only @2xl/header-actions:ml-0.5">
                 {primaryScript.name}
               </span>
             </TooltipTrigger>
             <TooltipPopup side="top">Run {primaryScript.name}</TooltipPopup>
           </Tooltip>
-          <GroupSeparator className="hidden @3xl/header-actions:block" />
+          <GroupSeparator className="hidden @2xl/header-actions:block" />
           <Menu
             highlightItemOnHover={false}
             open={actionsMenuOpen.scripts}
@@ -250,7 +250,7 @@ export default function ProjectScriptsControl({
         >
           <MenuTrigger render={<Button size="xs" variant="outline" aria-label="Project actions" />}>
             <PlusIcon className="size-3.5" />
-            <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
+            <span className="sr-only @2xl/header-actions:not-sr-only @2xl/header-actions:ml-0.5">
               Add action
             </span>
             <ChevronDownIcon className="size-3.5" />
@@ -270,7 +270,7 @@ export default function ProjectScriptsControl({
               <Button
                 size="xs"
                 variant="outline"
-                className="w-7 px-0 sm:w-6 @3xl/header-actions:w-auto! @3xl/header-actions:px-[calc(--spacing(2)-1px)]"
+                className="w-7 px-0 sm:w-6 @2xl/header-actions:w-auto! @2xl/header-actions:px-[calc(--spacing(2)-1px)]"
                 aria-label="Add action"
                 // The tooltip wrapper replaces data-slot="button", so themed
                 // toolbar styling needs its own hook.
@@ -280,7 +280,7 @@ export default function ProjectScriptsControl({
             }
           >
             <PlusIcon className="size-3.5" />
-            <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
+            <span className="sr-only @2xl/header-actions:not-sr-only @2xl/header-actions:ml-0.5">
               Add action
             </span>
           </TooltipTrigger>

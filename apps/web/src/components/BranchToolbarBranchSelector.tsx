@@ -24,6 +24,7 @@ import {
   useTransition,
   type MouseEvent as ReactMouseEvent,
   type Ref,
+  type ReactNode,
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
@@ -80,6 +81,8 @@ export interface BranchToolbarBranchSelectorHandle {
 
 interface BranchToolbarBranchSelectorProps {
   ref?: Ref<BranchToolbarBranchSelectorHandle>;
+  /** T3 Neo: rendered at the bottom of the popup (the "move branch manager" pill). */
+  popupFooter?: ReactNode;
   className?: string;
   environmentId: EnvironmentId;
   threadId: ThreadId;
@@ -100,6 +103,7 @@ function toBranchActionErrorMessage(error: unknown): string {
 
 export function BranchToolbarBranchSelector({
   ref,
+  popupFooter,
   className,
   environmentId,
   threadId,
@@ -906,6 +910,9 @@ export function BranchToolbarBranchSelector({
           ) : null}
           {branchStatusText ? <ComboboxStatus>{branchStatusText}</ComboboxStatus> : null}
         </div>
+        {popupFooter ? (
+          <div className="shrink-0 border-t border-border/60 px-2 py-1.5">{popupFooter}</div>
+        ) : null}
       </ComboboxPopup>
     </Combobox>
   );

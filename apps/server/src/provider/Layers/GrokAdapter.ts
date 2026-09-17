@@ -995,6 +995,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeGrokAcpRuntime({
             grokSettings,
+            origin: { kind: "provider", provider: "grok", threadId: input.threadId },
             ...(options?.environment || mcpSession?.agentDeviceEnvironment
               ? {
                   environment: McpProviderSession.withAgentDeviceEnvironment(

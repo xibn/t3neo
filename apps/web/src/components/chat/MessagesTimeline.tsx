@@ -155,6 +155,8 @@ import {
   timelineContentOverflowsViewport,
 } from "./timelineScrollAnchoring";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { UsageBadge } from "~/neo/UsageBadge";
+import type { TurnUsage } from "~/neo/turnUsage";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { inferEntryKindFromPath } from "../../pierre-icons";
 import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
@@ -255,6 +257,8 @@ import {
 // components (WorkingTimer, LiveElapsed) handle it.
 // ---------------------------------------------------------------------------
 
+const EMPTY_TURN_USAGE: ReadonlyMap<TurnId, TurnUsage> = new Map();
+
 interface TimelineRowSharedState {
   citationRequest: AssistantCitationTarget | null;
   listRef: React.RefObject<LegendListRef | null>;
@@ -287,6 +291,8 @@ interface TimelineRowSharedState {
   onSteerQueuedMessage: (id: string) => void;
   steerQueuedMessageShortcutLabel: string | null;
   onRemoveQueuedMessage: (id: string) => void;
+  turnUsageByTurnId: ReadonlyMap<TurnId, TurnUsage>;
+  turnUsagePlanLabel: string | null;
 }
 
 interface TimelineRowActivityState {
@@ -416,6 +422,10 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  /** Per-turn cost badges (Settings → Neo); empty when the badges are off. */
+  turnUsageByTurnId?: ReadonlyMap<TurnId, TurnUsage>;
+  /** Plan or provider name appended to usage badges. */
+  turnUsagePlanLabel?: string | null;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   anchorMessageId: MessageId | null;
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
@@ -500,6 +510,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onSteerQueuedMessage = NOOP_QUEUED_MESSAGE_ACTION,
   steerQueuedMessageShortcutLabel = null,
   onRemoveQueuedMessage = NOOP_QUEUED_MESSAGE_ACTION,
+  turnUsageByTurnId = EMPTY_TURN_USAGE,
+  turnUsagePlanLabel = null,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -945,8 +957,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onSteerQueuedMessage,
       steerQueuedMessageShortcutLabel,
       onRemoveQueuedMessage,
+      turnUsageByTurnId,
+      turnUsagePlanLabel,
     }),
     [
+      turnUsageByTurnId,
+      turnUsagePlanLabel,
       readyCitationRequest,
       listRef,
       timestampFormat,
@@ -2092,6 +2108,16 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
+        {row.message.turnId &&
+        ctx.turnUsageByTurnId.get(row.message.turnId) &&
+        !row.message.streaming ? (
+          <div className="mt-1.5 flex items-center empty:hidden">
+            <UsageBadge
+              usage={ctx.turnUsageByTurnId.get(row.message.turnId)!}
+              planLabel={ctx.turnUsagePlanLabel}
+            />
+          </div>
+        ) : null}
         {row.showAssistantMeta ? (
           <AssistantMessageMeta
             className="mt-1.5"
