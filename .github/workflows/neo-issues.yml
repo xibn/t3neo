@@ -1,0 +1,365 @@
+name: Neo Issues
+
+# Issue-driven automation for T3 Neo, managed through labels:
+#
+#   neo:fix           -> Claude Code fixes the bug on main
+#   neo:feature       -> Claude Code builds the feature on main and adds it to FEATURE.md
+#
+# Each fix/feature run: implement until verify.sh passes -> automated review
+# -> fixes -> approval gate -> pull request into main -> merge ->
+# refreshed feature patch -> patch release v<upstream>-neo.<n+1>. State is
+# mirrored as labels: neo:working, neo:in-review, neo:awaiting-maintainer,
+# neo:needs-human, neo:released. Comment "/retry" to run again.
+#
+# Who may trigger it: issues from OWNER/MEMBER/COLLABORATOR run right away.
+# Everyone else's issue waits for a maintainer to add the label "neo:go",
+# unless the repository variable NEO_AUTO_FROM_ANYONE is "true".
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: neo-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPOSITORY: pingdotgg/t3code
+  FORK_TAG_SUFFIX: neo
+  VITE_T3NEO_REPOSITORY: ${{ github.repository }}
+  CLAUDE_MODEL: claude-fable-5-1
+
+jobs:
+  triage:
+    name: Triage
+    if: >-
+      !github.event.issue.pull_request &&
+      (
+        github.event_name == 'issues' ||
+        (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/retry'))
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      kind: ${{ steps.plan.outputs.kind }}
+      upstream_tag: ${{ steps.plan.outputs.upstream_tag }}
+      upstream_version: ${{ steps.plan.outputs.upstream_version }}
+      fork_version: ${{ steps.plan.outputs.fork_version }}
+      fork_tag: ${{ steps.plan.outputs.fork_tag }}
+      notes: ${{ steps.plan.outputs.notes }}
+    steps:
+      - id: plan
+        name: Decide what this issue asks for
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+          SENDER_ASSOCIATION: ${{ github.event.comment.author_association || github.event.sender.type }}
+          AUTO_FROM_ANYONE: ${{ vars.NEO_AUTO_FROM_ANYONE }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          has_label() { [[ ",$ISSUE_LABELS," == *",$1,"* ]]; }
+          trusted="false"
+          case "$AUTHOR_ASSOCIATION" in OWNER|MEMBER|COLLABORATOR) trusted="true";; esac
+          [[ "$AUTO_FROM_ANYONE" == "true" ]] && trusted="true"
+          has_label "neo:go" && trusted="true"
+          if [[ "$GITHUB_EVENT_NAME" == "issue_comment" ]]; then
+            case "$SENDER_ASSOCIATION" in OWNER|MEMBER|COLLABORATOR) trusted="true";; *) trusted="false";; esac
+          fi
+          # Only the labels that mean something start a run; a labeled event for
+          # an unrelated label (state labels included) ends here.
+          if [[ "$GITHUB_EVENT_NAME" == "issues" && "${{ github.event.action }}" == "labeled" ]]; then
+            case "$EVENT_LABEL" in neo:fix|neo:feature|neo:go) ;; *) echo "action=none" >> "$GITHUB_OUTPUT"; exit 0;; esac
+          fi
+          if has_label "neo:working" || has_label "neo:in-review"; then
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            echo "already running"
+            exit 0
+          fi
+
+          field() {
+            # Value of a form field: the line after "### <label>", blank lines skipped.
+            printf '%s\n' "$ISSUE_BODY" | awk -v label="### $1" '
+              found && NF { print; exit }
+              $0 == label { found = 1 }'
+          }
+          notes="$(field "Notes")"
+          [[ "$notes" == "_No response_" ]] && notes=""
+          if [[ "$GITHUB_EVENT_NAME" == "issue_comment" ]]; then
+            extra="${COMMENT_BODY#/retry}"
+            notes="$(printf '%s\n%s' "$notes" "$extra" | sed -e 's/^[[:space:]]*//')"
+          fi
+
+          kind=""
+          has_label "neo:fix" && kind="fix"
+          has_label "neo:feature" && kind="feature"
+          if [[ -z "$kind" ]]; then
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$trusted" != "true" ]]; then
+            gh label create "neo:awaiting-maintainer" --repo "$GITHUB_REPOSITORY" --color F1A629 --force >/dev/null 2>&1 || true
+            gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "neo:awaiting-maintainer"
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Thanks. A maintainer adds the label \`neo:go\` and Claude Code takes it from there."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # One line only: work always happens on main, whose upstream version is
+          # the newest published T3 Neo release (fallback: the package version).
+          existing="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 300 --json tagName --jq '.[].tagName')"
+          upstream_version="$(printf '%s\n' "$existing" | sed -n "s/^v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)-${FORK_TAG_SUFFIX}\..*/\1/p" | sort -V | tail -n 1)"
+          if [[ -z "$upstream_version" ]]; then
+            upstream_version="$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=main" --jq .content | base64 -d | sed -n 's/.*"version": *"\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' | head -n 1)"
+          fi
+          if [[ -z "$upstream_version" ]]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "There is no T3 Neo release to work on yet. Run the Upstream Sync workflow first."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          count="$(printf '%s\n' "$existing" | grep -c "^v${upstream_version}-${FORK_TAG_SUFFIX}\.[0-9][0-9]*$" || true)"
+          {
+            echo "action=agent"
+            echo "kind=$kind"
+            echo "upstream_tag=v$upstream_version"
+            echo "upstream_version=$upstream_version"
+            echo "fork_version=${upstream_version}-${FORK_TAG_SUFFIX}.${count}"
+            echo "fork_tag=v${upstream_version}-${FORK_TAG_SUFFIX}.${count}"
+            echo "notes<<NEO_EOF"; printf '%s\n' "$notes"; echo "NEO_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  agent:
+    name: ${{ needs.triage.outputs.kind }} on main
+    needs: [triage]
+    if: needs.triage.outputs.action == 'agent'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    outputs:
+      sha: ${{ steps.merge.outputs.sha }}
+      pr: ${{ steps.pr.outputs.url }}
+      next_version: ${{ steps.merge.outputs.next_version }}
+      next_tag: ${{ steps.merge.outputs.next_tag }}
+    steps:
+      - name: Mark working
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          KIND: ${{ needs.triage.outputs.kind }}
+        run: |
+          for label in neo:working neo:in-review neo:needs-human neo:released neo:awaiting-maintainer; do
+            gh label create "$label" --repo "$GITHUB_REPOSITORY" --color F1A629 --force >/dev/null 2>&1 || true
+          done
+          gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "neo:working" \
+            --remove-label "neo:awaiting-maintainer" --remove-label "neo:needs-human" || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body "Claude Code is working on this $KIND on \`main\`: $RUN_URL"
+
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - id: issue
+        name: Collect the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          set -euo pipefail
+          file="$RUNNER_TEMP/issue-$ISSUE_NUMBER.md"
+          {
+            echo "# Issue #$ISSUE_NUMBER: $ISSUE_TITLE"
+            echo
+            gh issue view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq .body
+            echo
+            echo "## Comments"
+            gh issue view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json comments \
+              --jq '.comments[] | "- **\(.author.login)**: \(.body | gsub("\n"; " "))"' | grep -v "Claude Code is working" || true
+          } > "$file"
+          # Commit subject from the title: conventional, lower-case, under 40 chars.
+          subject="$(printf '%s' "$ISSUE_TITLE" | sed -E 's/^\[[^]]*\]:? *//' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9 ._-]//g; s/ +/ /g; s/^ //; s/ $//' | cut -c1-38 | sed -E 's/ [^ ]*$//')"
+          [[ -n "$subject" ]] || subject="issue $ISSUE_NUMBER"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - id: work
+        name: Implement, review, and approve with Claude Code
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          NEO_ISSUE_FILE: ${{ steps.issue.outputs.file }}
+          NEO_ISSUE_KIND: ${{ needs.triage.outputs.kind }}
+          NEO_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          NEO_COMMIT_SUBJECT: ${{ steps.issue.outputs.subject }}
+          NEO_NOTES: ${{ needs.triage.outputs.notes }}
+          NEO_BASE_SHA: ${{ steps.issue.outputs.base_sha }}
+          NEO_LOG_DIR: ${{ runner.temp }}/neo-agent
+          UPSTREAM_TAG: ${{ needs.triage.outputs.upstream_tag }}
+        run: bash .github/upstream-sync/agent.sh issue
+
+      - name: Upload Claude Code logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: neo-issue-${{ github.event.issue.number }}-run-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/neo-agent
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Report a rejected change
+        if: steps.work.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          OWNER: ${{ github.repository_owner }}
+          NOTIFY: ${{ vars.UPSTREAM_SYNC_NOTIFY }}
+          LOG_DIR: ${{ runner.temp }}/neo-agent
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          verdict="$(head -n 1 "$LOG_DIR/verdict.txt" 2>/dev/null || echo "the run failed before a verdict")"
+          gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "neo:needs-human" --remove-label "neo:working" || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(cat <<EOF
+          ${NOTIFY:-@$OWNER} Claude Code did not get this change approved: $verdict
+
+          Logs: $RUN_URL. Add details and comment \`/retry\` to try again.
+          EOF
+          )"
+          exit 1
+
+      - id: pr
+        name: Open the pull request
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          KIND: ${{ needs.triage.outputs.kind }}
+          LOG_DIR: ${{ runner.temp }}/neo-agent
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          branch="neo/issue-$ISSUE_NUMBER-$GITHUB_RUN_ID"
+          git push --force origin "HEAD:refs/heads/$branch"
+          prefix="fix"; [[ "$KIND" == "feature" ]] && prefix="feat"
+          title="$(printf '%s: %s' "$prefix" "$(printf '%s' "$ISSUE_TITLE" | sed -E 's/^\[[^]]*\]:? *//')" | cut -c1-72)"
+          reviews="$(cat "$LOG_DIR"/review-*.md 2>/dev/null || echo "No review output.")"
+          body="$(cat <<EOF
+          Closes #$ISSUE_NUMBER.
+
+          Implemented by Claude Code (\`$CLAUDE_MODEL\`), then reviewed and approved by two further passes. Run: $RUN_URL
+
+          <details><summary>Automated review</summary>
+
+          $reviews
+
+          </details>
+
+          Verdict: $(head -n 1 "$LOG_DIR/verdict.txt")
+          EOF
+          )"
+          url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --title "$title" --body "$body")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "neo:in-review" --remove-label "neo:working" || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Approved by the review passes; merging $url and building a patch release."
+
+      - id: merge
+        name: Merge into main and refresh the patch
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          UPSTREAM_TAG: ${{ needs.triage.outputs.upstream_tag }}
+          UPSTREAM_VERSION: ${{ needs.triage.outputs.upstream_version }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_URL" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+          git fetch origin main
+          git checkout -B main origin/main
+          git remote add upstream "https://github.com/$UPSTREAM_REPOSITORY.git" 2>/dev/null || true
+          git fetch --no-tags upstream "refs/tags/$UPSTREAM_TAG:refs/tags/upstream-$UPSTREAM_TAG"
+          git diff --binary "upstream-$UPSTREAM_TAG" HEAD -- . \
+            ':(exclude).github/upstream-sync' \
+            ':(exclude).github/workflows' \
+            ':(exclude).github/ISSUE_TEMPLATE' \
+            > .github/upstream-sync/feature.patch
+          git add .github/upstream-sync/feature.patch
+          git commit -q -m "chore: refresh feature patch" || echo "patch unchanged"
+          git push origin HEAD:main
+          count="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 300 --json tagName --jq '.[].tagName' \
+            | grep -c "^v${UPSTREAM_VERSION}-${FORK_TAG_SUFFIX}\.[0-9][0-9]*$" || true)"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "next_version=${UPSTREAM_VERSION}-${FORK_TAG_SUFFIX}.${count}" >> "$GITHUB_OUTPUT"
+          echo "next_tag=v${UPSTREAM_VERSION}-${FORK_TAG_SUFFIX}.${count}" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Patch release
+    needs: [triage, agent]
+    if: needs.agent.result == 'success'
+    uses: ./.github/workflows/neo-build-release.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.agent.outputs.sha }}
+      fork_version: ${{ needs.agent.outputs.next_version }}
+      fork_tag: ${{ needs.agent.outputs.next_tag }}
+      upstream_tag: ${{ needs.triage.outputs.upstream_tag }}
+      notes: "- Patch release for #${{ github.event.issue.number }} (${{ needs.agent.outputs.pr }}), implemented, reviewed, and approved by Claude Code."
+
+  finish:
+    name: Report back
+    needs: [triage, agent, release]
+    if: always() && needs.triage.outputs.action == 'agent' && needs.agent.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Comment and relabel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          OWNER: ${{ github.repository_owner }}
+          NOTIFY: ${{ vars.UPSTREAM_SYNC_NOTIFY }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          RELEASE_URL: ${{ needs.release.outputs.url }}
+          NEXT_TAG: ${{ needs.agent.outputs.next_tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_RESULT" == "success" ]]; then
+            gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "neo:released" --remove-label "neo:in-review" || true
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "${NOTIFY:-@$OWNER} released as **$NEXT_TAG**: $RELEASE_URL"
+            gh issue close "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --reason completed || true
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "neo:needs-human" --remove-label "neo:in-review" || true
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "${NOTIFY:-@$OWNER} the change is merged but the build or release failed: $RUN_URL"
+          fi
